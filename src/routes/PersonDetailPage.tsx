@@ -4,7 +4,10 @@ import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { client } from '@/amplify-client';
 import { usePerson } from '@/hooks/usePerson';
+import { useConnections } from '@/hooks/useConnections';
 import { PersonForm } from '@/components/person/PersonForm';
+import { ConnectionList } from '@/components/connection/ConnectionList';
+import { AddConnectionDialog } from '@/components/connection/AddConnectionDialog';
 import type { PersonFormValues } from '@/lib/validation';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +40,8 @@ export default function PersonDetailPage() {
   const { personId } = useParams<{ personId: string }>();
   const navigate = useNavigate();
   const { person, loading, error, refresh } = usePerson(personId);
+  const { connections, loading: connectionsLoading, error: connectionsError, refresh: refreshConnections } =
+    useConnections(personId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -65,6 +70,15 @@ export default function PersonDetailPage() {
     if (!personId) return;
     setIsDeleting(true);
     try {
+      const deleteResults = await Promise.all(
+        connections.map((c) => client.models.Connection.delete({ id: c.connectionId })),
+      );
+      const connectionErrors = deleteResults.flatMap((r) => r.errors ?? []);
+      if (connectionErrors.length > 0) {
+        toast.error(connectionErrors.map((e) => e.message).join(', '));
+        return;
+      }
+
       const { errors } = await client.models.Person.delete({ id: personId });
       if (errors) {
         toast.error(errors.map((e) => e.message).join(', '));
@@ -102,7 +116,9 @@ export default function PersonDetailPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete {person.name}?</AlertDialogTitle>
               <AlertDialogDescription>
-                This permanently removes {person.name} and cannot be undone.
+                {connections.length > 0
+                  ? `This permanently removes ${person.name} and their ${connections.length} connection${connections.length === 1 ? '' : 's'}. This cannot be undone.`
+                  : `This permanently removes ${person.name} and cannot be undone.`}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -128,6 +144,23 @@ export default function PersonDetailPage() {
         submitLabel="Save changes"
         isSubmitting={isSubmitting}
       />
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Connections</h2>
+          <AddConnectionDialog
+            personId={person.id}
+            personName={person.name}
+            onCreated={refreshConnections}
+          />
+        </div>
+        <ConnectionList
+          connections={connections}
+          loading={connectionsLoading}
+          error={connectionsError}
+          onChanged={refreshConnections}
+        />
+      </div>
     </div>
   );
 }
