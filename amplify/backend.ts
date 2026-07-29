@@ -17,9 +17,13 @@ backend.auth.resources.cfnResources.cfnUserPool.adminCreateUserConfig = {
 
 // Personal, hard-to-recreate data — enable Point-in-Time Recovery on every
 // model's underlying DynamoDB table so it's restorable for 35 days.
-const cfnTables = backend.data.resources.cfnResources.cfnTables;
-for (const modelName of Object.keys(cfnTables)) {
-  cfnTables[modelName].pointInTimeRecoverySpecification = {
-    pointInTimeRecoveryEnabled: true,
-  };
+//
+// Amplify Gen 2 provisions model tables as `Custom::AmplifyDynamoDBTable`
+// resources (not a plain CDK `CfnTable`), so they show up under
+// `cfnResources.amplifyDynamoDbTables` (AmplifyDynamoDbTableWrapper), not
+// `cfnResources.cfnTables` — that bucket is only populated for tables that
+// are literally `aws_dynamodb.CfnTable` instances, which ours never are.
+const amplifyDynamoDbTables = backend.data.resources.cfnResources.amplifyDynamoDbTables;
+for (const modelName of Object.keys(amplifyDynamoDbTables)) {
+  amplifyDynamoDbTables[modelName].pointInTimeRecoveryEnabled = true;
 }

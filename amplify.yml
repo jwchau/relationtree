@@ -1,15 +1,21 @@
+# `npm install` (not `npm ci`) throughout: @aws-amplify/data-construct bundles
+# zod@3.24.2 as a bundled dependency, which `npm ci`'s strict lockfile check
+# reports as inconsistent against the zod version resolved elsewhere in the
+# tree, even against a freshly-generated, self-consistent lockfile. This is an
+# upstream packaging quirk, not a real drift — `npm install` isn't strict about
+# it and installs correctly.
 version: 1
 backend:
   phases:
     build:
       commands:
-        - npm ci
+        - npm install
         - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
 frontend:
   phases:
     preBuild:
       commands:
-        - npm ci
+        - npm install
         - npm run typecheck
         - npm run lint
         - npm run test
