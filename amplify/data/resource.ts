@@ -13,8 +13,6 @@ const schema = a.schema({
       photoKey: a.string(),
       notes: a.string(),
       lastContactedDate: a.date(),
-      connectionsAsA: a.hasMany('Connection', 'personAId'),
-      connectionsAsB: a.hasMany('Connection', 'personBId'),
     })
     .authorization((allow) => [allow.owner()]),
 
@@ -33,8 +31,6 @@ const schema = a.schema({
         'PARENT',
         'MANAGER',
       ]),
-      personA: a.belongsTo('Person', 'personAId'),
-      personB: a.belongsTo('Person', 'personBId'),
     })
     .secondaryIndexes((index) => [index('personAId'), index('personBId')])
     .authorization((allow) => [allow.owner()]),

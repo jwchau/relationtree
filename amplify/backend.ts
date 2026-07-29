@@ -1,5 +1,4 @@
 import { defineBackend } from '@aws-amplify/backend';
-import type { CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { storage } from './storage/resource';
@@ -18,10 +17,9 @@ backend.auth.resources.cfnResources.cfnUserPool.adminCreateUserConfig = {
 
 // Personal, hard-to-recreate data — enable Point-in-Time Recovery on every
 // model's underlying DynamoDB table so it's restorable for 35 days.
-const tables = backend.data.resources.tables;
-for (const modelName of Object.keys(tables)) {
-  const cfnTable = tables[modelName].node.defaultChild as CfnTable;
-  cfnTable.pointInTimeRecoverySpecification = {
+const cfnTables = backend.data.resources.cfnResources.cfnTables;
+for (const modelName of Object.keys(cfnTables)) {
+  cfnTables[modelName].pointInTimeRecoverySpecification = {
     pointInTimeRecoveryEnabled: true,
   };
 }
