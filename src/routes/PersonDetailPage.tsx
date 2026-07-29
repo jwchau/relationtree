@@ -9,6 +9,7 @@ import { PersonForm } from '@/components/person/PersonForm';
 import { PhotoUploader } from '@/components/person/PhotoUploader';
 import { ConnectionList } from '@/components/connection/ConnectionList';
 import { AddConnectionDialog } from '@/components/connection/AddConnectionDialog';
+import { EgoGraph } from '@/components/graph/EgoGraph';
 import type { PersonFormValues } from '@/lib/validation';
 import { Button } from '@/components/ui/button';
 import {
@@ -97,7 +98,7 @@ export default function PersonDetailPage() {
   if (!person) return <p className="text-muted-foreground">Person not found.</p>;
 
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="space-y-6">
       <Link
         to="/"
         className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm"
@@ -129,44 +130,61 @@ export default function PersonDetailPage() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-      <PhotoUploader
-        personId={person.id}
-        personName={person.name}
-        photoKey={person.photoKey}
-        onUploaded={() => refresh()}
-      />
-      <PersonForm
-        defaultValues={{
-          name: person.name,
-          relationshipCategory: person.relationshipCategory ?? 'FRIEND',
-          context: person.context ?? '',
-          phone: person.phone ?? '',
-          email: person.email ?? '',
-          address: person.address ?? '',
-          birthday: person.birthday ?? '',
-          notes: person.notes ?? '',
-          lastContactedDate: person.lastContactedDate ?? '',
-        }}
-        onSubmit={handleSubmit}
-        submitLabel="Save changes"
-        isSubmitting={isSubmitting}
-      />
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Connections</h2>
-          <AddConnectionDialog
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <div className="max-w-xl space-y-6">
+          <PhotoUploader
             personId={person.id}
             personName={person.name}
-            onCreated={refreshConnections}
+            photoKey={person.photoKey}
+            onUploaded={() => refresh()}
+          />
+          <PersonForm
+            defaultValues={{
+              name: person.name,
+              relationshipCategory: person.relationshipCategory ?? 'FRIEND',
+              context: person.context ?? '',
+              phone: person.phone ?? '',
+              email: person.email ?? '',
+              address: person.address ?? '',
+              birthday: person.birthday ?? '',
+              notes: person.notes ?? '',
+              lastContactedDate: person.lastContactedDate ?? '',
+            }}
+            onSubmit={handleSubmit}
+            submitLabel="Save changes"
+            isSubmitting={isSubmitting}
           />
         </div>
-        <ConnectionList
-          connections={connections}
-          loading={connectionsLoading}
-          error={connectionsError}
-          onChanged={refreshConnections}
-        />
+
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Connections</h2>
+              <AddConnectionDialog
+                personId={person.id}
+                personName={person.name}
+                onCreated={refreshConnections}
+              />
+            </div>
+            <ConnectionList
+              connections={connections}
+              loading={connectionsLoading}
+              error={connectionsError}
+              onChanged={refreshConnections}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold">Graph</h2>
+            <EgoGraph
+              centerId={person.id}
+              centerName={person.name}
+              centerPhotoKey={person.photoKey}
+              connections={connections}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
