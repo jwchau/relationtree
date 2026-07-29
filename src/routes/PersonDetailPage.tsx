@@ -6,6 +6,7 @@ import { client } from '@/amplify-client';
 import { usePerson } from '@/hooks/usePerson';
 import { useConnections } from '@/hooks/useConnections';
 import { PersonForm } from '@/components/person/PersonForm';
+import { PhotoUploader } from '@/components/person/PhotoUploader';
 import { ConnectionList } from '@/components/connection/ConnectionList';
 import { AddConnectionDialog } from '@/components/connection/AddConnectionDialog';
 import type { PersonFormValues } from '@/lib/validation';
@@ -128,6 +129,12 @@ export default function PersonDetailPage() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+      <PhotoUploader
+        personId={person.id}
+        personName={person.name}
+        photoKey={person.photoKey}
+        onUploaded={() => refresh()}
+      />
       <PersonForm
         defaultValues={{
           name: person.name,

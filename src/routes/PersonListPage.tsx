@@ -1,9 +1,7 @@
 import { Link } from 'react-router-dom';
 import { usePersonList } from '@/hooks/usePersonList';
-import { categoryLabel } from '@/lib/relationshipTypes';
+import { PersonCard } from '@/components/person/PersonCard';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 
 export default function PersonListPage() {
   const { people, loading, error } = usePersonList();
@@ -28,25 +26,7 @@ export default function PersonListPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {people.map((person) => (
-          <Link key={person.id} to={`/people/${person.id}`}>
-            <Card className="h-full transition-colors hover:bg-accent/50">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between gap-2">
-                  <span>{person.name}</span>
-                  {person.relationshipCategory && (
-                    <Badge variant="secondary">
-                      {categoryLabel(person.relationshipCategory)}
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              {person.context && (
-                <CardContent>
-                  <p className="text-muted-foreground text-sm">{person.context}</p>
-                </CardContent>
-              )}
-            </Card>
-          </Link>
+          <PersonCard key={person.id} person={person} />
         ))}
       </div>
     </div>
