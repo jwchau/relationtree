@@ -34,8 +34,6 @@ function AppHeader() {
 }
 
 function App() {
-  const deliberateTypeError: string = 12345;
-  console.log(deliberateTypeError);
   return (
     <BrowserRouter>
       <div className="min-h-svh">
