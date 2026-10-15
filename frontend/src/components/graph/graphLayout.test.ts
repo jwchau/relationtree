@@ -10,7 +10,7 @@ function makeConnection(overrides: Partial<ConnectionWithPerson> = {}): Connecti
     otherPerson: {
       id: 'other-1',
       name: 'Other Person',
-      photoKey: null,
+      photo_key: '',
     } as ConnectionWithPerson['otherPerson'],
     ...overrides,
   };

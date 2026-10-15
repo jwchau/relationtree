@@ -1,20 +1,22 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Amplify } from 'aws-amplify'
-import { Authenticator } from '@aws-amplify/ui-react'
-import '@aws-amplify/ui-react/styles.css'
-import outputs from '../amplify_outputs.json'
+import { QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App.tsx'
 import { Toaster } from '@/components/ui/sonner'
+import { setUnauthorizedHandler } from '@/api/client'
+import { queryClient } from '@/api/queryClient'
+import { meQueryKey } from '@/hooks/useAuth'
 
-Amplify.configure(outputs)
+// A 401 mid-session (expired or revoked session) drops the cached user, and RequireAuth
+// then redirects to /login.
+setUnauthorizedHandler(() => queryClient.setQueryData(meQueryKey, null))
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Authenticator hideSignUp>
+    <QueryClientProvider client={queryClient}>
       <App />
       <Toaster />
-    </Authenticator>
+    </QueryClientProvider>
   </StrictMode>,
 )

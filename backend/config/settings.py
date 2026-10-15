@@ -1,6 +1,10 @@
 from pathlib import Path
 
+import django_stubs_ext
 import environ
+
+# Lets admin.ModelAdmin[Model] etc. be subscripted at runtime for type checking.
+django_stubs_ext.monkeypatch()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -19,6 +23,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "corsheaders",
+    "axes",
+    "ninja",
     "relationtree",
 ]
 
@@ -31,6 +37,13 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Must be last: turns an axes lockout into the 429 response.
+    "axes.middleware.AxesMiddleware",
+]
+
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -81,3 +94,13 @@ SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+
+# Brute-force protection: lock a username+IP pair after repeated failed logins.
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 1  # hours
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_RESET_ON_SUCCESS = True
+# Behind the Cloudflare Tunnel every request arrives from cloudflared, so the real client IP
+# comes from CF-Connecting-IP. Safe to trust only because Django is not reachable except
+# through the tunnel.
+AXES_CLIENT_IP_CALLABLE = "relationtree.client_ip.client_ip"

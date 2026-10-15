@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { client } from '@/amplify-client';
+import type { Person } from '@/api/client';
+import { useCreatePerson } from '@/hooks/usePerson';
+import { createConnection } from '@/hooks/useConnections';
 import {
   RELATIONSHIP_TYPES,
   relationshipLabel,
@@ -30,9 +32,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import type { Schema } from '../../../amplify/data/resource';
-
-type PersonRecord = Schema['Person']['type'];
 
 export interface AddConnectionDialogProps {
   personId: string;
@@ -42,11 +41,12 @@ export interface AddConnectionDialogProps {
 
 export function AddConnectionDialog({ personId, personName, onCreated }: AddConnectionDialogProps) {
   const [open, setOpen] = useState(false);
-  const [otherPerson, setOtherPerson] = useState<PersonRecord | null>(null);
+  const [otherPerson, setOtherPerson] = useState<Person | null>(null);
   const [newPersonName, setNewPersonName] = useState<string | null>(null);
   const [newPersonCategory, setNewPersonCategory] = useState<RelationshipCategory>('FRIEND');
   const [relationshipType, setRelationshipType] = useState<RelationshipType>('FRIEND');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const createPerson = useCreatePerson();
 
   function reset() {
     setOtherPerson(null);
@@ -62,16 +62,12 @@ export function AddConnectionDialog({ personId, personName, onCreated }: AddConn
       let targetPersonName = otherPerson?.name;
 
       if (!targetPersonId && newPersonName) {
-        const { data, errors } = await client.models.Person.create({
+        const created = await createPerson.mutateAsync({
           name: newPersonName,
-          relationshipCategory: newPersonCategory,
-        } as any);
-        if (errors || !data) {
-          toast.error(errors?.map((e) => e.message).join(', ') ?? 'Failed to create person');
-          return;
-        }
-        targetPersonId = data.id;
-        targetPersonName = data.name;
+          relationship_category: newPersonCategory,
+        });
+        targetPersonId = created.id;
+        targetPersonName = created.name;
       }
 
       if (!targetPersonId) {
@@ -79,20 +75,14 @@ export function AddConnectionDialog({ personId, personName, onCreated }: AddConn
         return;
       }
 
-      const { errors } = await client.models.Connection.create({
-        personAId: personId,
-        personBId: targetPersonId,
-        relationshipType,
-      } as any);
-      if (errors) {
-        toast.error(errors.map((e) => e.message).join(', '));
-        return;
-      }
+      await createConnection({ personAId: personId, personBId: targetPersonId, relationshipType });
 
       toast.success(`Connected ${personName} and ${targetPersonName}`);
       setOpen(false);
       reset();
       onCreated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add connection');
     } finally {
       setIsSubmitting(false);
     }

@@ -6,8 +6,8 @@ the resulting graph.
 
 > **Mid-migration.** The backend is moving from AWS Amplify to a self-hosted
 > Django + Postgres stack. See [docs/backend-migration-plan.md](./docs/backend-migration-plan.md)
-> for the agreed design and milestones. Until M8, the frontend still contains
-> its old Amplify data layer and is not wired to the new API.
+> for the agreed design and milestones. Connections (M9) and photos (M10) are
+> temporarily disabled while they're rebuilt on the new API.
 
 ## Stack
 

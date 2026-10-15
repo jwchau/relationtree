@@ -23,8 +23,9 @@ Not a goal: preserving existing data. Nobody uses the Amplify app; we start fres
 ### Data model
 ```
 User (Django built-in)
-Tree(id, name, owner → User)
-TreeMembership(tree, user, role: viewer|editor)       # v2 sharing; every user gets a default tree
+Tree(id, name)
+TreeMembership(tree, user, role: owner|editor|viewer) # sole source of truth for access;
+                                                      # every user gets an owned default tree
 Person(id UUID, tree → Tree, name, relationship_category, context, phone, email, address,
        birthday, photo_key, notes, last_contacted_date, created_at, updated_at)
 Connection(id UUID, tree → Tree, person_a → Person, person_b → Person, type)

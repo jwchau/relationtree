@@ -1,15 +1,14 @@
-import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import { client } from '@/amplify-client';
-import { usePerson } from '@/hooks/usePerson';
-import { useConnections } from '@/hooks/useConnections';
+import { useDeletePerson, usePerson, useUpdatePerson } from '@/hooks/usePerson';
+import { CONNECTIONS_ENABLED, useConnections } from '@/hooks/useConnections';
 import { PersonForm } from '@/components/person/PersonForm';
 import { PhotoUploader } from '@/components/person/PhotoUploader';
 import { ConnectionList } from '@/components/connection/ConnectionList';
 import { AddConnectionDialog } from '@/components/connection/AddConnectionDialog';
 import { EgoGraph } from '@/components/graph/EgoGraph';
+import { toFormValues, toPersonInput } from '@/lib/personInput';
 import type { PersonFormValues } from '@/lib/validation';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,72 +23,36 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
-function toPersonInput(values: PersonFormValues) {
-  return {
-    name: values.name,
-    relationshipCategory: values.relationshipCategory,
-    context: values.context || undefined,
-    phone: values.phone || undefined,
-    email: values.email || undefined,
-    address: values.address || undefined,
-    birthday: values.birthday || undefined,
-    notes: values.notes || undefined,
-    lastContactedDate: values.lastContactedDate || undefined,
-  };
-}
-
 export default function PersonDetailPage() {
-  const { personId } = useParams<{ personId: string }>();
+  const { personId = '' } = useParams<{ personId: string }>();
   const navigate = useNavigate();
-  const { person, loading, error, refresh } = usePerson(personId);
-  const { connections, loading: connectionsLoading, error: connectionsError, refresh: refreshConnections } =
-    useConnections(personId);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const { person, loading, error } = usePerson(personId);
+  const {
+    connections,
+    loading: connectionsLoading,
+    error: connectionsError,
+    refresh: refreshConnections,
+  } = useConnections(personId);
+  const updatePerson = useUpdatePerson(personId);
+  const deletePerson = useDeletePerson(personId);
 
   async function handleSubmit(values: PersonFormValues) {
-    if (!personId) return;
-    setIsSubmitting(true);
     try {
-      // `as any`: works around an upstream Amplify Gen 2 typing bug, see
-      // PersonCreatePage.tsx for details (aws-amplify/amplify-js#13695).
-      const { errors } = await client.models.Person.update({
-        id: personId,
-        ...toPersonInput(values),
-      } as any);
-      if (errors) {
-        toast.error(errors.map((e) => e.message).join(', '));
-        return;
-      }
+      await updatePerson.mutateAsync(toPersonInput(values));
       toast.success('Saved');
-      refresh();
-    } finally {
-      setIsSubmitting(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save');
     }
   }
 
   async function handleDelete() {
-    if (!personId) return;
-    setIsDeleting(true);
     try {
-      const deleteResults = await Promise.all(
-        connections.map((c) => client.models.Connection.delete({ id: c.connectionId })),
-      );
-      const connectionErrors = deleteResults.flatMap((r) => r.errors ?? []);
-      if (connectionErrors.length > 0) {
-        toast.error(connectionErrors.map((e) => e.message).join(', '));
-        return;
-      }
-
-      const { errors } = await client.models.Person.delete({ id: personId });
-      if (errors) {
-        toast.error(errors.map((e) => e.message).join(', '));
-        return;
-      }
+      // The API cascades: deleting a person also deletes their connections.
+      await deletePerson.mutateAsync();
       toast.success('Person deleted');
       navigate('/');
-    } finally {
-      setIsDeleting(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete');
     }
   }
 
@@ -110,7 +73,7 @@ export default function PersonDetailPage() {
         <h1 className="text-2xl font-semibold">{person.name}</h1>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="destructive" disabled={isDeleting}>
+            <Button variant="destructive" disabled={deletePerson.isPending}>
               Delete
             </Button>
           </AlertDialogTrigger>
@@ -133,58 +96,49 @@ export default function PersonDetailPage() {
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <div className="max-w-xl space-y-6">
-          <PhotoUploader
-            personId={person.id}
-            personName={person.name}
-            photoKey={person.photoKey}
-            onUploaded={() => refresh()}
-          />
+          <PhotoUploader personName={person.name} photoKey={person.photo_key} />
           <PersonForm
-            defaultValues={{
-              name: person.name,
-              relationshipCategory: person.relationshipCategory ?? 'FRIEND',
-              context: person.context ?? '',
-              phone: person.phone ?? '',
-              email: person.email ?? '',
-              address: person.address ?? '',
-              birthday: person.birthday ?? '',
-              notes: person.notes ?? '',
-              lastContactedDate: person.lastContactedDate ?? '',
-            }}
+            defaultValues={toFormValues(person)}
             onSubmit={handleSubmit}
             submitLabel="Save changes"
-            isSubmitting={isSubmitting}
+            isSubmitting={updatePerson.isPending}
           />
         </div>
 
-        <div className="space-y-6">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Connections</h2>
-              <AddConnectionDialog
-                personId={person.id}
-                personName={person.name}
-                onCreated={refreshConnections}
+        {CONNECTIONS_ENABLED ? (
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Connections</h2>
+                <AddConnectionDialog
+                  personId={person.id}
+                  personName={person.name}
+                  onCreated={refreshConnections}
+                />
+              </div>
+              <ConnectionList
+                connections={connections}
+                loading={connectionsLoading}
+                error={connectionsError}
+                onChanged={refreshConnections}
               />
             </div>
-            <ConnectionList
-              connections={connections}
-              loading={connectionsLoading}
-              error={connectionsError}
-              onChanged={refreshConnections}
-            />
-          </div>
 
-          <div className="space-y-3">
-            <h2 className="text-lg font-semibold">Graph</h2>
-            <EgoGraph
-              centerId={person.id}
-              centerName={person.name}
-              centerPhotoKey={person.photoKey}
-              connections={connections}
-            />
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold">Graph</h2>
+              <EgoGraph
+                centerId={person.id}
+                centerName={person.name}
+                centerPhotoKey={person.photo_key}
+                connections={connections}
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="text-muted-foreground rounded-md border p-6 text-sm">
+            Connections and the relationship graph are coming back in the next update.
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,26 +1,5 @@
-import { useEffect, useState } from 'react';
-import { getUrl } from 'aws-amplify/storage';
-
-export function usePhotoUrl(photoKey: string | null | undefined) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!photoKey) {
-      setUrl(null);
-      return;
-    }
-    let cancelled = false;
-    getUrl({ path: photoKey })
-      .then(({ url: signedUrl }) => {
-        if (!cancelled) setUrl(signedUrl.toString());
-      })
-      .catch(() => {
-        if (!cancelled) setUrl(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [photoKey]);
-
-  return url;
+// Photos move to Cloudflare R2 with presigned URLs in M10 (docs/backend-migration-plan.md).
+// Until then nothing resolves, so avatars show their fallback icon.
+export function usePhotoUrl(_photoKey: string | null | undefined): string | null {
+  return null;
 }

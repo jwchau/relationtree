@@ -1,83 +1,37 @@
-import { useCallback, useEffect, useState } from 'react';
-import { client } from '@/amplify-client';
-import {
-  relationshipLabel,
-  inverseRelationshipLabel,
-  type RelationshipType,
-} from '@/lib/relationshipTypes';
-import type { Schema } from '../../amplify/data/resource';
+import type { Person } from '@/api/client';
+import type { RelationshipType } from '@/lib/relationshipTypes';
 
-type ConnectionRecord = Schema['Connection']['type'];
-type PersonRecord = Schema['Person']['type'];
+// Connections are being rebuilt on the Django API (M9, see docs/backend-migration-plan.md).
+// Until then they're disabled; these keep the connection UI compiling for that rewire.
+
+export const CONNECTIONS_ENABLED = false;
 
 export interface ConnectionWithPerson {
   connectionId: string;
   relationshipType: RelationshipType;
   displayLabel: string;
-  otherPerson: PersonRecord;
+  otherPerson: Person;
 }
 
-async function resolveOtherPerson(otherPersonId: string): Promise<PersonRecord | null> {
-  const { data } = await client.models.Person.get({ id: otherPersonId });
-  return data;
+const NOT_YET = 'Connections are coming back in the next update.';
+
+export function useConnections(_personId: string | undefined) {
+  return {
+    connections: [] as ConnectionWithPerson[],
+    loading: false,
+    error: null as string | null,
+    refresh: () => {},
+  };
 }
 
-export function useConnections(personId: string | undefined) {
-  const [connections, setConnections] = useState<ConnectionWithPerson[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export async function createConnection(_input: {
+  personAId: string;
+  personBId: string;
+  relationshipType: RelationshipType;
+}): Promise<void> {
+  throw new Error(NOT_YET);
+}
 
-  const refresh = useCallback(async () => {
-    if (!personId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const [asA, asB] = await Promise.all([
-        client.models.Connection.listConnectionByPersonAId({ personAId: personId }),
-        client.models.Connection.listConnectionByPersonBId({ personBId: personId }),
-      ]);
-      const errors = [...(asA.errors ?? []), ...(asB.errors ?? [])];
-      if (errors.length > 0) {
-        setError(errors.map((e) => e.message).join(', '));
-        setConnections([]);
-        return;
-      }
-
-      const records: { conn: ConnectionRecord; isPersonA: boolean }[] = [
-        ...asA.data.map((conn) => ({ conn, isPersonA: true })),
-        ...asB.data.map((conn) => ({ conn, isPersonA: false })),
-      ];
-
-      const resolved = await Promise.all(
-        records.map(async ({ conn, isPersonA }) => {
-          const otherPersonId = isPersonA ? conn.personBId : conn.personAId;
-          const otherPerson = await resolveOtherPerson(otherPersonId);
-          if (!otherPerson || !conn.relationshipType) return null;
-          const relationshipType = conn.relationshipType as RelationshipType;
-          const displayLabel = isPersonA
-            ? relationshipLabel(relationshipType)
-            : inverseRelationshipLabel(relationshipType);
-          const result: ConnectionWithPerson = {
-            connectionId: conn.id,
-            relationshipType,
-            displayLabel,
-            otherPerson,
-          };
-          return result;
-        }),
-      );
-
-      setConnections(resolved.filter((c): c is ConnectionWithPerson => c !== null));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load connections');
-    } finally {
-      setLoading(false);
-    }
-  }, [personId]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return { connections, loading, error, refresh };
+export async function deleteConnection(_connectionId: string): Promise<void> {
+  throw new Error(NOT_YET);
 }

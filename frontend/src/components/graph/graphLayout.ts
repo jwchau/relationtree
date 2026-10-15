@@ -23,7 +23,7 @@ export function buildEgoGraph(
     const angle = (2 * Math.PI * i) / Math.max(count, 1) - Math.PI / 2;
     const data: PersonNodeData = {
       name: c.otherPerson.name,
-      photoKey: c.otherPerson.photoKey,
+      photoKey: c.otherPerson.photo_key,
       isCenter: false,
     };
     return {

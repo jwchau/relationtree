@@ -1,34 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
-import { client } from '@/amplify-client';
-import type { Schema } from '../../amplify/data/resource';
+import { useQuery } from '@tanstack/react-query';
+import { api, unwrap, type Person } from '@/api/client';
 
-export type PersonSummary = Schema['Person']['type'];
+export type PersonSummary = Person;
+
+export const peopleQueryKey = ['people'] as const;
 
 export function usePersonList() {
-  const [people, setPeople] = useState<PersonSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, errors } = await client.models.Person.list();
-      if (errors) {
-        setError(errors.map((e) => e.message).join(', '));
-      } else {
-        setPeople(data);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load people');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return { people, loading, error, refresh };
+  const query = useQuery({
+    queryKey: peopleQueryKey,
+    queryFn: () => unwrap(api.GET('/api/people')),
+  });
+  return { people: query.data ?? [], loading: query.isPending, error: query.error?.message ?? null };
 }

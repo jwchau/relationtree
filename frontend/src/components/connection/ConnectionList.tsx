@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
-import { client } from '@/amplify-client';
-import type { ConnectionWithPerson } from '@/hooks/useConnections';
+import { deleteConnection, type ConnectionWithPerson } from '@/hooks/useConnections';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -15,9 +14,10 @@ export interface ConnectionListProps {
 
 export function ConnectionList({ connections, loading, error, onChanged }: ConnectionListProps) {
   async function handleRemove(connectionId: string) {
-    const { errors } = await client.models.Connection.delete({ id: connectionId });
-    if (errors) {
-      toast.error(errors.map((e) => e.message).join(', '));
+    try {
+      await deleteConnection(connectionId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove connection');
       return;
     }
     toast.success('Connection removed');

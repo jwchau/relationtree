@@ -1,35 +1,58 @@
-import { useCallback, useEffect, useState } from 'react';
-import { client } from '@/amplify-client';
-import type { Schema } from '../../amplify/data/resource';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ApiError,
+  api,
+  unwrap,
+  type Person,
+  type PersonInput,
+  type PersonPatch,
+} from '@/api/client';
+import { peopleQueryKey } from '@/hooks/usePersonList';
 
-export type Person = Schema['Person']['type'];
+export type { Person };
 
 export function usePerson(personId: string | undefined) {
-  const [person, setPerson] = useState<Person | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useQuery({
+    queryKey: [...peopleQueryKey, personId],
+    enabled: Boolean(personId),
+    queryFn: async (): Promise<Person | null> => {
+      const { data, error, response } = await api.GET('/api/people/{person_id}', {
+        params: { path: { person_id: personId! } },
+      });
+      if (response.status === 404) return null;
+      if (error !== undefined || !data) throw new ApiError(response.status, 'Failed to load person');
+      return data;
+    },
+  });
+  return { person: query.data ?? null, loading: query.isPending, error: query.error?.message ?? null };
+}
 
-  const refresh = useCallback(async () => {
-    if (!personId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, errors } = await client.models.Person.get({ id: personId });
-      if (errors) {
-        setError(errors.map((e) => e.message).join(', '));
-      } else {
-        setPerson(data);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load person');
-    } finally {
-      setLoading(false);
-    }
-  }, [personId]);
+// Mutations invalidate the ['people'] prefix, which also refreshes every ['people', id] query.
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+export function useCreatePerson() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PersonInput) => unwrap(api.POST('/api/people', { body })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
+  });
+}
 
-  return { person, loading, error, refresh };
+export function useUpdatePerson(personId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PersonPatch) =>
+      unwrap(
+        api.PATCH('/api/people/{person_id}', { params: { path: { person_id: personId } }, body }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
+  });
+}
+
+export function useDeletePerson(personId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      unwrap(api.DELETE('/api/people/{person_id}', { params: { path: { person_id: personId } } })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
+  });
 }

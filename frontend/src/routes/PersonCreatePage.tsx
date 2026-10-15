@@ -1,45 +1,22 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import { client } from '@/amplify-client';
+import { useCreatePerson } from '@/hooks/usePerson';
 import { PersonForm } from '@/components/person/PersonForm';
+import { toPersonInput } from '@/lib/personInput';
 import type { PersonFormValues } from '@/lib/validation';
-
-function toPersonInput(values: PersonFormValues) {
-  return {
-    name: values.name,
-    relationshipCategory: values.relationshipCategory,
-    context: values.context || undefined,
-    phone: values.phone || undefined,
-    email: values.email || undefined,
-    address: values.address || undefined,
-    birthday: values.birthday || undefined,
-    notes: values.notes || undefined,
-    lastContactedDate: values.lastContactedDate || undefined,
-  };
-}
 
 export default function PersonCreatePage() {
   const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const createPerson = useCreatePerson();
 
   async function handleSubmit(values: PersonFormValues) {
-    setIsSubmitting(true);
     try {
-      // `as any`: works around an upstream Amplify Gen 2 typing bug where
-      // client.models.X.create()'s inferred input type collapses to a bogus
-      // `{ [x: string]: string[] }` shape (aws-amplify/amplify-js#13695).
-      // toPersonInput()'s return type is what's actually enforced here.
-      const { data, errors } = await client.models.Person.create(toPersonInput(values) as any);
-      if (errors || !data) {
-        toast.error(errors?.map((e) => e.message).join(', ') ?? 'Failed to create person');
-        return;
-      }
-      toast.success(`${data.name} added`);
-      navigate(`/people/${data.id}`);
-    } finally {
-      setIsSubmitting(false);
+      const person = await createPerson.mutateAsync(toPersonInput(values));
+      toast.success(`${person.name} added`);
+      navigate(`/people/${person.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create person');
     }
   }
 
@@ -53,7 +30,11 @@ export default function PersonCreatePage() {
         Back to people
       </Link>
       <h1 className="text-2xl font-semibold">Add person</h1>
-      <PersonForm onSubmit={handleSubmit} submitLabel="Add person" isSubmitting={isSubmitting} />
+      <PersonForm
+        onSubmit={handleSubmit}
+        submitLabel="Add person"
+        isSubmitting={createPerson.isPending}
+      />
     </div>
   );
 }

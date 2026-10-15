@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import type { PersonSummary } from '@/hooks/usePersonList';
 
 export function PersonCard({ person }: { person: PersonSummary }) {
-  const url = usePhotoUrl(person.photoKey);
+  const url = usePhotoUrl(person.photo_key);
 
   return (
     <Link to={`/people/${person.id}`}>
@@ -22,8 +22,8 @@ export function PersonCard({ person }: { person: PersonSummary }) {
               </AvatarFallback>
             </Avatar>
             <span className="flex-1">{person.name}</span>
-            {person.relationshipCategory && (
-              <Badge variant="secondary">{categoryLabel(person.relationshipCategory)}</Badge>
+            {person.relationship_category && (
+              <Badge variant="secondary">{categoryLabel(person.relationship_category)}</Badge>
             )}
           </CardTitle>
         </CardHeader>

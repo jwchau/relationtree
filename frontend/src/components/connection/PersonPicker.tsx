@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Check, ChevronsUpDown, UserPlus } from 'lucide-react';
-import { client } from '@/amplify-client';
+import type { Person } from '@/api/client';
+import { usePersonList } from '@/hooks/usePersonList';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,28 +13,18 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import type { Schema } from '../../../amplify/data/resource';
-
-type PersonRecord = Schema['Person']['type'];
 
 export interface PersonPickerProps {
   excludePersonId?: string;
-  value: PersonRecord | null;
-  onChange: (person: PersonRecord | null) => void;
+  value: Person | null;
+  onChange: (person: Person | null) => void;
   onCreateNew: (name: string) => void;
 }
 
 export function PersonPicker({ excludePersonId, value, onChange, onCreateNew }: PersonPickerProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [people, setPeople] = useState<PersonRecord[]>([]);
-
-  useEffect(() => {
-    if (!open) return;
-    client.models.Person.list().then(({ data }) => {
-      setPeople(data.filter((p) => p.id !== excludePersonId));
-    });
-  }, [open, excludePersonId]);
+  const people = usePersonList().people.filter((p) => p.id !== excludePersonId);
 
   const filtered = people.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const exactMatch = people.some((p) => p.name.toLowerCase() === search.trim().toLowerCase());
