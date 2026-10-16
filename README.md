@@ -8,6 +8,26 @@ the resulting graph.
 > Django + Postgres stack. See [docs/backend-migration-plan.md](./docs/backend-migration-plan.md)
 > for the agreed design and milestones.
 
+## Status
+
+| Milestone | State |
+|---|---|
+| M7 Skeleton, Amplify torn down | ✅ |
+| M8 Session auth, trees, people CRUD | ✅ |
+| M9 Connections (DB-enforced, backend labels) | ✅ |
+| M10 Photos on Cloudflare R2 (presigned) | ✅ |
+| M11 AI catch-up summaries (local Ollama, streamed) | ✅ |
+| M12 "Ask" semantic search (pgvector + qwen3-embedding, relationship summaries) | ✅ |
+| **M13 Production cutover** on the Windows home server | **next** |
+| v2 Sharing + invites, graph Q&A agent, free-text extraction | later |
+
+All of M7–M12 is on `dev` with CI green; `main` still holds the old Amplify scaffold (nothing
+deploys from it) until the M13 cutover is merged. M13 scope, from the plan: `start.ps1` /
+`stop.ps1` (including warming the chat model and `embed_worker --once`), `cloudflared` +
+`backup` + `embed_worker` services in a prod `compose.yml`, Cloudflare Pages deploy from Actions,
+GHCR image pull, whitenoise for admin static files, event-based backups to R2 with a tested
+restore, healthchecks.io, and a prod R2 bucket/CORS origin.
+
 Photos live in a private Cloudflare R2 bucket. For local photo uploads, fill in the
 `CLOUDFLARE_R2_*` values in `backend/.env` and allow `http://localhost:5173` in the
 bucket's CORS policy (`PUT`, `GET`, `HEAD`; header `Content-Type`). Everything else works
@@ -52,6 +72,26 @@ npm run dev
 cd backend
 uv run python manage.py embed_worker
 ```
+
+### After changing the API
+
+The frontend's API types are generated from the backend's OpenAPI schema. CI fails if either
+file is stale.
+
+```bash
+cd backend && uv run python manage.py export_openapi_schema --api relationtree.api.api \
+  --output ../frontend/src/api/openapi.json --indent 2
+cd ../frontend && npm run gen:api
+```
+
+### Local gotchas (Windows)
+
+- Use `127.0.0.1`, not `localhost`, for Ollama: `localhost` tries IPv6 first and adds ~2 s per
+  call (`OLLAMA_URL` already defaults to this).
+- Stopping a dev server's terminal/task can leave its `node`/`python` child running and holding
+  port 5173/8000; check with `Get-NetTCPConnection -LocalPort 5173,8000`.
+- Changing what `search.document_text()` produces needs a migration that bumps every person's
+  `content_version` (see migration 0004), or existing search entries stay stale.
 
 ## Checks
 
