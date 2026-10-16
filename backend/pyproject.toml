@@ -11,6 +11,8 @@ dependencies = [
     "django-environ>=0.14.0",
     "django-ninja>=1.7.1",
     "django-stubs-ext>=6.1.2",
+    "httpx>=0.28.1",
+    "ollama>=0.6.3",
     "psycopg[binary]>=3.3.6",
     "uvicorn>=0.54.0",
 ]
@@ -21,6 +23,7 @@ dev = [
     "django-stubs>=6.1.2",
     "mypy>=2.4.0",
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
     "pytest-django>=4.14.0",
     "ruff>=0.17.1",
 ]
@@ -28,6 +31,7 @@ dev = [
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100

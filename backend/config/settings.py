@@ -110,3 +110,14 @@ CLOUDFLARE_R2_ACCOUNT_ID = env("CLOUDFLARE_R2_ACCOUNT_ID", default="")
 CLOUDFLARE_R2_ACCESS_KEY_ID = env("CLOUDFLARE_R2_ACCESS_KEY_ID", default="")
 CLOUDFLARE_R2_SECRET_ACCESS_KEY = env("CLOUDFLARE_R2_SECRET_ACCESS_KEY", default="")
 CLOUDFLARE_R2_BUCKET_NAME = env("CLOUDFLARE_R2_BUCKET_NAME", default="")
+
+# Local LLM (Ollama). See docs/backend-migration-plan.md -> AI.
+OLLAMA_URL = env("OLLAMA_URL", default="http://localhost:11434")
+CHAT_MODEL = env("CHAT_MODEL", default="qwen3.8:27b")
+OLLAMA_NUM_CTX = env.int("OLLAMA_NUM_CTX", default=8192)
+OLLAMA_CONNECT_TIMEOUT = env.float("OLLAMA_CONNECT_TIMEOUT", default=3.0)
+# How long Ollama keeps the model in VRAM after a request. Not forever, so the GPU frees up
+# for other things (games) when the app isn't in use.
+OLLAMA_KEEP_ALIVE = env("OLLAMA_KEEP_ALIVE", default="1h")
+# Must cover a cold model load: ~100 s to get qwen3.8:27b (~17 GB) into VRAM.
+AI_FIRST_TOKEN_TIMEOUT = env.float("AI_FIRST_TOKEN_TIMEOUT", default=180.0)

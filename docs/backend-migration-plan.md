@@ -108,7 +108,15 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
 - Settings: `OLLAMA_URL`, `CHAT_MODEL` (~27B class, e.g. Qwen), `EMBED_MODEL` (e.g. `nomic-embed-text`).
 - Always pass `num_ctx` explicitly (e.g. 8192) — Ollama's default context silently truncates.
 - `think=False` for summaries (thinking models otherwise stall before the first streamed token).
-- `OLLAMA_MAX_LOADED_MODELS=2`, `OLLAMA_KEEP_ALIVE=-1` (or e.g. `2h`) so chat + embed models stay resident.
+- Django sends `keep_alive` (`OLLAMA_KEEP_ALIVE`, default `1h`) with every request: Ollama's
+  default unloads after 5 idle minutes, and a cold load of qwen3.8:27b takes ~100 s (warm: first
+  token <1 s, ~35 tok/s on the 3090 Ti). Not `-1`, so VRAM frees up for games after an hour.
+  `OLLAMA_MAX_LOADED_MODELS=2` on the Ollama side once the embed model arrives (M12).
+- First-token timeout is 180 s (covers a cold load); connect timeout 3 s (dead Ollama fails fast).
+- M13's `start.ps1` should warm the model after starting the stack, so the first summary of a
+  session doesn't wait for the cold load.
+- Summaries stream as `text/plain` from `POST /api/people/{id}/summary`. Local dev and prod both
+  run under uvicorn, since `runserver` can't stream async responses.
 - When Ollama is down/unreachable, endpoints return a clear "AI unavailable" error, never hang.
 - A single `build_summary_context(person)` controls what goes into prompts.
 - **MVP:** (2) catch-up summaries ("catch me up on Sam"), streamed; then (1) natural-language search

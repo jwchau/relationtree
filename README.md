@@ -13,6 +13,13 @@ Photos live in a private Cloudflare R2 bucket. For local photo uploads, fill in 
 bucket's CORS policy (`PUT`, `GET`, `HEAD`; header `Content-Type`). Everything else works
 without R2, and tests never touch it.
 
+AI catch-ups use a local [Ollama](https://ollama.com) (`ollama pull qwen3.8:27b`, or set
+`CHAT_MODEL`). Without it, everything works except the "Catch me up" card, which reports that
+the AI is unavailable. Tests use a fake model and never call Ollama.
+
+The API runs under uvicorn (ASGI), not `manage.py runserver`, because runserver can't stream
+the AI summaries. Side effect until M13: Django admin pages load without CSS locally.
+
 ## Stack
 
 - **frontend/** — React + Vite + TypeScript, Tailwind CSS + shadcn/ui, React Flow (`@xyflow/react`), Vitest, oxlint
@@ -32,7 +39,7 @@ cp .env.example .env
 uv sync
 uv run python manage.py migrate
 uv run python manage.py createsuperuser   # accounts are admin-created; there is no sign-up
-uv run python manage.py runserver
+uv run uvicorn config.asgi:application --reload --port 8000
 
 # 3. Frontend → http://localhost:5173 (second terminal)
 cd frontend

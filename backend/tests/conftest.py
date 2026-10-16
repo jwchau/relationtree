@@ -4,8 +4,8 @@ import pytest
 from django.contrib.auth.models import User
 from django.test import Client
 
-from relationtree import photos
-from tests.fakes import FakePhotoStorage
+from relationtree import ai, photos
+from tests.fakes import FakeChatModel, FakePhotoStorage
 
 
 @pytest.fixture
@@ -28,3 +28,12 @@ def photo_storage() -> Iterator[FakePhotoStorage]:
     photos.set_photo_storage(fake)
     yield fake
     photos.set_photo_storage(None)
+
+
+@pytest.fixture(autouse=True)
+def chat_model() -> Iterator[FakeChatModel]:
+    """Every test gets a fake LLM so nothing ever calls Ollama."""
+    fake = FakeChatModel()
+    ai.set_chat_model(fake)
+    yield fake
+    ai.set_chat_model(None)

@@ -1,8 +1,11 @@
-"""Relationship semantics shared by the API (and, later, the AI features)."""
+"""Relationship semantics shared by the API and the AI features."""
 
+from dataclasses import dataclass
 from uuid import UUID
 
-from relationtree.models import Connection
+from django.db.models import Q
+
+from relationtree.models import Connection, Person
 
 # A stored connection reads "person_a is <type> of person_b" (Ann PARENT Ben: Ann is Ben's parent).
 # Labels describe the *other* person's role relative to the person being viewed.
@@ -34,3 +37,32 @@ def canonical_pair(type_: Connection.RelationshipType, a: UUID, b: UUID) -> tupl
     if type_ in SYMMETRIC and b < a:
         return b, a
     return a, b
+
+
+@dataclass(frozen=True)
+class ConnectionView:
+    """One connection as seen from a particular person's page."""
+
+    connection: Connection
+    other: Person
+    label: str
+
+
+def connections_of(person: Person) -> list[ConnectionView]:
+    """Everyone connected to this person, labelled from their point of view (2 queries max)."""
+    connections = (
+        Connection.objects.filter(Q(person_a=person) | Q(person_b=person))
+        .select_related("person_a", "person_b")
+        .order_by("created_at")
+    )
+    views = []
+    for c in connections:
+        viewer_is_a = c.person_a_id == person.id
+        views.append(
+            ConnectionView(
+                connection=c,
+                other=c.person_b if viewer_is_a else c.person_a,
+                label=label_for(Connection.RelationshipType(c.type), viewer_is_a),
+            )
+        )
+    return views

@@ -2,7 +2,6 @@ from typing import Self
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
-from django.db.models import Q
 from ninja import Router, Schema
 from ninja.responses import Status
 from ninja.security import django_auth
@@ -15,7 +14,7 @@ from relationtree.access import (
 )
 from relationtree.models import Connection
 from relationtree.people_api import PersonOut
-from relationtree.relationships import canonical_pair, label_for
+from relationtree.relationships import canonical_pair, connections_of
 from relationtree.schemas import ErrorOut
 from relationtree.types import AuthedRequest
 
@@ -73,25 +72,17 @@ def create_connection(
 @router.get("/people/{person_id}/connections", response=list[PersonConnectionOut])
 def list_person_connections(request: AuthedRequest, person_id: UUID) -> list[dict[str, object]]:
     person = person_visible_to(request.user, person_id)
-    connections = (
-        Connection.objects.filter(Q(person_a=person) | Q(person_b=person))
-        .select_related("person_a", "person_b")
-        .order_by("created_at")
-    )
-    result: list[dict[str, object]] = []
-    for c in connections:
-        viewer_is_a = c.person_a_id == person.id
-        result.append(
-            {
-                "id": c.id,
-                "type": c.type,
-                "label": label_for(Connection.RelationshipType(c.type), viewer_is_a),
-                # Hand Ninja the model, not a pre-built PersonOut: its response serialization
-                # runs PersonOut's resolvers (photo_url); model_validate would skip them.
-                "other_person": c.person_b if viewer_is_a else c.person_a,
-            }
-        )
-    return result
+    # Hand Ninja the model, not a pre-built PersonOut: its response serialization runs
+    # PersonOut's resolvers (photo_url), which model_validate would skip.
+    return [
+        {
+            "id": v.connection.id,
+            "type": v.connection.type,
+            "label": v.label,
+            "other_person": v.other,
+        }
+        for v in connections_of(person)
+    ]
 
 
 @router.delete("/connections/{connection_id}", response={204: None})

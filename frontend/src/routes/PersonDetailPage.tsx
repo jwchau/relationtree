@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useDeletePerson, usePerson, useUpdatePerson } from '@/hooks/usePerson';
 import { useConnections } from '@/hooks/useConnections';
 import { PersonForm } from '@/components/person/PersonForm';
+import { CatchUpCard } from '@/components/person/CatchUpCard';
 import { PhotoUploader } from '@/components/person/PhotoUploader';
 import { ConnectionList } from '@/components/connection/ConnectionList';
 import { AddConnectionDialog } from '@/components/connection/AddConnectionDialog';
@@ -102,6 +103,8 @@ export default function PersonDetailPage() {
         </div>
 
         <div className="space-y-6">
+          <CatchUpCard personId={person.id} personName={person.name} />
+
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Connections</h2>
