@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDeletePerson, usePerson, useUpdatePerson } from '@/hooks/usePerson';
-import { CONNECTIONS_ENABLED, useConnections } from '@/hooks/useConnections';
+import { useConnections } from '@/hooks/useConnections';
 import { PersonForm } from '@/components/person/PersonForm';
 import { PhotoUploader } from '@/components/person/PhotoUploader';
 import { ConnectionList } from '@/components/connection/ConnectionList';
@@ -27,12 +27,8 @@ export default function PersonDetailPage() {
   const { personId = '' } = useParams<{ personId: string }>();
   const navigate = useNavigate();
   const { person, loading, error } = usePerson(personId);
-  const {
-    connections,
-    loading: connectionsLoading,
-    error: connectionsError,
-    refresh: refreshConnections,
-  } = useConnections(personId);
+  const { connections, loading: connectionsLoading, error: connectionsError } =
+    useConnections(personId);
   const updatePerson = useUpdatePerson(personId);
   const deletePerson = useDeletePerson(personId);
 
@@ -105,40 +101,29 @@ export default function PersonDetailPage() {
           />
         </div>
 
-        {CONNECTIONS_ENABLED ? (
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Connections</h2>
-                <AddConnectionDialog
-                  personId={person.id}
-                  personName={person.name}
-                  onCreated={refreshConnections}
-                />
-              </div>
-              <ConnectionList
-                connections={connections}
-                loading={connectionsLoading}
-                error={connectionsError}
-                onChanged={refreshConnections}
-              />
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Connections</h2>
+              <AddConnectionDialog personId={person.id} personName={person.name} />
             </div>
+            <ConnectionList
+              connections={connections}
+              loading={connectionsLoading}
+              error={connectionsError}
+            />
+          </div>
 
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold">Graph</h2>
-              <EgoGraph
-                centerId={person.id}
-                centerName={person.name}
-                centerPhotoKey={person.photo_key}
-                connections={connections}
-              />
-            </div>
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold">Graph</h2>
+            <EgoGraph
+              centerId={person.id}
+              centerName={person.name}
+              centerPhotoKey={person.photo_key}
+              connections={connections}
+            />
           </div>
-        ) : (
-          <div className="text-muted-foreground rounded-md border p-6 text-sm">
-            Connections and the relationship graph are coming back in the next update.
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

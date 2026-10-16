@@ -1,16 +1,12 @@
-export const RELATIONSHIP_TYPES = [
-  'SPOUSE',
-  'SIBLING',
-  'FRIEND',
-  'COWORKER',
-  'ACQUAINTANCE',
-  'PARENT',
-  'MANAGER',
-] as const;
+import type { components } from '@/api/schema';
 
-export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
+// Display labels for dropdowns. Which label a connection shows from each side (e.g. Parent vs
+// Child) is decided by the API, see backend/relationtree/relationships.py.
 
-const LABELS: Record<RelationshipType | 'CHILD' | 'REPORT', string> = {
+export type RelationshipType = components['schemas']['RelationshipType'];
+export type RelationshipCategory = components['schemas']['RelationshipCategory'];
+
+const RELATIONSHIP_LABELS: Record<RelationshipType, string> = {
   SPOUSE: 'Spouse',
   SIBLING: 'Sibling',
   FRIEND: 'Friend',
@@ -18,46 +14,13 @@ const LABELS: Record<RelationshipType | 'CHILD' | 'REPORT', string> = {
   ACQUAINTANCE: 'Acquaintance',
   PARENT: 'Parent',
   MANAGER: 'Manager',
-  CHILD: 'Child',
-  REPORT: 'Report',
 };
 
-const SYMMETRIC = new Set<RelationshipType>([
-  'SPOUSE',
-  'SIBLING',
-  'FRIEND',
-  'COWORKER',
-  'ACQUAINTANCE',
-]);
+export const RELATIONSHIP_TYPES = Object.keys(RELATIONSHIP_LABELS) as RelationshipType[];
 
-const INVERSE_LABEL: Partial<Record<RelationshipType, string>> = {
-  PARENT: LABELS.CHILD,
-  MANAGER: LABELS.REPORT,
-};
-
-export function isSymmetric(type: RelationshipType): boolean {
-  return SYMMETRIC.has(type);
-}
-
-/** Label to display from the "A" side of the connection (as stored). */
 export function relationshipLabel(type: RelationshipType): string {
-  return LABELS[type];
+  return RELATIONSHIP_LABELS[type];
 }
-
-/** Label to display from the "B" side of the connection (auto-derived inverse). */
-export function inverseRelationshipLabel(type: RelationshipType): string {
-  return INVERSE_LABEL[type] ?? LABELS[type];
-}
-
-export const RELATIONSHIP_CATEGORIES = [
-  'FAMILY',
-  'FRIEND',
-  'COWORKER',
-  'ACQUAINTANCE',
-  'OTHER',
-] as const;
-
-export type RelationshipCategory = (typeof RELATIONSHIP_CATEGORIES)[number];
 
 const CATEGORY_LABELS: Record<RelationshipCategory, string> = {
   FAMILY: 'Family',
@@ -66,6 +29,8 @@ const CATEGORY_LABELS: Record<RelationshipCategory, string> = {
   ACQUAINTANCE: 'Acquaintance',
   OTHER: 'Other',
 };
+
+export const RELATIONSHIP_CATEGORIES = Object.keys(CATEGORY_LABELS) as RelationshipCategory[];
 
 export function categoryLabel(category: RelationshipCategory): string {
   return CATEGORY_LABELS[category];

@@ -65,3 +65,36 @@ class Person(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class Connection(models.Model):
+    class RelationshipType(models.TextChoices):
+        SPOUSE = "SPOUSE"
+        SIBLING = "SIBLING"
+        FRIEND = "FRIEND"
+        COWORKER = "COWORKER"
+        ACQUAINTANCE = "ACQUAINTANCE"
+        PARENT = "PARENT"
+        MANAGER = "MANAGER"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name="connections")
+    person_a = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="+")
+    person_b = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="+")
+    type = models.CharField(max_length=20, choices=RelationshipType.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(person_a=models.F("person_b")), name="no_self_connection"
+            ),
+            # Symmetric types are stored with the lower UUID as person_a (see
+            # relationships.canonical_pair), so this also catches B-A duplicates of A-B.
+            models.UniqueConstraint(
+                fields=["person_a", "person_b", "type"], name="unique_connection"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.person_a} {self.type} {self.person_b}"

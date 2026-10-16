@@ -7,6 +7,7 @@ import {
   type PersonInput,
   type PersonPatch,
 } from '@/api/client';
+import { connectionsQueryKey } from '@/hooks/useConnections';
 import { peopleQueryKey } from '@/hooks/usePersonList';
 
 export type { Person };
@@ -53,6 +54,11 @@ export function useDeletePerson(personId: string) {
   return useMutation({
     mutationFn: () =>
       unwrap(api.DELETE('/api/people/{person_id}', { params: { path: { person_id: personId } } })),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
+    // The API cascades the delete to the person's connections, which appear on other people's lists.
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
+        queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+      ]),
   });
 }

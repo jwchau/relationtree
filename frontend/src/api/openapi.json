@@ -334,6 +334,136 @@
           }
         ]
       }
+    },
+    "/api/connections": {
+      "post": {
+        "operationId": "relationtree_connections_api_create_connection",
+        "summary": "Create Connection",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "connections"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/people/{person_id}/connections": {
+      "get": {
+        "operationId": "relationtree_connections_api_list_person_connections",
+        "summary": "List Person Connections",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "person_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonConnectionOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "connections"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/connections/{connection_id}": {
+      "delete": {
+        "operationId": "relationtree_connections_api_delete_connection",
+        "summary": "Delete Connection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        },
+        "tags": [
+          "connections"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -723,6 +853,101 @@
           }
         },
         "title": "PersonPatch",
+        "type": "object"
+      },
+      "ConnectionOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "person_a_id": {
+            "format": "uuid",
+            "title": "Person A Id",
+            "type": "string"
+          },
+          "person_b_id": {
+            "format": "uuid",
+            "title": "Person B Id",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/RelationshipType"
+          }
+        },
+        "required": [
+          "id",
+          "person_a_id",
+          "person_b_id",
+          "type"
+        ],
+        "title": "ConnectionOut",
+        "type": "object"
+      },
+      "RelationshipType": {
+        "enum": [
+          "SPOUSE",
+          "SIBLING",
+          "FRIEND",
+          "COWORKER",
+          "ACQUAINTANCE",
+          "PARENT",
+          "MANAGER"
+        ],
+        "title": "RelationshipType",
+        "type": "string"
+      },
+      "ConnectionIn": {
+        "properties": {
+          "person_a_id": {
+            "format": "uuid",
+            "title": "Person A Id",
+            "type": "string"
+          },
+          "person_b_id": {
+            "format": "uuid",
+            "title": "Person B Id",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/RelationshipType"
+          }
+        },
+        "required": [
+          "person_a_id",
+          "person_b_id",
+          "type"
+        ],
+        "title": "ConnectionIn",
+        "type": "object"
+      },
+      "PersonConnectionOut": {
+        "description": "A connection seen from one person's page.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/RelationshipType"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "other_person": {
+            "$ref": "#/components/schemas/PersonOut"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label",
+          "other_person"
+        ],
+        "title": "PersonConnectionOut",
         "type": "object"
       }
     },

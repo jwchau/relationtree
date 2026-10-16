@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
-import { deleteConnection, type ConnectionWithPerson } from '@/hooks/useConnections';
+import { useDeleteConnection, type ConnectionWithPerson } from '@/hooks/useConnections';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -9,19 +9,19 @@ export interface ConnectionListProps {
   connections: ConnectionWithPerson[];
   loading: boolean;
   error: string | null;
-  onChanged: () => void;
 }
 
-export function ConnectionList({ connections, loading, error, onChanged }: ConnectionListProps) {
+export function ConnectionList({ connections, loading, error }: ConnectionListProps) {
+  const deleteConnection = useDeleteConnection();
+
   async function handleRemove(connectionId: string) {
     try {
-      await deleteConnection(connectionId);
+      await deleteConnection.mutateAsync(connectionId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to remove connection');
       return;
     }
     toast.success('Connection removed');
-    onChanged();
   }
 
   if (loading) return <p className="text-muted-foreground text-sm">Loading connections...</p>;

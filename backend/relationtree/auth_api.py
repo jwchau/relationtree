@@ -6,6 +6,7 @@ from ninja.responses import Status
 from ninja.security import django_auth
 from ninja.utils import check_csrf
 
+from relationtree.schemas import ErrorOut
 from relationtree.types import AuthedRequest
 
 router = Router(tags=["auth"])
@@ -19,10 +20,6 @@ class LoginIn(Schema):
 class UserOut(Schema):
     id: int
     username: str
-
-
-class ErrorOut(Schema):
-    detail: str
 
 
 class CsrfOut(Schema):

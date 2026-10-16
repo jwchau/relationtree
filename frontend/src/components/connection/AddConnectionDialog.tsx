@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import type { Person } from '@/api/client';
 import { useCreatePerson } from '@/hooks/usePerson';
-import { createConnection } from '@/hooks/useConnections';
+import { useCreateConnection } from '@/hooks/useConnections';
 import {
   RELATIONSHIP_TYPES,
   relationshipLabel,
@@ -36,10 +36,9 @@ import {
 export interface AddConnectionDialogProps {
   personId: string;
   personName: string;
-  onCreated: () => void;
 }
 
-export function AddConnectionDialog({ personId, personName, onCreated }: AddConnectionDialogProps) {
+export function AddConnectionDialog({ personId, personName }: AddConnectionDialogProps) {
   const [open, setOpen] = useState(false);
   const [otherPerson, setOtherPerson] = useState<Person | null>(null);
   const [newPersonName, setNewPersonName] = useState<string | null>(null);
@@ -47,6 +46,7 @@ export function AddConnectionDialog({ personId, personName, onCreated }: AddConn
   const [relationshipType, setRelationshipType] = useState<RelationshipType>('FRIEND');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const createPerson = useCreatePerson();
+  const createConnection = useCreateConnection();
 
   function reset() {
     setOtherPerson(null);
@@ -75,12 +75,15 @@ export function AddConnectionDialog({ personId, personName, onCreated }: AddConn
         return;
       }
 
-      await createConnection({ personAId: personId, personBId: targetPersonId, relationshipType });
+      await createConnection.mutateAsync({
+        personAId: personId,
+        personBId: targetPersonId,
+        type: relationshipType,
+      });
 
       toast.success(`Connected ${personName} and ${targetPersonName}`);
       setOpen(false);
       reset();
-      onCreated();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add connection');
     } finally {

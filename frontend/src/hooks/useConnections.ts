@@ -1,37 +1,67 @@
-import type { Person } from '@/api/client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, unwrap, type Person } from '@/api/client';
 import type { RelationshipType } from '@/lib/relationshipTypes';
-
-// Connections are being rebuilt on the Django API (M9, see docs/backend-migration-plan.md).
-// Until then they're disabled; these keep the connection UI compiling for that rewire.
-
-export const CONNECTIONS_ENABLED = false;
 
 export interface ConnectionWithPerson {
   connectionId: string;
   relationshipType: RelationshipType;
+  /** The other person's role relative to the person being viewed (computed by the API). */
   displayLabel: string;
   otherPerson: Person;
 }
 
-const NOT_YET = 'Connections are coming back in the next update.';
+export const connectionsQueryKey = ['connections'] as const;
 
-export function useConnections(_personId: string | undefined) {
+export function useConnections(personId: string | undefined) {
+  const query = useQuery({
+    queryKey: [...connectionsQueryKey, personId],
+    enabled: Boolean(personId),
+    queryFn: async (): Promise<ConnectionWithPerson[]> => {
+      const rows = await unwrap(
+        api.GET('/api/people/{person_id}/connections', {
+          params: { path: { person_id: personId! } },
+        }),
+      );
+      return rows.map((row) => ({
+        connectionId: row.id,
+        relationshipType: row.type,
+        displayLabel: row.label,
+        otherPerson: row.other_person,
+      }));
+    },
+  });
   return {
-    connections: [] as ConnectionWithPerson[],
-    loading: false,
-    error: null as string | null,
-    refresh: () => {},
+    connections: query.data ?? [],
+    loading: query.isPending,
+    error: query.error?.message ?? null,
   };
 }
 
-export async function createConnection(_input: {
-  personAId: string;
-  personBId: string;
-  relationshipType: RelationshipType;
-}): Promise<void> {
-  throw new Error(NOT_YET);
+// A connection shows up on two people's lists, so mutations invalidate every
+// ['connections', ...] query rather than guessing which ones changed.
+
+export function useCreateConnection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { personAId: string; personBId: string; type: RelationshipType }) =>
+      unwrap(
+        api.POST('/api/connections', {
+          body: { person_a_id: input.personAId, person_b_id: input.personBId, type: input.type },
+        }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+  });
 }
 
-export async function deleteConnection(_connectionId: string): Promise<void> {
-  throw new Error(NOT_YET);
+export function useDeleteConnection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      unwrap(
+        api.DELETE('/api/connections/{connection_id}', {
+          params: { path: { connection_id: connectionId } },
+        }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+  });
 }

@@ -126,6 +126,57 @@ export interface paths {
         patch: operations["relationtree_people_api_update_person"];
         trace?: never;
     };
+    "/api/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Connection */
+        post: operations["relationtree_connections_api_create_connection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/{person_id}/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Person Connections */
+        get: operations["relationtree_connections_api_list_person_connections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Connection */
+        delete: operations["relationtree_connections_api_delete_connection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -264,6 +315,59 @@ export interface components {
             notes?: string | null;
             /** Last Contacted Date */
             last_contacted_date?: string | null;
+        };
+        /** ConnectionOut */
+        ConnectionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Person A Id
+             * Format: uuid
+             */
+            person_a_id: string;
+            /**
+             * Person B Id
+             * Format: uuid
+             */
+            person_b_id: string;
+            type: components["schemas"]["RelationshipType"];
+        };
+        /**
+         * RelationshipType
+         * @enum {string}
+         */
+        RelationshipType: "SPOUSE" | "SIBLING" | "FRIEND" | "COWORKER" | "ACQUAINTANCE" | "PARENT" | "MANAGER";
+        /** ConnectionIn */
+        ConnectionIn: {
+            /**
+             * Person A Id
+             * Format: uuid
+             */
+            person_a_id: string;
+            /**
+             * Person B Id
+             * Format: uuid
+             */
+            person_b_id: string;
+            type: components["schemas"]["RelationshipType"];
+        };
+        /**
+         * PersonConnectionOut
+         * @description A connection seen from one person's page.
+         */
+        PersonConnectionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            type: components["schemas"]["RelationshipType"];
+            /** Label */
+            label: string;
+            other_person: components["schemas"]["PersonOut"];
         };
     };
     responses: never;
@@ -512,6 +616,90 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PersonOut"];
                 };
+            };
+        };
+    };
+    relationtree_connections_api_create_connection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionIn"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    relationtree_connections_api_list_person_connections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonConnectionOut"][];
+                };
+            };
+        };
+    };
+    relationtree_connections_api_delete_connection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
