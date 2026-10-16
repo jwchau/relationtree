@@ -71,24 +71,25 @@ def create_connection(
 
 
 @router.get("/people/{person_id}/connections", response=list[PersonConnectionOut])
-def list_person_connections(request: AuthedRequest, person_id: UUID) -> list[PersonConnectionOut]:
+def list_person_connections(request: AuthedRequest, person_id: UUID) -> list[dict[str, object]]:
     person = person_visible_to(request.user, person_id)
     connections = (
         Connection.objects.filter(Q(person_a=person) | Q(person_b=person))
         .select_related("person_a", "person_b")
         .order_by("created_at")
     )
-    result = []
+    result: list[dict[str, object]] = []
     for c in connections:
         viewer_is_a = c.person_a_id == person.id
-        other = c.person_b if viewer_is_a else c.person_a
         result.append(
-            PersonConnectionOut(
-                id=c.id,
-                type=Connection.RelationshipType(c.type),
-                label=label_for(Connection.RelationshipType(c.type), viewer_is_a),
-                other_person=PersonOut.model_validate(other, from_attributes=True),
-            )
+            {
+                "id": c.id,
+                "type": c.type,
+                "label": label_for(Connection.RelationshipType(c.type), viewer_is_a),
+                # Hand Ninja the model, not a pre-built PersonOut: its response serialization
+                # runs PersonOut's resolvers (photo_url); model_validate would skip them.
+                "other_person": c.person_b if viewer_is_a else c.person_a,
+            }
         )
     return result
 

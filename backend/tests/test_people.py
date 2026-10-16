@@ -116,7 +116,7 @@ def test_a_person_must_have_a_name(login_as: Callable[[str], Client], blank: str
     assert alice.get(f"/api/people/{sam['id']}").json()["name"] == "Sam"
 
 
-@pytest.mark.parametrize("field", ["context", "phone", "email", "address", "photo_key", "notes"])
+@pytest.mark.parametrize("field", ["context", "phone", "email", "address", "notes"])
 def test_text_fields_reject_null_but_accept_empty(
     login_as: Callable[[str], Client], field: str
 ) -> None:

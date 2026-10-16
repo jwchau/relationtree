@@ -6,8 +6,12 @@ the resulting graph.
 
 > **Mid-migration.** The backend is moving from AWS Amplify to a self-hosted
 > Django + Postgres stack. See [docs/backend-migration-plan.md](./docs/backend-migration-plan.md)
-> for the agreed design and milestones. Photo uploads are temporarily disabled
-> until they move to Cloudflare R2 (M10).
+> for the agreed design and milestones.
+
+Photos live in a private Cloudflare R2 bucket. For local photo uploads, fill in the
+`CLOUDFLARE_R2_*` values in `backend/.env` and allow `http://localhost:5173` in the
+bucket's CORS policy (`PUT`, `GET`, `HEAD`; header `Content-Type`). Everything else works
+without R2, and tests never touch it.
 
 ## Stack
 

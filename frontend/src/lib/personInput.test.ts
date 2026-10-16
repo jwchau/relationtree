@@ -31,7 +31,7 @@ describe('toFormValues', () => {
       email: 'sam@example.com',
       address: '1 Main St',
       birthday: '1990-04-02',
-      photo_key: '',
+      photo_url: null,
       notes: 'Likes climbing',
       last_contacted_date: null,
       created_at: '2026-01-01T00:00:00Z',

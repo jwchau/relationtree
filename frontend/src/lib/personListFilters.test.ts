@@ -12,7 +12,7 @@ function person(overrides: Partial<PersonSummary>): PersonSummary {
     email: '',
     address: '',
     birthday: null,
-    photo_key: '',
+    photo_url: null,
     notes: '',
     last_contacted_date: null,
     created_at: '2026-01-01T00:00:00Z',

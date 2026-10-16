@@ -92,7 +92,7 @@ export default function PersonDetailPage() {
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <div className="max-w-xl space-y-6">
-          <PhotoUploader personName={person.name} photoKey={person.photo_key} />
+          <PhotoUploader person={person} />
           <PersonForm
             defaultValues={toFormValues(person)}
             onSubmit={handleSubmit}
@@ -119,7 +119,7 @@ export default function PersonDetailPage() {
             <EgoGraph
               centerId={person.id}
               centerName={person.name}
-              centerPhotoKey={person.photo_key}
+              centerPhotoUrl={person.photo_url}
               connections={connections}
             />
           </div>

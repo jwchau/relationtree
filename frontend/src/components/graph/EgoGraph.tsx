@@ -11,15 +11,15 @@ const nodeTypes = { person: PersonNode };
 export interface EgoGraphProps {
   centerId: string;
   centerName: string;
-  centerPhotoKey: string | null | undefined;
+  centerPhotoUrl: string | null;
   connections: ConnectionWithPerson[];
 }
 
-export function EgoGraph({ centerId, centerName, centerPhotoKey, connections }: EgoGraphProps) {
+export function EgoGraph({ centerId, centerName, centerPhotoUrl, connections }: EgoGraphProps) {
   const navigate = useNavigate();
   const { nodes, edges } = useMemo(
-    () => buildEgoGraph(centerId, centerName, centerPhotoKey, connections),
-    [centerId, centerName, centerPhotoKey, connections],
+    () => buildEgoGraph(centerId, centerName, centerPhotoUrl, connections),
+    [centerId, centerName, centerPhotoUrl, connections],
   );
 
   if (connections.length === 0) {

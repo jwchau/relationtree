@@ -76,10 +76,20 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
   (Fixes the current silent truncation bug: Amplify `list()` ignores `nextToken`.)
 
 ### Photos
-- **Cloudflare R2**, private bucket, via `django-storages` (S3 backend, custom endpoint).
-- Upload: Django issues a presigned PUT; browser uploads directly; frontend saves the key.
-- Download: Django checks tree membership, returns a ~5-minute presigned GET.
-- Keys: `trees/{tree_id}/people/{person_id}/{uuid}.jpg`.
+- **Cloudflare R2**, private bucket, via plain `boto3` (Django only signs URLs and deletes
+  objects; it never stores or serves bytes, so `django-storages` adds nothing).
+- Upload: `POST /api/people/{id}/photo/upload-url` returns a ~5-minute presigned PUT signed
+  for the exact content type (jpeg/png/webp/gif) and size (max 5 MB), so R2 enforces both.
+  Browser uploads directly, then `PUT /api/people/{id}/photo {key}` confirms.
+- `photo_key` is **server-managed**: not writable via person create/PATCH, and confirm only
+  accepts keys matching this person's folder exactly (otherwise a client could point a person
+  at another tree's object and receive a presigned URL for it).
+- Download: `PersonOut.photo_url` is a ~1-hour presigned GET (signed locally, no round trip).
+- Old objects are deleted on replace, remove, and person delete (`post_delete` signal, so admin
+  and tree cascades are covered). Deletes are best-effort; failures only orphan an object.
+- Keys: `trees/{tree_id}/people/{person_id}/{uuid}.{ext}`.
+- Known gap: an upload URL that's requested but never confirmed leaves an orphan; a 1-day R2
+  lifecycle rule can clean those up later.
 
 ### Host
 - **Windows** machine, **RTX 3090 Ti (24 GB VRAM)**. Runs in ~8-hour bursts, not 24/7.

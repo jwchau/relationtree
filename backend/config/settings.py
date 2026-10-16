@@ -104,3 +104,9 @@ AXES_RESET_ON_SUCCESS = True
 # comes from CF-Connecting-IP. Safe to trust only because Django is not reachable except
 # through the tunnel.
 AXES_CLIENT_IP_CALLABLE = "relationtree.client_ip.client_ip"
+
+# Cloudflare R2 (S3-compatible) for person photos. Empty in CI: tests use a fake storage.
+CLOUDFLARE_R2_ACCOUNT_ID = env("CLOUDFLARE_R2_ACCOUNT_ID", default="")
+CLOUDFLARE_R2_ACCESS_KEY_ID = env("CLOUDFLARE_R2_ACCESS_KEY_ID", default="")
+CLOUDFLARE_R2_SECRET_ACCESS_KEY = env("CLOUDFLARE_R2_SECRET_ACCESS_KEY", default="")
+CLOUDFLARE_R2_BUCKET_NAME = env("CLOUDFLARE_R2_BUCKET_NAME", default="")

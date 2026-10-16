@@ -1,18 +1,16 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { User } from 'lucide-react';
-import { usePhotoUrl } from '@/hooks/usePhotoUrl';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
 export interface PersonNodeData extends Record<string, unknown> {
   name: string;
-  photoKey: string | null | undefined;
+  photoUrl: string | null;
   isCenter: boolean;
 }
 
 export function PersonNode({ data }: NodeProps) {
-  const { name, photoKey, isCenter } = data as PersonNodeData;
-  const url = usePhotoUrl(photoKey);
+  const { name, photoUrl, isCenter } = data as PersonNodeData;
 
   return (
     <div
@@ -23,7 +21,7 @@ export function PersonNode({ data }: NodeProps) {
     >
       <Handle type="target" position={Position.Top} className="opacity-0" />
       <Avatar className={isCenter ? 'size-12' : 'size-9'}>
-        <AvatarImage src={url ?? undefined} alt={name} />
+        <AvatarImage src={photoUrl ?? undefined} alt={name} />
         <AvatarFallback>
           <User className="size-4" />
         </AvatarFallback>

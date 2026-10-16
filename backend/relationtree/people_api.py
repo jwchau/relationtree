@@ -14,6 +14,7 @@ from relationtree.access import (
     person_visible_to,
 )
 from relationtree.models import Person
+from relationtree.photos import get_photo_storage
 from relationtree.types import AuthedRequest
 
 router = Router(tags=["people"], auth=django_auth)
@@ -22,6 +23,8 @@ Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max
 
 
 class PersonIn(Schema):
+    # photo_key is server-managed: set only via the photo endpoints, which check it belongs
+    # to this person. Unknown fields like photo_key are ignored.
     name: Name
     relationship_category: Person.RelationshipCategory | None = None
     context: str = ""
@@ -29,7 +32,6 @@ class PersonIn(Schema):
     email: str = ""
     address: str = ""
     birthday: date | None = None
-    photo_key: str = ""
     notes: str = ""
     last_contacted_date: date | None = None
 
@@ -42,11 +44,10 @@ class PersonPatch(Schema):
     email: str | None = None
     address: str | None = None
     birthday: date | None = None
-    photo_key: str | None = None
     notes: str | None = None
     last_contacted_date: date | None = None
 
-    @field_validator("name", "context", "phone", "email", "address", "photo_key", "notes")
+    @field_validator("name", "context", "phone", "email", "address", "notes")
     @classmethod
     def not_null(cls, value: str | None) -> str:
         # Omitting a field leaves it unchanged (validators skip defaults); sending null is an
@@ -65,11 +66,16 @@ class PersonOut(Schema):
     email: str
     address: str
     birthday: date | None
-    photo_key: str
+    photo_url: str | None
     notes: str
     last_contacted_date: date | None
     created_at: datetime
     updated_at: datetime
+
+    @staticmethod
+    def resolve_photo_url(person: Person) -> str | None:
+        # Short-lived presigned GET; signing is local, so this costs no network round trip.
+        return get_photo_storage().presign_download(person.photo_key) if person.photo_key else None
 
 
 @router.get("", response=list[PersonOut])

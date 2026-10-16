@@ -335,6 +335,141 @@
         ]
       }
     },
+    "/api/people/{person_id}/photo/upload-url": {
+      "post": {
+        "operationId": "relationtree_photos_api_create_upload_url",
+        "summary": "Create Upload Url",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "person_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadUrlOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "photos"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadUrlIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/people/{person_id}/photo": {
+      "put": {
+        "operationId": "relationtree_photos_api_confirm_photo",
+        "summary": "Confirm Photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "person_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "photos"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmPhotoIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "relationtree_photos_api_remove_photo",
+        "summary": "Remove Photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "person_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        },
+        "tags": [
+          "photos"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/connections": {
       "post": {
         "operationId": "relationtree_connections_api_create_connection",
@@ -597,9 +732,16 @@
             ],
             "title": "Birthday"
           },
-          "photo_key": {
-            "title": "Photo Key",
-            "type": "string"
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
           },
           "notes": {
             "title": "Notes",
@@ -637,7 +779,7 @@
           "email",
           "address",
           "birthday",
-          "photo_key",
+          "photo_url",
           "notes",
           "last_contacted_date",
           "created_at",
@@ -706,11 +848,6 @@
               }
             ],
             "title": "Birthday"
-          },
-          "photo_key": {
-            "default": "",
-            "title": "Photo Key",
-            "type": "string"
           },
           "notes": {
             "default": "",
@@ -817,17 +954,6 @@
             ],
             "title": "Birthday"
           },
-          "photo_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Photo Key"
-          },
           "notes": {
             "anyOf": [
               {
@@ -853,6 +979,63 @@
           }
         },
         "title": "PersonPatch",
+        "type": "object"
+      },
+      "UploadUrlOut": {
+        "properties": {
+          "upload_url": {
+            "title": "Upload Url",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "upload_url",
+          "key"
+        ],
+        "title": "UploadUrlOut",
+        "type": "object"
+      },
+      "UploadUrlIn": {
+        "properties": {
+          "content_type": {
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/gif"
+            ],
+            "title": "Content Type",
+            "type": "string"
+          },
+          "size": {
+            "exclusiveMinimum": 0,
+            "maximum": 5242880,
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "content_type",
+          "size"
+        ],
+        "title": "UploadUrlIn",
+        "type": "object"
+      },
+      "ConfirmPhotoIn": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "ConfirmPhotoIn",
         "type": "object"
       },
       "ConnectionOut": {

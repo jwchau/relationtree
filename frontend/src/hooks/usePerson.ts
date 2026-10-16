@@ -9,6 +9,7 @@ import {
 } from '@/api/client';
 import { connectionsQueryKey } from '@/hooks/useConnections';
 import { peopleQueryKey } from '@/hooks/usePersonList';
+import { removePersonPhoto, uploadPersonPhoto } from '@/lib/photoStorage';
 
 export type { Person };
 
@@ -54,11 +55,31 @@ export function useDeletePerson(personId: string) {
   return useMutation({
     mutationFn: () =>
       unwrap(api.DELETE('/api/people/{person_id}', { params: { path: { person_id: personId } } })),
-    // The API cascades the delete to the person's connections, which appear on other people's lists.
-    onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
-        queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
-      ]),
+    // The API also deletes the person's connections (shown on other people's pages) and photo.
+    onSuccess: () => invalidatePeopleAndConnections(queryClient),
+  });
+}
+
+// People (and their photos) also appear inside other people's connection lists and graphs.
+function invalidatePeopleAndConnections(queryClient: ReturnType<typeof useQueryClient>) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
+    queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+  ]);
+}
+
+export function useUploadPhoto(personId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => uploadPersonPhoto(personId, file),
+    onSuccess: () => invalidatePeopleAndConnections(queryClient),
+  });
+}
+
+export function useRemovePhoto(personId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => removePersonPhoto(personId),
+    onSuccess: () => invalidatePeopleAndConnections(queryClient),
   });
 }

@@ -10,7 +10,7 @@ function makeConnection(overrides: Partial<ConnectionWithPerson> = {}): Connecti
     otherPerson: {
       id: 'other-1',
       name: 'Other Person',
-      photo_key: '',
+      photo_url: null,
     } as ConnectionWithPerson['otherPerson'],
     ...overrides,
   };
@@ -25,8 +25,8 @@ describe('buildEgoGraph', () => {
 
   it('creates one node and one edge per connection', () => {
     const connections = [
-      makeConnection({ connectionId: 'c1', otherPerson: { id: 'p1', name: 'A', photoKey: null } as never }),
-      makeConnection({ connectionId: 'c2', otherPerson: { id: 'p2', name: 'B', photoKey: null } as never }),
+      makeConnection({ connectionId: 'c1', otherPerson: { id: 'p1', name: 'A', photo_url: null } as never }),
+      makeConnection({ connectionId: 'c2', otherPerson: { id: 'p2', name: 'B', photo_url: null } as never }),
     ];
     const { nodes, edges } = buildEgoGraph('center-1', 'Center', null, connections);
 

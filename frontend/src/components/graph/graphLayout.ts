@@ -7,10 +7,10 @@ const RADIUS = 220;
 export function buildEgoGraph(
   centerId: string,
   centerName: string,
-  centerPhotoKey: string | null | undefined,
+  centerPhotoUrl: string | null,
   connections: ConnectionWithPerson[],
 ): { nodes: Node[]; edges: Edge[] } {
-  const centerData: PersonNodeData = { name: centerName, photoKey: centerPhotoKey, isCenter: true };
+  const centerData: PersonNodeData = { name: centerName, photoUrl: centerPhotoUrl, isCenter: true };
   const centerNode: Node = {
     id: centerId,
     type: 'person',
@@ -23,7 +23,7 @@ export function buildEgoGraph(
     const angle = (2 * Math.PI * i) / Math.max(count, 1) - Math.PI / 2;
     const data: PersonNodeData = {
       name: c.otherPerson.name,
-      photoKey: c.otherPerson.photo_key,
+      photoUrl: c.otherPerson.photo_url,
       isCenter: false,
     };
     return {

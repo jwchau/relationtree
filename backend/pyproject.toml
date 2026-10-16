@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "RelationTree API (Django + Ninja)"
 requires-python = ">=3.14"
 dependencies = [
+    "boto3>=1.43.114",
     "django>=6.1.2",
     "django-axes>=8.3.1",
     "django-cors-headers>=4.9.0",
@@ -16,6 +17,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "boto3-stubs[s3]>=1.43.114",
     "django-stubs>=6.1.2",
     "mypy>=2.4.0",
     "pytest>=9.1.1",

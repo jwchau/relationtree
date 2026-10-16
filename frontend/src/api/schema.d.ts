@@ -126,6 +126,41 @@ export interface paths {
         patch: operations["relationtree_people_api_update_person"];
         trace?: never;
     };
+    "/api/people/{person_id}/photo/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Upload Url */
+        post: operations["relationtree_photos_api_create_upload_url"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/{person_id}/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Confirm Photo */
+        put: operations["relationtree_photos_api_confirm_photo"];
+        post?: never;
+        /** Remove Photo */
+        delete: operations["relationtree_photos_api_remove_photo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connections": {
         parameters: {
             query?: never;
@@ -232,8 +267,8 @@ export interface components {
             address: string;
             /** Birthday */
             birthday: string | null;
-            /** Photo Key */
-            photo_key: string;
+            /** Photo Url */
+            photo_url: string | null;
             /** Notes */
             notes: string;
             /** Last Contacted Date */
@@ -282,11 +317,6 @@ export interface components {
             /** Birthday */
             birthday?: string | null;
             /**
-             * Photo Key
-             * @default
-             */
-            photo_key?: string;
-            /**
              * Notes
              * @default
              */
@@ -309,12 +339,32 @@ export interface components {
             address?: string | null;
             /** Birthday */
             birthday?: string | null;
-            /** Photo Key */
-            photo_key?: string | null;
             /** Notes */
             notes?: string | null;
             /** Last Contacted Date */
             last_contacted_date?: string | null;
+        };
+        /** UploadUrlOut */
+        UploadUrlOut: {
+            /** Upload Url */
+            upload_url: string;
+            /** Key */
+            key: string;
+        };
+        /** UploadUrlIn */
+        UploadUrlIn: {
+            /**
+             * Content Type
+             * @enum {string}
+             */
+            content_type: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+            /** Size */
+            size: number;
+        };
+        /** ConfirmPhotoIn */
+        ConfirmPhotoIn: {
+            /** Key */
+            key: string;
         };
         /** ConnectionOut */
         ConnectionOut: {
@@ -616,6 +666,87 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PersonOut"];
                 };
+            };
+        };
+    };
+    relationtree_photos_api_create_upload_url: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadUrlIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadUrlOut"];
+                };
+            };
+        };
+    };
+    relationtree_photos_api_confirm_photo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPhotoIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    relationtree_photos_api_remove_photo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
