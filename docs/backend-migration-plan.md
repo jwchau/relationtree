@@ -105,13 +105,17 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
 
 ### AI
 - **Ollama only** (no hosted LLM APIs). Python `ollama` package `AsyncClient` in async Ninja views.
-- Settings: `OLLAMA_URL`, `CHAT_MODEL` (~27B class, e.g. Qwen), `EMBED_MODEL` (e.g. `nomic-embed-text`).
+- Settings: `OLLAMA_URL` (default `http://127.0.0.1:11434`; **not** `localhost`, which on Windows
+  tries IPv6 first and adds ~2 s to every call), `CHAT_MODEL` (`qwen3.8:27b`), `EMBED_MODEL`
+  (`qwen3-embedding:0.6b`, with `EMBED_NUM_CTX=2048`: its default 32K context costs 4.6 GB of VRAM
+  vs ~1 GB).
 - Always pass `num_ctx` explicitly (e.g. 8192) — Ollama's default context silently truncates.
 - `think=False` for summaries (thinking models otherwise stall before the first streamed token).
 - Django sends `keep_alive` (`OLLAMA_KEEP_ALIVE`, default `1h`) with every request: Ollama's
   default unloads after 5 idle minutes, and a cold load of qwen3.8:27b takes ~100 s (warm: first
   token <1 s, ~35 tok/s on the 3090 Ti). Not `-1`, so VRAM frees up for games after an hour.
-  `OLLAMA_MAX_LOADED_MODELS=2` on the Ollama side once the embed model arrives (M12).
+  Ollama's default `OLLAMA_MAX_LOADED_MODELS` (auto: 3 per GPU, VRAM permitting) already keeps
+  the chat and embed models resident together (17.3 + ~1 GB of 24 GB); no change needed.
 - First-token timeout is 180 s (covers a cold load); connect timeout 3 s (dead Ollama fails fast).
 - M13's `start.ps1` should warm the model after starting the stack, so the first summary of a
   session doesn't wait for the cold load.
@@ -124,10 +128,24 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
 - **v2:** (3) graph Q&A via tool-calling agent ("how am I connected to Priya?");
   (4) free-text extraction ("Met Jordan at Alex's wedding…" → proposed people/connections to confirm).
 
+### Semantic search (M12)
+- `GET /api/people/search?q=` embeds the question and ranks the user's people by cosine
+  similarity (pgvector, HNSW index, `VectorField(1024)`). Returns the best match plus anything
+  within `MATCH_WINDOW` (0.06) of it, and `pending` (people not yet indexed). 503 if Ollama is down.
+- Embedded text: name, category, context, notes. Never phone, email, address or birthday.
+- **Model choice, measured** on 7 people x 10 natural questions: `nomic-embed-text` and
+  `qwen3-embedding:0.6b` both got 9/10 top-1, but qwen3 (with its `Instruct: ...\nQuery: ` query
+  format) separates the right answer about twice as clearly (median top-1 lead 0.098 vs 0.057),
+  which is what makes a relevance cutoff possible. nomic tied or lost on "finance" questions.
+- Known gap: connections aren't part of the searchable text yet ("who has a family member?").
+
 ### Background jobs
-- Postgres-backed queue that survives the server stopping mid-job — `procrastinate` (preferred, has
-  retries) or Django's Tasks framework with a DB backend. No Redis.
-- `manage.py reembed_stale` runs at startup as a safety net.
+- **No job queue.** Each `Person` tracks `content_version` (bumped in SQL when a searchable field
+  changes, including admin edits) and `embedded_version`. `manage.py embed_worker` embeds rows
+  where they differ, recording the version it read, so an edit mid-embed stays pending. Stopping
+  the worker, a crash, or Ollama being down loses nothing: the rows are the queue.
+  `embed_worker --once` drains the backlog and exits (for `start.ps1`).
+- A model with a different vector size fails loudly (`ImproperlyConfigured`) instead of writing.
 
 ### Backups (event-driven — the server isn't on at night)
 - `backup` container in the prod compose stack:
@@ -184,7 +202,7 @@ relationtree/
 | M8 | **Auth + trees + people CRUD.** Sessions, CSRF endpoint, `django-axes`, default tree per user, generated TS client, TanStack Query, `LoginPage`. Remove the Amplify frontend code (`frontend/amplify/`, `aws-amplify` packages) and restore frontend typecheck + build in CI. | Log in and manage people locally |
 | M9 | **Connections.** Constraints + backend inverse labels. | Detail page + graph work locally |
 | M10 | **Photos via R2** (dev bucket). | Uploads work |
-| M11 | **AI summaries** against local Ollama (`OLLAMA_URL=http://localhost:11434`), streamed. | "Catch me up on Sam" works |
-| M12 | **Semantic search.** pgvector, embedding job queue, `reembed_stale`. | "Who works in finance?" works |
+| M11 | **AI summaries** against local Ollama (`OLLAMA_URL=http://127.0.0.1:11434`), streamed. | "Catch me up on Sam" works |
+| M12 | **Semantic search.** pgvector, `embed_worker` (version-tracked, no queue), qwen3-embedding. | "Who works in finance?" works |
 | M13 | **Prod cutover.** `start.ps1`/`stop.ps1`, `cloudflared` in compose, Pages deploy, GHCR pull, event-based backups + **tested restore**, healthchecks.io. | Prod runs from home; real data only after backups work |
 | v2 | Sharing + invites, graph Q&A agent, free-text extraction. | — |

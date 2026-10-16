@@ -5,7 +5,7 @@ from typing import Any, Protocol
 
 import httpx
 from django.conf import settings
-from ollama import AsyncClient, ResponseError
+from ollama import AsyncClient, Client, ResponseError
 
 
 class AIUnavailable(Exception):
@@ -74,3 +74,59 @@ def set_chat_model(model: ChatModel | None) -> None:
     """Swap the model backend (tests use a scripted fake)."""
     global _chat_model
     _chat_model = model
+
+
+class Embedder(Protocol):
+    def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+
+class OllamaEmbedder:
+    def __init__(
+        self,
+        host: str,
+        *,
+        model: str,
+        connect_timeout: float,
+        keep_alive: str,
+        num_ctx: int,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        self._model = model
+        self._keep_alive = keep_alive
+        self._options = {"num_ctx": num_ctx}
+        self._client = Client(
+            host=host,
+            timeout=httpx.Timeout(connect=connect_timeout, read=60, write=10, pool=10),
+            transport=transport,
+        )
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        try:
+            response = self._client.embed(
+                model=self._model, input=texts, keep_alive=self._keep_alive, options=self._options
+            )
+        except (httpx.HTTPError, ResponseError, ConnectionError) as err:
+            raise AIUnavailable(str(err)) from err
+        return [list(vector) for vector in response.embeddings]
+
+
+_embedder: Embedder | None = None
+
+
+def get_embedder() -> Embedder:
+    global _embedder
+    if _embedder is None:
+        _embedder = OllamaEmbedder(
+            settings.OLLAMA_URL,
+            model=settings.EMBED_MODEL,
+            connect_timeout=settings.OLLAMA_CONNECT_TIMEOUT,
+            keep_alive=settings.OLLAMA_KEEP_ALIVE,
+            num_ctx=settings.EMBED_NUM_CTX,
+        )
+    return _embedder
+
+
+def set_embedder(embedder: Embedder | None) -> None:
+    """Swap the embedding backend (tests use a deterministic fake)."""
+    global _embedder
+    _embedder = embedder

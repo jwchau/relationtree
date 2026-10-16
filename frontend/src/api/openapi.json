@@ -156,6 +156,55 @@
         ]
       }
     },
+    "/api/people/search": {
+      "get": {
+        "operationId": "relationtree_search_api_search",
+        "summary": "Search",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "search"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/people": {
       "get": {
         "operationId": "relationtree_people_api_list_people",
@@ -846,6 +895,45 @@
         ],
         "title": "RelationshipCategory",
         "type": "string"
+      },
+      "SearchOut": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "pending": {
+            "description": "People not yet indexed with their latest details",
+            "title": "Pending",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "results",
+          "pending"
+        ],
+        "title": "SearchOut",
+        "type": "object"
+      },
+      "SearchResult": {
+        "properties": {
+          "person": {
+            "$ref": "#/components/schemas/PersonOut"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "person",
+          "score"
+        ],
+        "title": "SearchResult",
+        "type": "object"
       },
       "PersonIn": {
         "properties": {

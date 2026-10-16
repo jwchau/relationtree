@@ -7,10 +7,13 @@ from relationtree.auth_api import router as auth_router
 from relationtree.connections_api import router as connections_router
 from relationtree.people_api import router as people_router
 from relationtree.photos_api import router as photos_router
+from relationtree.search_api import router as search_router
 from relationtree.summary_api import router as summary_router
 
 api = NinjaAPI(title="RelationTree API")
 api.add_router("/auth", auth_router)
+# Before people_router, or "/people/search" would be matched as /people/{person_id}.
+api.add_router("/people", search_router)
 api.add_router("/people", people_router)
 api.add_router("/people", photos_router)
 api.add_router("/people", summary_router)

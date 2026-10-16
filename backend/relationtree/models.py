@@ -1,7 +1,9 @@
 import uuid
+from typing import Any, Self
 
 from django.conf import settings
 from django.db import models
+from pgvector.django import HnswIndex, VectorField
 
 
 class Tree(models.Model):
@@ -63,8 +65,54 @@ class Person(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Semantic search (see search.py). content_version moves when searchable text changes;
+    # the embed worker catches embedded_version up. Unequal means "needs (re-)embedding".
+    embedding = VectorField(dimensions=1024, null=True, blank=True, editable=False)
+    content_version = models.PositiveIntegerField(default=1, editable=False)
+    embedded_version = models.PositiveIntegerField(default=0, editable=False)
+
+    class Meta:
+        indexes = [
+            HnswIndex(
+                name="person_embedding_hnsw",
+                fields=["embedding"],
+                opclasses=["vector_cosine_ops"],
+            ),
+        ]
+
+    # The fields search.document_text() reads. Changing one means the embedding is out of date.
+    SEARCHABLE_FIELDS = ("name", "relationship_category", "context", "notes")
+
     def __str__(self) -> str:
         return self.name
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        snapshot = getattr(self, "_searchable_snapshot", None)
+        changed = snapshot is not None and snapshot != self._searchable_values()
+        if changed:
+            # Incremented in SQL so two overlapping edits can't land on the same version.
+            self.content_version = models.F("content_version") + 1
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "content_version"}
+        super().save(*args, **kwargs)
+        if changed:
+            self.content_version = (
+                Person.objects.filter(pk=self.pk).values_list("content_version", flat=True).get()
+            )
+        self._searchable_snapshot = self._searchable_values()
+
+    @classmethod
+    def from_db(cls, db: str | None, field_names: Any, values: Any, **kwargs: Any) -> Self:
+        instance = super().from_db(db, field_names, values, **kwargs)
+        # Only snapshot fully loaded rows: touching a deferred field here would trigger another
+        # partial load, and so on. A partially loaded Person never bumps content_version.
+        if set(cls.SEARCHABLE_FIELDS) <= set(field_names):
+            instance._searchable_snapshot = instance._searchable_values()
+        return instance
+
+    def _searchable_values(self) -> tuple[object, ...]:
+        return tuple(getattr(self, f) for f in self.SEARCHABLE_FIELDS)
 
 
 class Connection(models.Model):

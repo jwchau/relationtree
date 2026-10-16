@@ -26,6 +26,18 @@
         "8000"
       ],
       "port": 8000
+    },
+    {
+      "name": "relationtree-embed-worker",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "--directory",
+        "backend",
+        "run",
+        "python",
+        "manage.py",
+        "embed_worker"
+      ]
     }
   ]
 }

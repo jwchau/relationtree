@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePersonList } from '@/hooks/usePersonList';
+import { AskPeople } from '@/components/person/AskPeople';
 import { PersonCard } from '@/components/person/PersonCard';
 import { filterAndSortPeople, type CategoryFilter } from '@/lib/personListFilters';
 import { RELATIONSHIP_CATEGORIES, categoryLabel } from '@/lib/relationshipTypes';
@@ -33,9 +34,11 @@ export default function PersonListPage() {
         </Button>
       </div>
 
+      <AskPeople />
+
       <div className="flex flex-col gap-3 sm:flex-row">
         <Input
-          placeholder="Search by name..."
+          placeholder="Filter by name..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="sm:max-w-xs"

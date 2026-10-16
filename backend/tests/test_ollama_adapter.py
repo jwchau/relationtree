@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from relationtree.ai import AIUnavailable, OllamaChatModel
+from relationtree.ai import AIUnavailable, OllamaChatModel, OllamaEmbedder
 
 
 def ndjson(*objs: dict[str, object]) -> bytes:
@@ -59,3 +59,45 @@ async def test_connection_failures_become_ai_unavailable() -> None:
     with pytest.raises(AIUnavailable):
         async for _ in model.stream([], model="m", options={}, think=False):
             pass
+
+
+def test_embedder_sends_the_model_and_keep_alive_and_returns_vectors() -> None:
+    sent: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"model": "e", "embeddings": [[0.1, 0.2], [0.3, 0.4]]})
+
+    embedder = OllamaEmbedder(
+        "http://ollama.test",
+        model="qwen3-embedding:0.6b",
+        connect_timeout=1,
+        keep_alive="1h",
+        num_ctx=2048,
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert embedder.embed(["a", "b"]) == [[0.1, 0.2], [0.3, 0.4]]
+    [request] = sent
+    assert request["model"] == "qwen3-embedding:0.6b"
+    assert request["input"] == ["a", "b"]
+    assert request["keep_alive"] == "1h"
+    # Without a cap Ollama sizes the KV cache for the model's 32K context: 4.6 GB vs ~1 GB.
+    assert request["options"] == {"num_ctx": 2048}
+
+
+def test_embedder_connection_failures_become_ai_unavailable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    embedder = OllamaEmbedder(
+        "http://ollama.test",
+        model="e",
+        connect_timeout=1,
+        keep_alive="1h",
+        num_ctx=2048,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(AIUnavailable):
+        embedder.embed(["a"])

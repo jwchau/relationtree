@@ -13,9 +13,10 @@ Photos live in a private Cloudflare R2 bucket. For local photo uploads, fill in 
 bucket's CORS policy (`PUT`, `GET`, `HEAD`; header `Content-Type`). Everything else works
 without R2, and tests never touch it.
 
-AI catch-ups use a local [Ollama](https://ollama.com) (`ollama pull qwen3.8:27b`, or set
-`CHAT_MODEL`). Without it, everything works except the "Catch me up" card, which reports that
-the AI is unavailable. Tests use a fake model and never call Ollama.
+AI features use a local [Ollama](https://ollama.com): `ollama pull qwen3.8:27b` (catch-up
+summaries, `CHAT_MODEL`) and `ollama pull qwen3-embedding:0.6b` (the "Ask" search,
+`EMBED_MODEL`). Without Ollama everything else works; the AI features report that the AI is
+unavailable. Tests use fakes and never call Ollama.
 
 The API runs under uvicorn (ASGI), not `manage.py runserver`, because runserver can't stream
 the AI summaries. Side effect until M13: Django admin pages load without CSS locally.
@@ -45,6 +46,11 @@ uv run uvicorn config.asgi:application --reload --port 8000
 cd frontend
 npm install
 npm run dev
+
+# 4. Search indexer (third terminal, optional): keeps "Ask" search up to date as people change.
+#    Safe to stop any time; it catches up on whatever changed when it starts again.
+cd backend
+uv run python manage.py embed_worker
 ```
 
 ## Checks

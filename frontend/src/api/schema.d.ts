@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/people/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search */
+        get: operations["relationtree_search_api_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/people": {
         parameters: {
             query?: never;
@@ -306,6 +323,22 @@ export interface components {
          * @enum {string}
          */
         RelationshipCategory: "FAMILY" | "FRIEND" | "COWORKER" | "ACQUAINTANCE" | "OTHER";
+        /** SearchOut */
+        SearchOut: {
+            /** Results */
+            results: components["schemas"]["SearchResult"][];
+            /**
+             * Pending
+             * @description People not yet indexed with their latest details
+             */
+            pending: number;
+        };
+        /** SearchResult */
+        SearchResult: {
+            person: components["schemas"]["PersonOut"];
+            /** Score */
+            score: number;
+        };
         /** PersonIn */
         PersonIn: {
             /** Name */
@@ -570,6 +603,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+        };
+    };
+    relationtree_search_api_search: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchOut"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
                 };
             };
         };

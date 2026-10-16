@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
     "corsheaders",
     "axes",
     "ninja",
@@ -112,8 +113,13 @@ CLOUDFLARE_R2_SECRET_ACCESS_KEY = env("CLOUDFLARE_R2_SECRET_ACCESS_KEY", default
 CLOUDFLARE_R2_BUCKET_NAME = env("CLOUDFLARE_R2_BUCKET_NAME", default="")
 
 # Local LLM (Ollama). See docs/backend-migration-plan.md -> AI.
-OLLAMA_URL = env("OLLAMA_URL", default="http://localhost:11434")
+# 127.0.0.1, not localhost: on Windows "localhost" tries IPv6 first and adds ~2 s per call.
+OLLAMA_URL = env("OLLAMA_URL", default="http://127.0.0.1:11434")
 CHAT_MODEL = env("CHAT_MODEL", default="qwen3.8:27b")
+# Changing the embedding model means re-embedding everyone (and maybe a new vector size).
+EMBED_MODEL = env("EMBED_MODEL", default="qwen3-embedding:0.6b")
+# Caps the embed model's KV cache: its default 32K context costs ~4.6 GB of VRAM vs ~1 GB.
+EMBED_NUM_CTX = env.int("EMBED_NUM_CTX", default=2048)
 OLLAMA_NUM_CTX = env.int("OLLAMA_NUM_CTX", default=8192)
 OLLAMA_CONNECT_TIMEOUT = env.float("OLLAMA_CONNECT_TIMEOUT", default=3.0)
 # How long Ollama keeps the model in VRAM after a request. Not forever, so the GPU frees up

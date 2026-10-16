@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 
@@ -40,3 +40,39 @@ class FakeChatModel:
             await asyncio.sleep(self.first_chunk_delay)
         for chunk in self.chunks:
             yield chunk
+
+
+# Topics the fake embedder "understands": text mentioning any keyword lands on that topic's axis.
+FAKE_TOPICS = {
+    "finance": ["finance", "bank", "investment", "accountant"],
+    "climbing": ["climbing", "boulder", "gym"],
+    "music": ["music", "guitar", "band"],
+}
+
+
+class FakeEmbedder:
+    """Stands in for Ollama embeddings: one axis per topic, so similarity is predictable."""
+
+    dimensions = 1024
+
+    def __init__(self) -> None:
+        self.inputs: list[str] = []
+        self.error: Exception | None = None
+        self.during_embed: Callable[[], None] | None = None
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        if self.error is not None:
+            raise self.error
+        self.inputs.extend(texts)
+        if self.during_embed is not None:
+            hook, self.during_embed = self.during_embed, None
+            hook()
+        return [self._vector(text) for text in texts]
+
+    def _vector(self, text: str) -> list[float]:
+        vector = [0.0] * self.dimensions
+        lowered = text.lower()
+        for axis, keywords in enumerate(FAKE_TOPICS.values()):
+            vector[axis] = float(sum(lowered.count(k) for k in keywords))
+        vector[-1] = 0.01  # never all-zero: cosine distance is undefined for a zero vector
+        return vector

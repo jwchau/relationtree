@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 from django.test import Client
 
 from relationtree import ai, photos
-from tests.fakes import FakeChatModel, FakePhotoStorage
+from tests.fakes import FakeChatModel, FakeEmbedder, FakePhotoStorage
 
 
 @pytest.fixture
@@ -37,3 +37,12 @@ def chat_model() -> Iterator[FakeChatModel]:
     ai.set_chat_model(fake)
     yield fake
     ai.set_chat_model(None)
+
+
+@pytest.fixture(autouse=True)
+def embedder() -> Iterator[FakeEmbedder]:
+    """Every test gets a fake embedding model so nothing ever calls Ollama."""
+    fake = FakeEmbedder()
+    ai.set_embedder(fake)
+    yield fake
+    ai.set_embedder(None)
