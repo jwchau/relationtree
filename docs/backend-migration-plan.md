@@ -137,7 +137,17 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
   `qwen3-embedding:0.6b` both got 9/10 top-1, but qwen3 (with its `Instruct: ...\nQuery: ` query
   format) separates the right answer about twice as clearly (median top-1 lead 0.098 vs 0.057),
   which is what makes a relevance cutoff possible. nomic tied or lost on "finance" questions.
-- Known gap: connections aren't part of the searchable text yet ("who has a family member?").
+- Connections are included as a **relationship summary** in plain sentences from the person's
+  point of view ("Is married. Has 2 children. Manages 4 people. Has 12 coworkers."), never as a
+  list of names. Measured: a list of 1000 names is ~6800 tokens (silently cut at the 2048 context)
+  and 10 names already pulled the vector to 0.83 similarity with the person's own description; the
+  summary is ~40 tokens at any size (0.94). Natural sentences beat labels ("who is married?").
+- Summaries change only when a connection is added/removed (signals on Connection bump both
+  people, including cascades from deleting a person). Renames affect no one else. Changing
+  `document_text()` requires a migration that marks everyone stale (see migration 0004).
+- **Known limitation:** embeddings don't capture the *direction* of parent/child ("who has kids?"
+  vs "who has a parent?"); four wordings each got 2-3 of 4 test questions. Directional questions
+  belong to the v2 graph Q&A (tool calls over connections), not to embedding search.
 
 ### Background jobs
 - **No job queue.** Each `Person` tracks `content_version` (bumped in SQL when a searchable field

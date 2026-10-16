@@ -10,6 +10,7 @@ from pgvector.django import CosineDistance
 from relationtree.access import people_visible_to
 from relationtree.ai import get_embedder
 from relationtree.models import Person
+from relationtree.relationships import relationship_summary
 
 # qwen3-embedding format: documents as-is, queries prefixed with a task instruction. Measured on
 # a 10-question set it beat nomic-embed-text on separation (median top-1 lead 0.098 vs 0.057).
@@ -27,7 +28,10 @@ BATCH_SIZE = 32
 
 
 def document_text(person: Person) -> str:
-    """The searchable description of a person: who they are to you, never contact details."""
+    """The searchable description of a person: who they are to you, never contact details.
+
+    Changing what this produces leaves existing embeddings stale: ship a migration that bumps
+    every person's content_version (see 0004_reembed_with_relationship_summaries)."""
     parts = [person.name]
     if person.relationship_category:
         parts.append(person.get_relationship_category_display())
@@ -35,6 +39,8 @@ def document_text(person: Person) -> str:
         parts.append(person.context)
     if person.notes:
         parts.append(person.notes)
+    if relationships := relationship_summary(person):
+        parts.append(relationships)
     return DOCUMENT_PREFIX + "\n".join(parts)
 
 

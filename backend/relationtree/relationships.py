@@ -1,5 +1,6 @@
 """Relationship semantics shared by the API and the AI features."""
 
+from collections import Counter
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -66,3 +67,30 @@ def connections_of(person: Person) -> list[ConnectionView]:
             )
         )
     return views
+
+
+# How each label (the other person's role) reads in a person's searchable summary, in this order.
+# Plain sentences match how people ask ("who is married?") far better than "Spouse: 1".
+_SUMMARY_SENTENCES: dict[str, tuple[str, str]] = {
+    "Spouse": ("Is married.", "Is married."),
+    "Child": ("Has a child.", "Has {n} children."),
+    "Parent": ("Has a parent.", "Has {n} parents."),
+    "Sibling": ("Has a sibling.", "Has {n} siblings."),
+    "Report": ("Manages 1 person.", "Manages {n} people."),
+    "Manager": ("Has a manager.", "Has {n} managers."),
+    "Friend": ("Has a friend.", "Has {n} friends."),
+    "Coworker": ("Has a coworker.", "Has {n} coworkers."),
+    "Acquaintance": ("Has an acquaintance.", "Has {n} acquaintances."),
+}
+
+
+def relationship_summary(person: Person) -> str:
+    """Counts, not names: stays ~a sentence per kind of relationship however many there are,
+    so it can't drown out the person's own description in their embedding."""
+    counts = Counter(view.label for view in connections_of(person))
+    sentences = []
+    for label, (one, many) in _SUMMARY_SENTENCES.items():
+        n = counts.get(label, 0)
+        if n:
+            sentences.append(one if n == 1 else many.format(n=n))
+    return " ".join(sentences)

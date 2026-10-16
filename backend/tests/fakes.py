@@ -47,6 +47,7 @@ FAKE_TOPICS = {
     "finance": ["finance", "bank", "investment", "accountant"],
     "climbing": ["climbing", "boulder", "gym"],
     "music": ["music", "guitar", "band"],
+    "children": ["child", "kids"],
 }
 
 
