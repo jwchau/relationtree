@@ -27,7 +27,7 @@ jobs:
           --health-retries 10
     env:
       DJANGO_SECRET_KEY: ci-insecure
-      DATABASE_URL: postgres://relationtree:relationtree@localhost:5432/relationtree
+      DATABASE_URL: postgres://relationtree:relationtree@127.0.0.1:5432/relationtree
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v7

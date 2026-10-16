@@ -83,10 +83,10 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# The frontend (Cloudflare Pages, or Vite on :5173 locally) is a different origin from the API,
+# The frontend (Cloudflare Pages, or Vite on :5174 locally) is a different origin from the API,
 # so session-cookie auth needs credentialed CORS plus a trusted CSRF origin.
 # See docs/backend-migration-plan.md → Topology.
-FRONTEND_ORIGINS = env.list("FRONTEND_ORIGINS", default=["http://localhost:5173"])
+FRONTEND_ORIGINS = env.list("FRONTEND_ORIGINS", default=["http://127.0.0.1:5174"])
 CORS_ALLOWED_ORIGINS = FRONTEND_ORIGINS
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = FRONTEND_ORIGINS

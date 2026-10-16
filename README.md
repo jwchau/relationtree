@@ -29,7 +29,7 @@ GHCR image pull, whitenoise for admin static files, event-based backups to R2 wi
 restore, healthchecks.io, and a prod R2 bucket/CORS origin.
 
 Photos live in a private Cloudflare R2 bucket. For local photo uploads, fill in the
-`CLOUDFLARE_R2_*` values in `backend/.env` and allow `http://localhost:5173` in the
+`CLOUDFLARE_R2_*` values in `backend/.env` and allow `http://127.0.0.1:5174` in the
 bucket's CORS policy (`PUT`, `GET`, `HEAD`; header `Content-Type`). Everything else works
 without R2, and tests never touch it.
 
@@ -54,15 +54,15 @@ Prerequisites: Docker, Node 24, [uv](https://docs.astral.sh/uv/).
 # 1. Database (Postgres + pgvector)
 docker compose -f compose.dev.yml up -d
 
-# 2. Backend → http://localhost:8000 (API docs at /api/docs)
+# 2. Backend → http://127.0.0.1:8001 (API docs at /api/docs)
 cd backend
 cp .env.example .env
 uv sync
 uv run python manage.py migrate
 uv run python manage.py createsuperuser   # accounts are admin-created; there is no sign-up
-uv run uvicorn config.asgi:application --reload --port 8000
+uv run uvicorn config.asgi:application --reload --port 8001
 
-# 3. Frontend → http://localhost:5173 (second terminal)
+# 3. Frontend → http://127.0.0.1:5174 (second terminal)
 cd frontend
 npm install
 npm run dev
@@ -89,7 +89,7 @@ cd ../frontend && npm run gen:api
 - Use `127.0.0.1`, not `localhost`, for Ollama: `localhost` tries IPv6 first and adds ~2 s per
   call (`OLLAMA_URL` already defaults to this).
 - Stopping a dev server's terminal/task can leave its `node`/`python` child running and holding
-  port 5173/8000; check with `Get-NetTCPConnection -LocalPort 5173,8000`.
+  port 5174/8001; check with `Get-NetTCPConnection -LocalPort 5174,8001`.
 - Changing what `search.document_text()` produces needs a migration that bumps every person's
   `content_version` (see migration 0004), or existing search entries stay stale.
 

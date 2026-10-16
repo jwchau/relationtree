@@ -62,7 +62,7 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
   `CORS_ALLOW_CREDENTIALS=True`; `CSRF_TRUSTED_ORIGINS=[app origin]`.
 - Session cookie host-only on `api.`; `SameSite=Lax`. Frontend gets the CSRF token from
   `GET /api/auth/csrf` and sends `X-CSRFToken`. All fetches use `credentials: "include"`.
-- Local dev mirrors this: Vite `:5173` → Django `:8000` directly (no Vite proxy), so CORS/CSRF is
+- Local dev mirrors this: Vite `:5174` → Django `:8001` directly (no Vite proxy), so CORS/CSRF is
   exercised daily.
 
 ### Frontend data layer

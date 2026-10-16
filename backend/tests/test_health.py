@@ -12,9 +12,9 @@ def test_health_reports_ok_when_database_reachable(client: Client) -> None:
 
 @pytest.mark.django_db
 def test_health_allows_frontend_origin_with_credentials(client: Client) -> None:
-    response = client.get("/api/health", headers={"Origin": "http://localhost:5173"})
+    response = client.get("/api/health", headers={"Origin": "http://127.0.0.1:5174"})
 
-    assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:5173"
+    assert response.headers["Access-Control-Allow-Origin"] == "http://127.0.0.1:5174"
     assert response.headers["Access-Control-Allow-Credentials"] == "true"
 
 

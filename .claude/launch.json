@@ -10,7 +10,7 @@
         "run",
         "dev"
       ],
-      "port": 5173
+      "port": 5174
     },
     {
       "name": "relationtree-backend",
@@ -23,9 +23,9 @@
         "config.asgi:application",
         "--reload",
         "--port",
-        "8000"
+        "8001"
       ],
-      "port": 8000
+      "port": 8001
     },
     {
       "name": "relationtree-embed-worker",

@@ -7,7 +7,7 @@ export type PersonInput = components['schemas']['PersonIn'];
 export type PersonPatch = components['schemas']['PersonPatch'];
 export type User = components['schemas']['UserOut'];
 
-export const API_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+export const API_URL: string = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8001';
 
 export class ApiError extends Error {
   readonly status: number;
