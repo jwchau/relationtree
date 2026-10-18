@@ -1,0 +1,13 @@
+# Secrets: settings.py reads backend/.env if present, so it must never reach the image.
+.env
+.env.*
+
+.venv/
+staticfiles/
+tests/
+**/__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+Dockerfile
+.dockerignore

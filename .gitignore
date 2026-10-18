@@ -32,3 +32,18 @@ amplifyconfiguration*
 
 # harness session state
 .claude/scheduled_tasks.lock
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# secrets
+.env
+.env.prod
+
+# django collectstatic output (built into the Docker image)
+backend/staticfiles/
