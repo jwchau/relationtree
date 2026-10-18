@@ -238,5 +238,5 @@ relationtree/
 | M10 | **Photos via R2** (dev bucket). | Uploads work |
 | M11 | **AI summaries** against local Ollama (`OLLAMA_URL=http://127.0.0.1:11434`), streamed. | "Catch me up on Sam" works |
 | M12 | **Semantic search.** pgvector, `embed_worker` (version-tracked, no queue), qwen3-embedding. | "Who works in finance?" works |
-| M13 | **Prod cutover.** `start.ps1`/`stop.ps1`, `cloudflared` in compose, Pages deploy, GHCR pull, event-based backups + **tested restore**, healthchecks.io. | Prod runs from home; real data only after backups work |
+| M13 | **Prod cutover.** `start.ps1`/`stop.ps1`, `cloudflared` in compose, Pages deploy, GHCR pull, event-based backups + **tested restore**, healthchecks.io. Done 2026-10-18; healthchecks.io deferred (`HEALTHCHECK_URL` empty). | Prod runs from home; real data only after backups work |
 | v2 | Sharing + invites, graph Q&A agent, free-text extraction. | — |
