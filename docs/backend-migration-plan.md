@@ -32,6 +32,9 @@ Connection(id UUID, tree → Tree, person_a → Person, person_b → Person, typ
 ```
 - **Tree-level sharing** (Google-Drive-folder model). Every query is scoped through `TreeMembership`.
   The MVP UI hides trees entirely (one default tree per user, no switcher).
+- **Deleting a user deletes the trees they solely own** (a `pre_delete` signal), with their
+  people, connections and photos. A tree with another owner survives; editors and viewers
+  alone don't keep it alive.
 - **Connection integrity enforced by Postgres:**
   - `on_delete=CASCADE` on both person FKs (replaces client-side delete loop).
   - `CheckConstraint`: `person_a != person_b`.

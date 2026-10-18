@@ -3,8 +3,8 @@ from uuid import UUID
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F
-from django.db.models.signals import post_delete, post_save
+from django.db.models import Exists, F, OuterRef
+from django.db.models.signals import post_delete, post_save, pre_delete
 from django.dispatch import receiver
 
 from relationtree.models import Connection, Person, Tree, TreeMembership
@@ -19,6 +19,20 @@ def create_default_tree(sender: Any, instance: Any, created: bool, **kwargs: Any
     with transaction.atomic():
         tree = Tree.objects.create(name=f"{instance.get_username()}'s tree")
         TreeMembership.objects.create(tree=tree, user=instance, role=TreeMembership.Role.OWNER)
+
+
+@receiver(pre_delete, sender=settings.AUTH_USER_MODEL)
+def delete_sole_owned_trees(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """Memberships cascade from the user but trees don't, so delete the ones left ownerless.
+    Editors and viewers don't keep a tree alive: nobody could manage it. The cascade reaches
+    its people, so delete_person_photo cleans up R2 too."""
+    owner = TreeMembership.Role.OWNER
+    other_owners = TreeMembership.objects.filter(tree=OuterRef("pk"), role=owner).exclude(
+        user=instance
+    )
+    Tree.objects.filter(memberships__user=instance, memberships__role=owner).exclude(
+        Exists(other_owners)
+    ).delete()
 
 
 @receiver(post_delete, sender=Person)
