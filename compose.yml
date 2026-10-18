@@ -1,0 +1,65 @@
+# Production stack on the home server. Use start.ps1 / stop.ps1 rather than calling this
+# directly: they pass --env-file .env.prod (secrets, git-ignored; see .env.prod.example),
+# start Ollama, run migrations and take the shutdown backup.
+#
+# Own project name: without it this shares "relationtree" with compose.dev.yml and would
+# quietly mount the dev database volume.
+name: relationtree-prod
+
+x-app: &app
+  image: ghcr.io/jwchau/relationtree-api:${IMAGE_TAG:-latest}
+  env_file: .env.prod
+  environment:
+    DATABASE_URL: postgres://relationtree:${POSTGRES_PASSWORD:?set in .env.prod}@db:5432/relationtree
+    # Ollama runs natively on Windows for the GPU.
+    OLLAMA_URL: http://host.docker.internal:11434
+  extra_hosts:
+    - host.docker.internal:host-gateway
+  depends_on:
+    db:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  db:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: relationtree
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env.prod}
+      POSTGRES_DB: relationtree
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relationtree"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    # Admin is reachable only from this machine; the tunnel forwards /api/ and nothing else.
+    ports:
+      - 127.0.0.1:8002:8000
+
+  embed_worker:
+    <<: *app
+    command: ["python", "manage.py", "embed_worker"]
+
+  backup:
+    <<: *app
+    command: ["python", "manage.py", "backup"]
+    # Time for the final dump + upload after `compose down` sends SIGTERM.
+    stop_grace_period: 60s
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set in .env.prod}
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:

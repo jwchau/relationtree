@@ -1,6 +1,7 @@
 import pytest
 from django.contrib.auth.models import User
 from django.test import Client
+from pytest_django.fixtures import Settings
 
 PASSWORD = "correct-horse-battery"
 
@@ -92,3 +93,29 @@ def test_repeated_failed_logins_lock_out_even_the_correct_password(
 
     assert login.status_code == 429
     assert client.get("/api/auth/me").status_code == 401
+
+
+APP_ORIGIN = "https://relationtree.johnchau.org"
+API_HOST = "relationtree-api.johnchau.org"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("origin", "expected"), [(APP_ORIGIN, 200), ("https://evil.example", 403)])
+def test_login_through_the_tunnel_is_csrf_checked_against_the_app_origin(
+    settings: Settings, alice: User, origin: str, expected: int
+) -> None:
+    # Prod values from .env.prod: the app on Pages calls the API through the tunnel.
+    settings.ALLOWED_HOSTS = [API_HOST]
+    settings.CSRF_TRUSTED_ORIGINS = [APP_ORIGIN]
+    browser = Client(enforce_csrf_checks=True)
+    tunnel = {"Host": API_HOST, "X-Forwarded-Proto": "https", "Origin": origin}
+
+    token = browser.get("/api/auth/csrf", headers=tunnel).json()["csrf_token"]
+    login = browser.post(
+        "/api/auth/login",
+        {"username": "alice", "password": PASSWORD},
+        content_type="application/json",
+        headers={**tunnel, "X-CSRFToken": token},
+    )
+
+    assert login.status_code == expected

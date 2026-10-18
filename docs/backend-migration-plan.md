@@ -50,7 +50,8 @@ Connection(id UUID, tree → Tree, person_a → Person, person_b → Person, typ
 - No email infra initially; password resets via Django admin.
 - Brute-force: `django-axes` (client IP from `CF-Connecting-IP`) + a Cloudflare WAF rate-limit rule on
   `/api/auth/login`.
-- **`/admin` is not exposed through the tunnel** — tunnel ingress routes `/api/*` only; admin is LAN-only.
+- **`/admin` is not exposed through the tunnel** — tunnel ingress routes `/api/*` only; admin is
+  reachable only from the server itself (`127.0.0.1:8002`).
 
 ### Topology
 ```
@@ -99,8 +100,15 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
 - **Docker Desktop (WSL2)** runs Django, Postgres, `cloudflared` and the backup job.
   `cloudflared` is a compose service so the tunnel lives and dies with the API.
 - Postgres data in a **named volume**, not a bind mount on `C:\`.
+- Measured in M13: containers reach Ollama via `host.docker.internal` (~40 ms) even with Ollama
+  bound to `127.0.0.1`, because Docker Desktop proxies to the host. No `OLLAMA_HOST` change needed.
 - `start.ps1`: start Docker Desktop if needed → wait for engine → ping/start Ollama → `compose pull` →
-  `compose run --rm api migrate` → `compose up -d`. `stop.ps1`: `compose down` (triggers shutdown backup).
+  `compose run --rm api migrate` → `compose up -d` → warm the chat model. `stop.ps1`: stop
+  `backup` first (final backup, prints its log), then `compose down`.
+- `compose.yml` sets `name: relationtree-prod`; otherwise it shares the `relationtree` project
+  name with `compose.dev.yml` and mounts the dev database volume.
+- Admin is published on `127.0.0.1:8002` (8000 is taken by another app on this machine), so
+  it's reachable from this machine only, not the LAN.
 - Set Windows Update active hours so it doesn't reboot mid-session.
 
 ### AI
@@ -158,15 +166,26 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
 - A model with a different vector size fails loudly (`ImproperlyConfigured`) instead of writing.
 
 ### Backups (event-driven — the server isn't on at night)
-- `backup` container in the prod compose stack:
+- `backup` service (`manage.py backup`, same image as the API) in the prod compose stack:
   - **on start:** if newest backup in R2 is older than 6h → dump + upload;
-  - **every 2h while running:** dump + upload only if the DB changed (compare `xact_commit` or `max(updated_at)`);
-  - **on SIGTERM:** final dump + upload (`stop_grace_period: 60s`). Best-effort — power loss skips it.
-  - Worst-case loss: ~2h of edits.
-- Separate R2 bucket `relationtree-backups`, **write-only token**.
-- Retention: last 50 + one per calendar month.
-- healthchecks.io ping with a **7-day** grace period. No uptime monitoring (would alert constantly).
-- Restore drill: a script loads the latest dump into a throwaway local Postgres. Run quarterly.
+  - **every 2h while running:** dump + upload only if the DB changed;
+  - **on SIGTERM:** final dump + upload if anything changed since the last one
+    (`stop_grace_period: 60s`). Best-effort — power loss skips it.
+  - A failed backup is retried on the next tick. Worst-case loss: ~2h of edits.
+- "Changed" = `tup_inserted + tup_updated + tup_deleted` from `pg_stat_database`: `xact_commit`
+  moves on reads (pg_dump itself bumps it) and `max(updated_at)` misses deletes.
+- Separate R2 bucket `relationtree-backups`. R2 has no write-only tokens, so the token is
+  Object Read & Write scoped to that bucket, and a **bucket lock on `daily/` (30 days)** stops a
+  compromised server from deleting recent backups.
+- Retention (no pruning code): each backup goes to `daily/<time>.dump` (lifecycle rule expires
+  them at 35 days) **and** overwrites `monthly/YYYY-MM.dump` (kept). The newest backup therefore
+  survives however long the server stays off. Both bucket rules must use prefix `daily/`:
+  unprefixed, the lock blocks the `monthly/` overwrite (`ObjectLockedByBucketPolicy`, found in
+  M13) and the lifecycle rule would delete the monthly backups.
+- healthchecks.io pings (`/fail` on failure), period 7 days + 1 day grace. No uptime monitoring
+  (would alert constantly).
+- Restore drill: `scripts/restore-drill.ps1` restores the newest dump into a throwaway Postgres
+  and compares row counts with the live database. Run quarterly.
 
 ### CI/CD
 - **No deployed dev environment.** Laptop = dev, `main` = prod. Keep `dev` → PR → `main`.
@@ -176,6 +195,8 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
   - generated API types are up to date.
 - On `main` after checks pass: build Django image → push to GHCR (`latest` + SHA);
   `wrangler pages deploy` from Actions (not Cloudflare's git integration, so the CI gate holds).
+  `VITE_API_URL` and `CLOUDFLARE_ACCOUNT_ID` are repo variables; `CLOUDFLARE_API_TOKEN` a secret.
+- Hostnames: app `relationtree.johnchau.org` (Pages), API `relationtree-api.johnchau.org` (tunnel).
 - Server pulls on startup (`start.ps1`). Nothing connects inbound. No self-hosted runner, no Watchtower.
 - Backend changes must be backward-compatible (expand → deploy → contract), since the frontend can ship
   before the server next restarts.

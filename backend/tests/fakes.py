@@ -1,5 +1,7 @@
 import asyncio
 from collections.abc import AsyncGenerator, Callable
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 
@@ -77,3 +79,34 @@ class FakeEmbedder:
             vector[axis] = float(sum(lowered.count(k) for k in keywords))
         vector[-1] = 0.01  # never all-zero: cosine distance is undefined for a zero vector
         return vector
+
+
+class FakeBackupStore:
+    """Stands in for the R2 backups bucket: records each upload's key and contents."""
+
+    def __init__(self, newest: datetime | None = None) -> None:
+        self.newest = newest
+        self.uploads: list[tuple[str, bytes]] = []
+        self.error: Exception | None = None
+
+    def newest_backup_time(self) -> datetime | None:
+        return self.newest
+
+    def upload(self, path: Path, key: str) -> None:
+        if self.error:
+            raise self.error
+        self.uploads.append((key, path.read_bytes()))
+
+
+class FakeDumper:
+    """Stands in for pg_dump: writes a recognizable dump, or fails like pg_dump would."""
+
+    def __init__(self) -> None:
+        self.error: Exception | None = None
+        self.calls = 0
+
+    def __call__(self, path: Path) -> None:
+        self.calls += 1
+        if self.error:
+            raise self.error
+        path.write_bytes(b"dump-%d" % self.calls)

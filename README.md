@@ -18,15 +18,11 @@ the resulting graph.
 | M10 Photos on Cloudflare R2 (presigned) | ✅ |
 | M11 AI catch-up summaries (local Ollama, streamed) | ✅ |
 | M12 "Ask" semantic search (pgvector + qwen3-embedding, relationship summaries) | ✅ |
-| **M13 Production cutover** on the Windows home server | **next** |
+| **M13 Production cutover** on the Windows home server | **in progress** |
 | v2 Sharing + invites, graph Q&A agent, free-text extraction | later |
 
-All of M7–M12 is on `dev` with CI green; `main` still holds the old Amplify scaffold (nothing
-deploys from it) until the M13 cutover is merged. M13 scope, from the plan: `start.ps1` /
-`stop.ps1` (including warming the chat model and `embed_worker --once`), `cloudflared` +
-`backup` + `embed_worker` services in a prod `compose.yml`, Cloudflare Pages deploy from Actions,
-GHCR image pull, whitenoise for admin static files, event-based backups to R2 with a tested
-restore, healthchecks.io, and a prod R2 bucket/CORS origin.
+All of M7–M12 is on `dev` with CI green; `main` still holds the old Amplify scaffold until the
+M13 cutover is merged. Merging to `main` is what deploys (see [Production](#production)).
 
 Photos live in a private Cloudflare R2 bucket. For local photo uploads, fill in the
 `CLOUDFLARE_R2_*` values in `backend/.env` and allow `http://127.0.0.1:5174` in the
@@ -39,7 +35,7 @@ summaries, `CHAT_MODEL`) and `ollama pull qwen3-embedding:0.6b` (the "Ask" searc
 unavailable. Tests use fakes and never call Ollama.
 
 The API runs under uvicorn (ASGI), not `manage.py runserver`, because runserver can't stream
-the AI summaries. Side effect until M13: Django admin pages load without CSS locally.
+the AI summaries. whitenoise serves the admin's CSS/JS.
 
 ## Stack
 
@@ -105,9 +101,42 @@ npm run typecheck && npm run lint && npm run test && npm run build
 
 CI (`.github/workflows/ci.yml`) runs both on every push to `dev`/`main` and on PRs.
 
+## Production
+
+Runs on the Windows home server, only while it's on:
+
+```
+Browser ─► https://relationtree.johnchau.org      Cloudflare Pages (the React build)
+       └─► https://relationtree-api.johnchau.org  Cloudflare Tunnel ─► compose.yml on this machine
+                                                   (api, embed_worker, backup, db, cloudflared)
+                                                   └─► Ollama, native on Windows (GPU)
+```
+
+- **Deploying:** merge `dev` → `main`. After checks pass, CI pushes the API image to GHCR
+  (`latest` + commit SHA) and deploys the frontend to Pages. The server picks up the new image
+  on its next `start.ps1`, so API changes must stay backward-compatible with the deployed frontend.
+- **Daily use:** `.\start.ps1` (starts Docker Desktop and Ollama if needed, pulls, migrates, starts
+  the stack, warms the chat model) and `.\stop.ps1` (final backup, then `compose down`).
+- **Admin:** http://127.0.0.1:8002/admin/ on the server only. The tunnel forwards `/api/` and
+  nothing else. Accounts: `docker compose --env-file .env.prod run --rm api python manage.py createsuperuser`.
+- **Backups:** the `backup` service uploads a `pg_dump` to the `relationtree-backups` R2 bucket on
+  start (if the newest is over 6h old), every 2h if the database changed, and on shutdown.
+  `daily/<time>.dump` is bucket-locked for 30 days and expires at 35; `monthly/YYYY-MM.dump` is
+  overwritten by each backup and kept. Restore drill (quarterly): `.\scripts\restore-drill.ps1`.
+
+### One-time setup
+
+1. `.env.prod` from `.env.prod.example` (git-ignored; all secrets live here).
+2. `docker login ghcr.io` with a classic PAT that has `read:packages` (the image is private).
+3. Cloudflare: tunnel `relationtree` routes `relationtree-api.johnchau.org` path `^/api/` to
+   `http://api:8000`; WAF rate-limit rule on `POST /api/auth/login`; Pages project `relationtree`
+   with custom domain `relationtree.johnchau.org`; bucket lock and lifecycle rules on the backups
+   bucket use prefix `daily/` (not the whole bucket, or `monthly/` can't be overwritten or kept).
+4. GitHub: secret `CLOUDFLARE_API_TOKEN` (Pages: Edit); variables `CLOUDFLARE_ACCOUNT_ID`,
+   `VITE_API_URL=https://relationtree-api.johnchau.org`.
+
 ## Git workflow
 
-- Work on `dev`; ship by opening a PR from `dev` → `main`.
-- There is no deployed environment until the production cutover (M13).
+- Work on `dev`; ship by opening a PR from `dev` → `main` (which deploys).
 
 See [MANUAL_TESTS.md](./MANUAL_TESTS.md) for the manual regression checklist.

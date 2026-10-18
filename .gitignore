@@ -43,3 +43,7 @@ __pycache__/
 
 # secrets
 .env
+.env.prod
+
+# django collectstatic output (built into the Docker image)
+backend/staticfiles/
