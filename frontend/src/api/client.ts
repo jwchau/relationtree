@@ -9,6 +9,8 @@ export type User = components['schemas']['UserOut'];
 export type Tree = components['schemas']['TreeOut'];
 export type TreeRole = Tree['role'];
 export type Member = components['schemas']['MemberOut'];
+export type InviteDetails = components['schemas']['InviteDetailsOut'];
+export type PendingInvite = components['schemas']['PendingInviteOut'];
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8001';
 

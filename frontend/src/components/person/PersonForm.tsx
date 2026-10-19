@@ -52,6 +52,8 @@ export function PersonForm({
       ...defaultValues,
     },
   });
+  // Example text in an empty read-only field would look like real data.
+  const hint = (example: string) => (readOnly ? undefined : example);
 
   return (
     <Form {...form}>
@@ -64,7 +66,7 @@ export function PersonForm({
               <FormItem>
                 <FormLabel>Name</FormLabel>
                 <FormControl>
-                  <Input placeholder="Jane Doe" {...field} />
+                  <Input placeholder={hint('Jane Doe')} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -103,7 +105,7 @@ export function PersonForm({
               <FormItem>
                 <FormLabel>How you know them</FormLabel>
                 <FormControl>
-                  <Input placeholder="College roommate, met at a conference..." {...field} />
+                  <Input placeholder={hint('College roommate, met at a conference...')} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -118,7 +120,7 @@ export function PersonForm({
                 <FormItem>
                   <FormLabel>Phone</FormLabel>
                   <FormControl>
-                    <Input placeholder="(555) 555-5555" {...field} />
+                    <Input placeholder={hint('(555) 555-5555')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -131,7 +133,7 @@ export function PersonForm({
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="jane@example.com" {...field} />
+                    <Input placeholder={hint('jane@example.com')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -146,7 +148,7 @@ export function PersonForm({
               <FormItem>
                 <FormLabel>Address</FormLabel>
                 <FormControl>
-                  <Input placeholder="123 Main St, Springfield, IL 62704" {...field} />
+                  <Input placeholder={hint('123 Main St, Springfield, IL 62704')} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -189,7 +191,7 @@ export function PersonForm({
               <FormItem>
                 <FormLabel>Notes</FormLabel>
                 <FormControl>
-                  <Textarea rows={4} placeholder="Anything worth remembering..." {...field} />
+                  <Textarea rows={4} placeholder={hint('Anything worth remembering...')} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

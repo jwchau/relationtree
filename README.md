@@ -21,7 +21,8 @@ the resulting graph.
 | M13 Production cutover on the Windows home server | ✅ (healthchecks.io ping not set up yet) |
 | M14 Graph Q&A in Ask (tool-calling agent, "This is me") | ✅ |
 | M15 Sharing (tree switcher, members and roles) | ✅ on `dev` |
-| M16–M17 Invites, free-text extraction | next |
+| M16 Invite links (one-time, the only way to sign up) | ✅ on `dev` |
+| M17 Free-text extraction | next |
 
 Production runs at https://relationtree.johnchau.org since 2026-10-18. Merging `dev` to
 `main` is what deploys (see [Production](#production)).
@@ -57,7 +58,7 @@ cd backend
 cp .env.example .env
 uv sync
 uv run python manage.py migrate
-uv run python manage.py createsuperuser   # accounts are admin-created; there is no sign-up
+uv run python manage.py createsuperuser   # the first account; others join via invite links
 uv run uvicorn config.asgi:application --reload --port 8001
 
 # 3. Frontend → http://127.0.0.1:5174 (second terminal)
@@ -120,7 +121,8 @@ Browser ─► https://relationtree.johnchau.org      Cloudflare Pages (the Reac
 - **Daily use:** `.\start.ps1` (starts Docker Desktop and Ollama if needed, pulls, migrates, starts
   the stack, warms the chat model) and `.\stop.ps1` (final backup, then `compose down`).
 - **Admin:** http://127.0.0.1:8002/admin/ on the server only. The tunnel forwards `/api/` and
-  nothing else. Accounts: `docker compose --env-file .env.prod run --rm api python manage.py createsuperuser`.
+  nothing else. First account: `docker compose --env-file .env.prod run --rm api python manage.py createsuperuser`;
+  everyone else joins through an invite link from a tree's settings.
 - **Backups:** the `backup` service uploads a `pg_dump` to the `relationtree-backups` R2 bucket on
   start (if the newest is over 6h old), every 2h if the database changed, and on shutdown.
   `daily/<time>.dump` is bucket-locked for 30 days and expires at 35; `monthly/YYYY-MM.dump` is
@@ -131,7 +133,9 @@ Browser ─► https://relationtree.johnchau.org      Cloudflare Pages (the Reac
 1. `.env.prod` from `.env.prod.example` (git-ignored; all secrets live here).
 2. `docker login ghcr.io` with a classic PAT that has `read:packages` (the image is private).
 3. Cloudflare: tunnel `relationtree` routes `relationtree-api.johnchau.org` path `^/api/` to
-   `http://api:8000`; WAF rate-limit rule on `POST /api/auth/login`; Pages project `relationtree`
+   `http://api:8000`; one WAF rate-limit rule (the free plan allows only one) matching both
+   `POST /api/auth/login` and paths starting with `/api/invites/` (invite sign-up isn't covered
+   by axes); Pages project `relationtree`
    with custom domain `relationtree.johnchau.org`; bucket lock and lifecycle rules on the backups
    bucket use prefix `daily/` (not the whole bucket, or `monthly/` can't be overwritten or kept).
 4. GitHub: secret `CLOUDFLARE_API_TOKEN` (Pages: Edit); variables `CLOUDFLARE_ACCOUNT_ID`,

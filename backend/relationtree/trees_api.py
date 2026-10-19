@@ -48,7 +48,7 @@ class MemberOut(Schema):
     is_me: bool
 
 
-def _tree_out(membership: TreeMembership, member_count: int | None = None) -> TreeOut:
+def tree_out(membership: TreeMembership, member_count: int | None = None) -> TreeOut:
     if member_count is None:
         member_count = TreeMembership.objects.filter(tree=membership.tree_id).count()
     return TreeOut(
@@ -87,7 +87,7 @@ def list_trees(request: AuthedRequest) -> list[TreeOut]:
         .annotate(member_count=Count("tree__memberships"))
         .order_by("tree__name")
     )
-    return [_tree_out(m, m.member_count) for m in memberships]
+    return [tree_out(m, m.member_count) for m in memberships]
 
 
 @router.post("/trees", response={201: TreeOut})
@@ -97,7 +97,7 @@ def create_tree(request: AuthedRequest, payload: TreeIn) -> Status[TreeOut]:
         membership = TreeMembership.objects.create(
             tree=tree, user=request.user, role=TreeMembership.Role.OWNER
         )
-    return Status(201, _tree_out(membership))
+    return Status(201, tree_out(membership))
 
 
 @router.patch("/trees/{tree_id}", response=TreeOut)
@@ -106,7 +106,7 @@ def rename_tree(request: AuthedRequest, tree_id: UUID, payload: TreeIn) -> TreeO
     require_owner(membership)
     membership.tree.name = payload.name
     membership.tree.save(update_fields=["name"])
-    return _tree_out(membership)
+    return tree_out(membership)
 
 
 @router.get("/trees/{tree_id}/members", response=list[MemberOut])

@@ -199,6 +199,24 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
   members and leave. Viewers don't see add, edit, delete, photo or connection controls; the API
   enforces the same rules. Deleting a tree isn't offered yet.
 
+### Invites (M16)
+- `Invite(tree, role, token_hash, created_by, expires_at, used_at, used_by)`. The token
+  (`secrets.token_urlsafe(32)`) is returned once, when made; only its SHA-256 is stored, so a
+  leaked database or backup can't be used to join. Links last 7 days and work once.
+- Owners: `POST/GET /api/trees/{id}/invites` (create; list pending, never tokens),
+  `DELETE …/{invite_id}` (revoke). Public: `GET /api/invites/{token}` (tree, role, inviter,
+  expiry). Unknown, expired, used and revoked links all get the same 404.
+- `POST /api/invites/{token}/accept` (logged in; 409 and the invite stays usable if already a
+  member) and `POST /api/invites/{token}/signup {username, password}` (explicit CSRF check like
+  login; Django's username and password validators; usernames unique ignoring case). Both lock
+  the invite row (`select_for_update`), so one link can't be used twice at once. Sign-up logs
+  the new user in; like every account they also get their own empty tree.
+- This is the only way to sign up. axes doesn't cover sign-up, so prod's Cloudflare rate-limit
+  rule covers `/api/invites/` as well as login (one rule on the free plan).
+- Frontend: the owner's settings page makes a link (shown once, with Copy) and lists or revokes
+  pending ones; `/invite/:token` is public: join with one click, sign up, or sign in and come
+  back; it then opens the joined tree.
+
 ### Background jobs
 - **No job queue.** Each `Person` tracks `content_version` (bumped in SQL when a searchable field
   changes, including admin edits) and `embedded_version`. `manage.py embed_worker` embeds rows
@@ -280,5 +298,5 @@ relationtree/
 | M13 | **Prod cutover.** `start.ps1`/`stop.ps1`, `cloudflared` in compose, Pages deploy, GHCR pull, event-based backups + **tested restore**, healthchecks.io. Done 2026-10-18; healthchecks.io deferred (`HEALTHCHECK_URL` empty). | Prod runs from home; real data only after backups work |
 | M14 | **Graph Q&A** in the Ask box: tool-calling agent over connections, streamed answer with progress, "This is me" marker. | "How is Leo connected to Priya?" works |
 | M15 | **Sharing.** Tree switcher (one tree at a time); owners manage members and roles; role-aware UI. Owners add existing users by username. | Two users share a tree |
-| M16 | **Invites.** One-time `Invite(token, tree, role, expires_at)` links the owner copies; creates an account or adds the tree for a logged-in user. | Invite a new person end to end |
+| M16 | **Invites.** One-time `Invite(token, tree, role, expires_at)` links the owner copies; creates an account or adds the tree for a logged-in user. Only the token's hash is stored. | Invite a new person end to end |
 | M17 | **Free-text extraction.** Paste a note → proposed people/connections (matched to existing people) to confirm. | "Met Jordan at Alex's wedding" adds Jordan |

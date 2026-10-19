@@ -7,6 +7,7 @@ import { TreeSwitcher } from '@/components/TreeSwitcher'
 import { ServerStatusBanner } from '@/components/ServerStatusBanner'
 import { useLogout } from '@/hooks/useAuth'
 import { useCurrentTree } from '@/hooks/useCurrentTree'
+import InvitePage from '@/routes/InvitePage'
 import LoginPage from '@/routes/LoginPage'
 import PersonListPage from '@/routes/PersonListPage'
 import PersonDetailPage from '@/routes/PersonDetailPage'
@@ -65,6 +66,7 @@ function App() {
       <ServerStatusBanner />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/invite/:token" element={<InvitePage />} />
         <Route element={<AppLayout />}>
           <Route path="/" element={<PersonListPage />} />
           <Route path="/people/new" element={<PersonCreatePage />} />

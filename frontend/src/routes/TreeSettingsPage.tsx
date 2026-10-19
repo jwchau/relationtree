@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, Copy, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Member, Tree, TreeRole } from '@/api/client';
 import { useCurrentTree } from '@/hooks/useCurrentTree';
+import { useCreateInvite, useInvites, useRevokeInvite } from '@/hooks/useInvites';
 import {
   useAddMember,
   useChangeRole,
@@ -11,6 +12,7 @@ import {
   useRemoveMember,
   useRenameTree,
 } from '@/hooks/useTrees';
+import { expiresIn, inviteUrl } from '@/lib/invites';
 import { permissionsFor } from '@/lib/trees';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -77,6 +79,7 @@ function TreeSettings({ tree }: { tree: Tree }) {
       </div>
       {canManage && <RenameForm tree={tree} />}
       <MemberSection tree={tree} canManage={canManage} />
+      {canManage && <InviteSection treeId={tree.id} />}
     </div>
   );
 }
@@ -272,5 +275,111 @@ function AddMemberForm({ treeId }: { treeId: string }) {
         Add member
       </Button>
     </form>
+  );
+}
+
+function InviteSection({ treeId }: { treeId: string }) {
+  const invites = useInvites(treeId);
+  const createInvite = useCreateInvite(treeId);
+  const revokeInvite = useRevokeInvite(treeId);
+  const [role, setRole] = useState<TreeRole>('viewer');
+  // The token only exists in this response, so the link can't be shown again later.
+  const [link, setLink] = useState<string | null>(null);
+
+  function handleCreate() {
+    createInvite.mutate(role, {
+      onSuccess: (created) => setLink(inviteUrl(window.location.origin, created.token)),
+      onError: showError('Failed to create invite'),
+    });
+  }
+
+  async function copyLink() {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success('Link copied');
+    } catch {
+      toast.error('Copy failed. Select the link and copy it yourself.');
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold">Invite links</h2>
+        <p className="text-muted-foreground text-sm">
+          For someone without an account, or to share without knowing their username. Each link
+          works once and lasts a week.
+        </p>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Select value={role} onValueChange={(v) => setRole(v as TreeRole)}>
+          <SelectTrigger className="capitalize sm:w-28" aria-label="Role for the invite">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ROLES.map((r) => (
+              <SelectItem key={r} value={r} className="capitalize">
+                {r}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button variant="outline" onClick={handleCreate} disabled={createInvite.isPending}>
+          Create link
+        </Button>
+      </div>
+      {link && (
+        <div className="space-y-1">
+          <div className="flex gap-2">
+            <Input
+              readOnly
+              value={link}
+              aria-label="Invite link"
+              onFocus={(e) => e.target.select()}
+            />
+            <Button variant="outline" onClick={copyLink}>
+              <Copy />
+              Copy
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-xs">
+            Copy it now: it won&apos;t be shown again.
+          </p>
+        </div>
+      )}
+      {invites.data && invites.data.length > 0 && (
+        <ul className="space-y-2">
+          {invites.data.map((i) => (
+            <li
+              key={i.id}
+              className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+            >
+              <span>
+                <span className="capitalize">{i.role}</span> link
+                <span className="text-muted-foreground">
+                  {' '}
+                  · {expiresIn(i.expires_at)}
+                  {i.created_by && ` · made by ${i.created_by}`}
+                </span>
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={revokeInvite.isPending}
+                onClick={() =>
+                  revokeInvite.mutate(i.id, {
+                    onSuccess: () => toast.success('Link revoked'),
+                    onError: showError('Failed to revoke'),
+                  })
+                }
+              >
+                Revoke
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
