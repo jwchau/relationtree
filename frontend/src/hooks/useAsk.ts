@@ -13,7 +13,7 @@ import {
  * it's user-triggered, costs GPU time and arrives in pieces. Asking again or leaving the page
  * aborts the request, which stops generation on the server.
  */
-export function useAsk() {
+export function useAsk(treeId: string | undefined) {
   const [answer, setAnswer] = useState<Answer | null>(null);
   const controller = useRef<AbortController | null>(null);
 
@@ -27,6 +27,7 @@ export function useAsk() {
 
     try {
       const { data, error, response } = await api.POST('/api/ask', {
+        params: { query: { tree: treeId } },
         body: { question },
         parseAs: 'stream',
         signal: abort.signal,
@@ -50,7 +51,7 @@ export function useAsk() {
       const message = err instanceof Error ? err.message : 'Failed to get an answer';
       setAnswer((previous) => applyAskEvent(previous ?? initialAnswer, { error: message }));
     }
-  }, []);
+  }, [treeId]);
 
   const reset = useCallback(() => {
     controller.current?.abort();

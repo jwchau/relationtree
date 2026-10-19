@@ -11,7 +11,7 @@ from django.test import AsyncClient
 
 from relationtree.access import default_tree_for
 from relationtree.ai import AIUnavailable, ToolCall
-from relationtree.models import Person, TreeMembership
+from relationtree.models import Person, Tree, TreeMembership
 from tests.fakes import FakeChatModel
 
 
@@ -149,3 +149,39 @@ async def test_the_model_is_told_who_me_is_when_marked(chat_model: FakeChatModel
     )
     assert "Jordan" not in unmarked
     assert f"The user is Jordan (id {jordan.id})" in marked
+
+
+@sync_to_async
+def share_new_tree(user: User, *names: str) -> tuple[Tree, list[Person]]:
+    tree = Tree.objects.create(name="Work")
+    TreeMembership.objects.create(tree=tree, user=user, role=TreeMembership.Role.OWNER)
+    return tree, [Person.objects.create(tree=tree, name=name) for name in names]
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_ask_answers_from_the_given_tree_only(chat_model: FakeChatModel) -> None:
+    alice, [_ann] = await make_user_with_people("alice", "Ann")
+    work, [priya] = await share_new_tree(alice, "Priya")
+    await sync_to_async(TreeMembership.objects.filter(tree=work).update)(me=priya)
+    _bob, _ = await make_user_with_people("bob")
+    client = await logged_in(alice)
+    chat_model.turns = [[ToolCall("find_people", {"name": ""})], ["Done."]] * 2
+
+    await read_events(await ask(client, "Who is there?"))
+    await read_events(
+        await client.post(
+            f"/api/ask?tree={work.id}", {"question": "Who?"}, content_type="application/json"
+        )
+    )
+
+    own, shared = chat_model.calls[1], chat_model.calls[3]
+    assert [p["name"] for p in tool_results(own)[0]] == ["Ann"]
+    assert [p["name"] for p in tool_results(shared)[0]] == ["Priya"]
+    system = " ".join(m["content"] for m in shared["messages"] if m["role"] == "system")
+    assert "The user is Priya" in system
+
+    bobs = await sync_to_async(lambda: TreeMembership.objects.get(user__username="bob").tree_id)()
+    stranger = await client.post(
+        f"/api/ask?tree={bobs}", {"question": "Who?"}, content_type="application/json"
+    )
+    assert stranger.status_code == 404

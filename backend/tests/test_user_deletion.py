@@ -73,7 +73,8 @@ def test_a_tree_with_another_owner_survives_without_the_deleted_user(
 
     User.objects.get(username="alice").delete()
 
-    assert sorted(p["name"] for p in bob.get("/api/people").json()) == ["Sam"]
+    shared = bob.get("/api/people", {"tree": str(alices_tree.id)}).json()
+    assert sorted(p["name"] for p in shared) == ["Sam"]
     assert list(alices_tree.memberships.values_list("user__username", flat=True)) == ["bob"]
 
 

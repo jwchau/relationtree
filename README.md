@@ -19,8 +19,9 @@ the resulting graph.
 | M11 AI catch-up summaries (local Ollama, streamed) | ✅ |
 | M12 "Ask" semantic search (pgvector + qwen3-embedding, relationship summaries) | ✅ |
 | M13 Production cutover on the Windows home server | ✅ (healthchecks.io ping not set up yet) |
-| M14 Graph Q&A in Ask (tool-calling agent, "This is me") | ✅ on `dev` |
-| M15–M17 Sharing, invites, free-text extraction | next |
+| M14 Graph Q&A in Ask (tool-calling agent, "This is me") | ✅ |
+| M15 Sharing (tree switcher, members and roles) | ✅ on `dev` |
+| M16–M17 Invites, free-text extraction | next |
 
 Production runs at https://relationtree.johnchau.org since 2026-10-18. Merging `dev` to
 `main` is what deploys (see [Production](#production)).

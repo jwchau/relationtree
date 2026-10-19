@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDeletePerson, usePerson, useSetMe, useUpdatePerson } from '@/hooks/usePerson';
 import { useConnections } from '@/hooks/useConnections';
+import { useCurrentTree, useTreePermissions } from '@/hooks/useCurrentTree';
 import { PersonForm } from '@/components/person/PersonForm';
 import { CatchUpCard } from '@/components/person/CatchUpCard';
 import { PhotoUploader } from '@/components/person/PhotoUploader';
@@ -34,6 +36,15 @@ export default function PersonDetailPage() {
   const updatePerson = useUpdatePerson(personId);
   const deletePerson = useDeletePerson(personId);
   const setMe = useSetMe(personId);
+  const { tree: currentTree, select: selectTree } = useCurrentTree();
+  const { canEdit } = useTreePermissions(person?.tree_id);
+
+  // Opening someone from another tree (e.g. a shared link) switches to that tree, so the
+  // header, list and Ask all match the person on screen.
+  const personTreeId = person?.tree_id;
+  useEffect(() => {
+    if (personTreeId && currentTree && personTreeId !== currentTree.id) selectTree(personTreeId);
+  }, [personTreeId, currentTree, selectTree]);
 
   async function handleSubmit(values: PersonFormValues) {
     try {
@@ -83,38 +94,41 @@ export default function PersonDetailPage() {
             <UserCheck />
             {person.is_me ? 'Not me' : 'This is me'}
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={deletePerson.isPending}>
-                Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete {person.name}?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {connections.length > 0
-                    ? `This permanently removes ${person.name} and their ${connections.length} connection${connections.length === 1 ? '' : 's'}. This cannot be undone.`
-                    : `This permanently removes ${person.name} and cannot be undone.`}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {canEdit && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={deletePerson.isPending}>
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete {person.name}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {connections.length > 0
+                      ? `This permanently removes ${person.name} and their ${connections.length} connection${connections.length === 1 ? '' : 's'}. This cannot be undone.`
+                      : `This permanently removes ${person.name} and cannot be undone.`}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <div className="max-w-xl space-y-6">
-          <PhotoUploader person={person} />
+          <PhotoUploader person={person} readOnly={!canEdit} />
           <PersonForm
             defaultValues={toFormValues(person)}
             onSubmit={handleSubmit}
             submitLabel="Save changes"
             isSubmitting={updatePerson.isPending}
+            readOnly={!canEdit}
           />
         </div>
 
@@ -124,12 +138,19 @@ export default function PersonDetailPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Connections</h2>
-              <AddConnectionDialog personId={person.id} personName={person.name} />
+              {canEdit && (
+                <AddConnectionDialog
+                  personId={person.id}
+                  personName={person.name}
+                  treeId={person.tree_id}
+                />
+              )}
             </div>
             <ConnectionList
               connections={connections}
               loading={connectionsLoading}
               error={connectionsError}
+              canEdit={canEdit}
             />
           </div>
 

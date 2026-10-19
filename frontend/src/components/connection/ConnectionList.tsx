@@ -9,9 +9,10 @@ export interface ConnectionListProps {
   connections: ConnectionWithPerson[];
   loading: boolean;
   error: string | null;
+  canEdit: boolean;
 }
 
-export function ConnectionList({ connections, loading, error }: ConnectionListProps) {
+export function ConnectionList({ connections, loading, error, canEdit }: ConnectionListProps) {
   const deleteConnection = useDeleteConnection();
 
   async function handleRemove(connectionId: string) {
@@ -43,15 +44,17 @@ export function ConnectionList({ connections, loading, error }: ConnectionListPr
             </Link>
             <Badge variant="secondary">{c.displayLabel}</Badge>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={() => handleRemove(c.connectionId)}
-            aria-label={`Remove connection to ${c.otherPerson.name}`}
-          >
-            <X className="size-4" />
-          </Button>
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => handleRemove(c.connectionId)}
+              aria-label={`Remove connection to ${c.otherPerson.name}`}
+            >
+              <X className="size-4" />
+            </Button>
+          )}
         </li>
       ))}
     </ul>

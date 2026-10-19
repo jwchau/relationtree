@@ -1,11 +1,12 @@
 import uuid
 from collections.abc import Callable
+from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
 from django.test import Client
 
-from relationtree.models import TreeMembership
+from relationtree.models import Tree, TreeMembership
 
 SOME_ID = uuid.uuid4()
 
@@ -88,13 +89,14 @@ def test_viewer_of_a_shared_tree_can_read_but_not_write(
     alice, bob = login_as("alice"), login_as("bob")
     sam = alice.post("/api/people", {"name": "Sam"}, content_type="application/json").json()
     url = f"/api/people/{sam['id']}"
-    # No sharing API until v2, so grant access directly.
     alices_tree = TreeMembership.objects.get(user__username="alice").tree
     TreeMembership.objects.create(
         tree=alices_tree, user=User.objects.get(username="bob"), role=TreeMembership.Role.VIEWER
     )
 
-    assert [p["name"] for p in bob.get("/api/people").json()] == ["Sam"]
+    assert [p["name"] for p in bob.get("/api/people", {"tree": str(alices_tree.id)}).json()] == [
+        "Sam"
+    ]
     assert bob.get(url).status_code == 200
     assert bob.patch(url, {"name": "Hacked"}, content_type="application/json").status_code == 403
     assert bob.delete(url).status_code == 403
@@ -126,3 +128,57 @@ def test_text_fields_reject_null_but_accept_empty(
 
     assert alice.patch(url, {field: None}, content_type="application/json").status_code == 422
     assert alice.patch(url, {field: ""}, content_type="application/json").status_code == 200
+
+
+def share(owner: str, member: str, role: TreeMembership.Role) -> Tree:
+    tree = TreeMembership.objects.get(user__username=owner, role=TreeMembership.Role.OWNER).tree
+    TreeMembership.objects.create(tree=tree, user=User.objects.get(username=member), role=role)
+    return tree
+
+
+def test_listing_people_covers_one_tree_defaulting_to_my_own(
+    login_as: Callable[[str], Client],
+) -> None:
+    alice, bob = login_as("alice"), login_as("bob")
+    alice.post("/api/people", {"name": "Ann"}, content_type="application/json")
+    bob.post("/api/people", {"name": "Bea"}, content_type="application/json")
+    alices = share("alice", "bob", TreeMembership.Role.VIEWER)
+
+    assert [p["name"] for p in bob.get("/api/people").json()] == ["Bea"]
+    assert [p["name"] for p in bob.get("/api/people", {"tree": str(alices.id)}).json()] == ["Ann"]
+    assert alice.get("/api/people", {"tree": str(uuid.uuid4())}).status_code == 404
+    bobs = TreeMembership.objects.get(user__username="bob", role=TreeMembership.Role.OWNER).tree
+    assert alice.get("/api/people", {"tree": str(bobs.id)}).status_code == 404
+
+
+def test_creating_a_person_goes_into_the_given_tree(login_as: Callable[[str], Client]) -> None:
+    alice, bob, carol = login_as("alice"), login_as("bob"), login_as("carol")
+    alices = share("alice", "bob", TreeMembership.Role.EDITOR)
+    TreeMembership.objects.create(
+        tree=alices, user=User.objects.get(username="carol"), role=TreeMembership.Role.VIEWER
+    )
+
+    def create(client: Client, tree: object) -> Any:
+        return client.post(
+            "/api/people",
+            {"name": "Dana"},
+            QUERY_STRING=f"tree={tree}",
+            content_type="application/json",
+        )
+
+    created = create(bob, alices.id)
+    assert created.status_code == 201
+    assert created.json()["tree_id"] == str(alices.id)
+    assert create(carol, alices.id).status_code == 403
+    assert create(carol, uuid.uuid4()).status_code == 404
+    assert [p["name"] for p in alice.get("/api/people").json()] == ["Dana"]
+
+
+def test_people_say_which_tree_they_are_in(login_as: Callable[[str], Client]) -> None:
+    alice = login_as("alice")
+    tree = TreeMembership.objects.get(user__username="alice").tree
+
+    sam = alice.post("/api/people", {"name": "Sam"}, content_type="application/json").json()
+
+    assert sam["tree_id"] == str(tree.id)
+    assert alice.get(f"/api/people/{sam['id']}").json()["tree_id"] == str(tree.id)

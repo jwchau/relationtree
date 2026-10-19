@@ -171,6 +171,23 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "tree",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tree"
+            },
+            "required": false
           }
         ],
         "responses": {
@@ -209,7 +226,25 @@
       "get": {
         "operationId": "relationtree_people_api_list_people",
         "summary": "List People",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tree",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tree"
+            },
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -238,7 +273,25 @@
       "post": {
         "operationId": "relationtree_people_api_create_person",
         "summary": "Create Person",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tree",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tree"
+            },
+            "required": false
+          }
+        ],
         "responses": {
           "201": {
             "description": "Created",
@@ -768,7 +821,25 @@
       "post": {
         "operationId": "relationtree_ask_api_ask",
         "summary": "Ask",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tree",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tree"
+            },
+            "required": false
+          }
+        ],
         "responses": {
           "503": {
             "description": "Service Unavailable",
@@ -804,6 +875,344 @@
           },
           "required": true
         },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/trees": {
+      "get": {
+        "operationId": "relationtree_trees_api_list_trees",
+        "summary": "List Trees",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TreeOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "trees"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "relationtree_trees_api_create_tree",
+        "summary": "Create Tree",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreeOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "trees"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TreeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/trees/{tree_id}": {
+      "patch": {
+        "operationId": "relationtree_trees_api_rename_tree",
+        "summary": "Rename Tree",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tree_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Tree Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreeOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "trees"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TreeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/trees/{tree_id}/members": {
+      "get": {
+        "operationId": "relationtree_trees_api_list_members",
+        "summary": "List Members",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tree_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Tree Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemberOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "trees"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "relationtree_trees_api_add_member",
+        "summary": "Add Member",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tree_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Tree Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "trees"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/trees/{tree_id}/members/{user_id}": {
+      "patch": {
+        "operationId": "relationtree_trees_api_change_role",
+        "summary": "Change Role",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tree_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Tree Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "trees"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "relationtree_trees_api_remove_member",
+        "summary": "Remove Member",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tree_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Tree Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "An owner removes someone, or a member leaves.",
+        "tags": [
+          "trees"
+        ],
         "security": [
           {
             "SessionAuth": []
@@ -901,6 +1310,11 @@
             "title": "Id",
             "type": "string"
           },
+          "tree_id": {
+            "format": "uuid",
+            "title": "Tree Id",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -988,6 +1402,7 @@
         },
         "required": [
           "id",
+          "tree_id",
           "name",
           "relationship_category",
           "context",
@@ -1402,6 +1817,114 @@
           "question"
         ],
         "title": "AskIn",
+        "type": "object"
+      },
+      "Role": {
+        "enum": [
+          "owner",
+          "editor",
+          "viewer"
+        ],
+        "title": "Role",
+        "type": "string"
+      },
+      "TreeOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "member_count": {
+            "title": "Member Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "member_count"
+        ],
+        "title": "TreeOut",
+        "type": "object"
+      },
+      "TreeIn": {
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "TreeIn",
+        "type": "object"
+      },
+      "MemberOut": {
+        "properties": {
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "is_me": {
+            "title": "Is Me",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "user_id",
+          "username",
+          "role",
+          "is_me"
+        ],
+        "title": "MemberOut",
+        "type": "object"
+      },
+      "MemberIn": {
+        "properties": {
+          "username": {
+            "title": "Username",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "username",
+          "role"
+        ],
+        "title": "MemberIn",
+        "type": "object"
+      },
+      "RoleIn": {
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "title": "RoleIn",
         "type": "object"
       }
     },

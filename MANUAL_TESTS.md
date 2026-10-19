@@ -17,3 +17,6 @@ Re-run this checklist by hand before merging `dev` → `main`.
 - [ ] Filter the list by category
 - [ ] Confirm list sort order: a never-contacted person appears before one with an old `lastContactedDate`, which appears before one with a recent date
 - [ ] Sign out and confirm the sign-up tab is not shown on the login screen
+- [ ] Tree switcher: create a tree, switch between trees, and confirm the list, Ask and "Add person" follow the selected tree (and it's remembered after a reload)
+- [ ] Tree settings as an owner: rename; add a member by username (an unknown name shows an error); change their role; remove them; "Leave" as the only owner is refused
+- [ ] As a viewer of a shared tree: no Add person, Delete, photo, connection or edit controls; "This is me" still works; Leave works

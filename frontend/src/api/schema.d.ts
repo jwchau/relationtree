@@ -281,6 +281,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Trees */
+        get: operations["relationtree_trees_api_list_trees"];
+        put?: never;
+        /** Create Tree */
+        post: operations["relationtree_trees_api_create_tree"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trees/{tree_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename Tree */
+        patch: operations["relationtree_trees_api_rename_tree"];
+        trace?: never;
+    };
+    "/api/trees/{tree_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Members */
+        get: operations["relationtree_trees_api_list_members"];
+        put?: never;
+        /** Add Member */
+        post: operations["relationtree_trees_api_add_member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trees/{tree_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Member
+         * @description An owner removes someone, or a member leaves.
+         */
+        delete: operations["relationtree_trees_api_remove_member"];
+        options?: never;
+        head?: never;
+        /** Change Role */
+        patch: operations["relationtree_trees_api_change_role"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -323,6 +397,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Tree Id
+             * Format: uuid
+             */
+            tree_id: string;
             /** Name */
             name: string;
             relationship_category: components["schemas"]["RelationshipCategory"] | null;
@@ -514,6 +593,49 @@ export interface components {
             /** Question */
             question: string;
         };
+        /**
+         * Role
+         * @enum {string}
+         */
+        Role: "owner" | "editor" | "viewer";
+        /** TreeOut */
+        TreeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            role: components["schemas"]["Role"];
+            /** Member Count */
+            member_count: number;
+        };
+        /** TreeIn */
+        TreeIn: {
+            /** Name */
+            name: string;
+        };
+        /** MemberOut */
+        MemberOut: {
+            /** User Id */
+            user_id: number;
+            /** Username */
+            username: string;
+            role: components["schemas"]["Role"];
+            /** Is Me */
+            is_me: boolean;
+        };
+        /** MemberIn */
+        MemberIn: {
+            /** Username */
+            username: string;
+            role: components["schemas"]["Role"];
+        };
+        /** RoleIn */
+        RoleIn: {
+            role: components["schemas"]["Role"];
+        };
     };
     responses: never;
     parameters: never;
@@ -656,6 +778,7 @@ export interface operations {
         parameters: {
             query: {
                 q: string;
+                tree?: string | null;
             };
             header?: never;
             path?: never;
@@ -685,7 +808,9 @@ export interface operations {
     };
     relationtree_people_api_list_people: {
         parameters: {
-            query?: never;
+            query?: {
+                tree?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -705,7 +830,9 @@ export interface operations {
     };
     relationtree_people_api_create_person: {
         parameters: {
-            query?: never;
+            query?: {
+                tree?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1035,7 +1162,9 @@ export interface operations {
     };
     relationtree_ask_api_ask: {
         parameters: {
-            query?: never;
+            query?: {
+                tree?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1057,6 +1186,208 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    relationtree_trees_api_list_trees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreeOut"][];
+                };
+            };
+        };
+    };
+    relationtree_trees_api_create_tree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TreeIn"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreeOut"];
+                };
+            };
+        };
+    };
+    relationtree_trees_api_rename_tree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tree_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TreeIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreeOut"];
+                };
+            };
+        };
+    };
+    relationtree_trees_api_list_members: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tree_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"][];
+                };
+            };
+        };
+    };
+    relationtree_trees_api_add_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tree_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberIn"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    relationtree_trees_api_remove_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tree_id: string;
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    relationtree_trees_api_change_role: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tree_id: string;
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

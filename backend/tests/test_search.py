@@ -2,11 +2,13 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
 from django.test import Client
 
 from relationtree.ai import AIUnavailable
+from relationtree.models import TreeMembership
 from relationtree.search import embed_pending
 from tests.fakes import FakeEmbedder
 
@@ -228,3 +230,25 @@ def test_a_mismatched_embedding_model_fails_with_a_clear_message(
     with pytest.raises(ImproperlyConfigured, match="768.*1024"):
         embed_pending()
     assert search(alice, "anything").json()["pending"] == 1
+
+
+def test_search_and_pending_cover_one_tree(login_as: Callable[[str], Client]) -> None:
+    alice, bob = login_as("alice"), login_as("bob")
+    add_person(alice, "Priya", "Investment banker")
+    add_person(bob, "Bob's accountant", "Finance, bank, investment, accountant")
+    alices = TreeMembership.objects.get(user__username="alice").tree
+    TreeMembership.objects.create(
+        tree=alices, user=User.objects.get(username="bob"), role=TreeMembership.Role.VIEWER
+    )
+    embed_pending()
+    add_person(bob, "Bea", "Not indexed yet")
+
+    own = search(bob, "finance").json()
+    shared = bob.get("/api/people/search", {"q": "finance", "tree": str(alices.id)}).json()
+
+    assert [r["person"]["name"] for r in own["results"]] == ["Bob's accountant"]
+    assert own["pending"] == 1
+    assert [r["person"]["name"] for r in shared["results"]] == ["Priya"]
+    assert shared["pending"] == 0
+    stranger = login_as("carol")
+    assert stranger.get("/api/people/search", {"q": "x", "tree": str(alices.id)}).status_code == 404
