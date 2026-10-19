@@ -18,7 +18,9 @@ Not a goal: preserving existing data. Nobody uses the Amplify app; we start fres
   OpenAPI and async views; Django gives auth, sessions, admin, ORM, migrations.
 - Served via ASGI (uvicorn). CRUD views are **sync**; AI views are **async** (I/O-bound, streaming).
 - Watch for N+1 queries (`select_related`/`prefetch_related`, `django_assert_num_queries` in tests).
-  Graph traversal ("friends of friends") uses recursive CTEs via raw SQL or `django-cte`.
+  Graph traversal ("friends of friends") loads the visible connections in one query and searches
+  in Python (`graph.py`): a recursive CTE enumerates every path, which grows exponentially in a
+  dense tree (a team of coworkers who all know each other).
 
 ### Data model
 ```
@@ -136,8 +138,9 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
 - A single `build_summary_context(person)` controls what goes into prompts.
 - **MVP:** (2) catch-up summaries ("catch me up on Sam"), streamed; then (1) natural-language search
   over `context` + `notes` via embeddings in a pgvector column.
-- **v2:** (3) graph Q&A via tool-calling agent ("how am I connected to Priya?");
-  (4) free-text extraction ("Met Jordan at Alex's wedding…" → proposed people/connections to confirm).
+- **Graph Q&A (M14):** (3) tool-calling agent ("how am I connected to Priya?"), see below.
+- **v2:** (4) free-text extraction ("Met Jordan at Alex's wedding…" → proposed people/connections
+  to confirm).
 
 ### Semantic search (M12)
 - `GET /api/people/search?q=` embeds the question and ranks the user's people by cosine
@@ -159,6 +162,25 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
 - **Known limitation:** embeddings don't capture the *direction* of parent/child ("who has kids?"
   vs "who has a parent?"); four wordings each got 2-3 of 4 test questions. Directional questions
   belong to the v2 graph Q&A (tool calls over connections), not to embedding search.
+
+### Graph Q&A (M14)
+- The Ask box does two things at once: semantic search cards appear straight away, and
+  `POST /api/ask` streams an answer above them. Single questions only (no follow-ups).
+- `ask.py` runs a tool loop on `CHAT_MODEL` (at most 6 rounds; then a polite give-up). Tools
+  (`graph.py`, read-only, scoped by `TreeMembership`, never contact details): `find_people`,
+  `get_person`, `people_with_relationship` (role-based: "Child" lists parents), `path_between`
+  (shortest chain, max 6 steps, 2 queries at any size), `semantic_search`. Unknown tools and bad
+  arguments go back to the model as errors.
+- Streams newline-delimited JSON: `{"tool": progress}`, `{"text": delta}`, `{"error": …}` if the
+  AI stops mid-answer, then `{"people": [{id, name}]}` (tool-result people named in the answer,
+  shown as links). 503 before streaming when Ollama is down, as for summaries.
+- **"This is me":** `TreeMembership.me` (per user per tree, `SET_NULL`), set with
+  `PUT/DELETE /api/people/{id}/me` (viewers too: it's about the user, not the tree's data);
+  `PersonOut.is_me`. When set, the model is told who "I/me/my" is.
+- **Measured** (`tests/eval_ask.py`, 15 people, 12 graph questions, qwen3.8:27b): thinking on
+  11/12, median 3.8 s, max 8.7 s; thinking off 8/12 with confident wrong answers ("your kids are
+  Maya and Ava" for a spouse and a child). So `think=True`. The miss: an aunt by marriage
+  (the model named the blood uncle only). Re-run the eval when changing the model or prompt.
 
 ### Background jobs
 - **No job queue.** Each `Person` tracks `content_version` (bumped in SQL when a searchable field
@@ -238,5 +260,8 @@ relationtree/
 | M10 | **Photos via R2** (dev bucket). | Uploads work |
 | M11 | **AI summaries** against local Ollama (`OLLAMA_URL=http://127.0.0.1:11434`), streamed. | "Catch me up on Sam" works |
 | M12 | **Semantic search.** pgvector, `embed_worker` (version-tracked, no queue), qwen3-embedding. | "Who works in finance?" works |
-| M13 | **Prod cutover.** `start.ps1`/`stop.ps1`, `cloudflared` in compose, Pages deploy, GHCR pull, event-based backups + **tested restore**, healthchecks.io. | Prod runs from home; real data only after backups work |
-| v2 | Sharing + invites, graph Q&A agent, free-text extraction. | — |
+| M13 | **Prod cutover.** `start.ps1`/`stop.ps1`, `cloudflared` in compose, Pages deploy, GHCR pull, event-based backups + **tested restore**, healthchecks.io. Done 2026-10-18; healthchecks.io deferred (`HEALTHCHECK_URL` empty). | Prod runs from home; real data only after backups work |
+| M14 | **Graph Q&A** in the Ask box: tool-calling agent over connections, streamed answer with progress, "This is me" marker. | "How is Leo connected to Priya?" works |
+| M15 | **Sharing.** Tree switcher (one tree at a time); owners manage members and roles; role-aware UI. | Two users share a tree |
+| M16 | **Invites.** One-time `Invite(token, tree, role, expires_at)` links the owner copies; creates an account or adds the tree for a logged-in user. | Invite a new person end to end |
+| M17 | **Free-text extraction.** Paste a note → proposed people/connections (matched to existing people) to confirm. | "Met Jordan at Alex's wedding" adds Jordan |

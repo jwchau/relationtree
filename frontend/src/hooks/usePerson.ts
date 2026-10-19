@@ -50,6 +50,20 @@ export function useUpdatePerson(personId: string) {
   });
 }
 
+/** Mark (or unmark) this person as the current user, so Ask understands "me" and "my". */
+export function useSetMe(personId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (isMe: boolean) => {
+      const params = { params: { path: { person_id: personId } } };
+      if (isMe) await unwrap(api.PUT('/api/people/{person_id}/me', params));
+      else await unwrap(api.DELETE('/api/people/{person_id}/me', params));
+    },
+    // Marking someone unmarks whoever was "me" before, so refresh everyone.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
+  });
+}
+
 export function useDeletePerson(personId: string) {
   const queryClient = useQueryClient();
   return useMutation({

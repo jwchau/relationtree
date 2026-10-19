@@ -18,11 +18,12 @@ the resulting graph.
 | M10 Photos on Cloudflare R2 (presigned) | ✅ |
 | M11 AI catch-up summaries (local Ollama, streamed) | ✅ |
 | M12 "Ask" semantic search (pgvector + qwen3-embedding, relationship summaries) | ✅ |
-| **M13 Production cutover** on the Windows home server | **in progress** |
-| v2 Sharing + invites, graph Q&A agent, free-text extraction | later |
+| M13 Production cutover on the Windows home server | ✅ (healthchecks.io ping not set up yet) |
+| M14 Graph Q&A in Ask (tool-calling agent, "This is me") | ✅ on `dev` |
+| M15–M17 Sharing, invites, free-text extraction | next |
 
-All of M7–M12 is on `dev` with CI green; `main` still holds the old Amplify scaffold until the
-M13 cutover is merged. Merging to `main` is what deploys (see [Production](#production)).
+Production runs at https://relationtree.johnchau.org since 2026-10-18. Merging `dev` to
+`main` is what deploys (see [Production](#production)).
 
 Photos live in a private Cloudflare R2 bucket. For local photo uploads, fill in the
 `CLOUDFLARE_R2_*` values in `backend/.env` and allow `http://127.0.0.1:5174` in the

@@ -1,11 +1,11 @@
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from ninja import Router, Schema
 from ninja.responses import Status
 from ninja.security import django_auth
-from pydantic import StringConstraints, field_validator
+from pydantic import Field, StringConstraints, field_validator
 
 from relationtree.access import (
     default_tree_for,
@@ -13,7 +13,7 @@ from relationtree.access import (
     person_editable_by,
     person_visible_to,
 )
-from relationtree.models import Person
+from relationtree.models import Person, TreeMembership
 from relationtree.photos import get_photo_storage
 from relationtree.types import AuthedRequest
 
@@ -72,10 +72,27 @@ class PersonOut(Schema):
     created_at: datetime
     updated_at: datetime
 
+    is_me: bool = Field(description='Whether the current user marked this person "This is me"')
+
     @staticmethod
     def resolve_photo_url(person: Person) -> str | None:
         # Short-lived presigned GET; signing is local, so this costs no network round trip.
         return get_photo_storage().presign_download(person.photo_key) if person.photo_key else None
+
+    @staticmethod
+    def resolve_is_me(person: Person, context: dict[str, Any]) -> bool:
+        return person.id in me_ids(context["request"])
+
+
+def me_ids(request: AuthedRequest) -> set[UUID]:
+    """The people this user marked as themselves, looked up once per request."""
+    if not hasattr(request, "_me_ids"):
+        request._me_ids = set(  # type: ignore[attr-defined]
+            TreeMembership.objects.filter(user=request.user, me__isnull=False).values_list(
+                "me_id", flat=True
+            )
+        )
+    return request._me_ids  # type: ignore[attr-defined,no-any-return]
 
 
 @router.get("", response=list[PersonOut])
@@ -106,4 +123,19 @@ def update_person(request: AuthedRequest, person_id: UUID, payload: PersonPatch)
 @router.delete("/{person_id}", response={204: None})
 def delete_person(request: AuthedRequest, person_id: UUID) -> Status[None]:
     person_editable_by(request.user, person_id).delete()
+    return Status(204, None)
+
+
+# "This is me" is about the user, not the tree's data, so viewers can set it too.
+@router.put("/{person_id}/me", response=PersonOut)
+def mark_as_me(request: AuthedRequest, person_id: UUID) -> Person:
+    person = person_visible_to(request.user, person_id)
+    TreeMembership.objects.filter(tree=person.tree_id, user=request.user).update(me=person)
+    return person
+
+
+@router.delete("/{person_id}/me", response={204: None})
+def unmark_as_me(request: AuthedRequest, person_id: UUID) -> Status[None]:
+    person = person_visible_to(request.user, person_id)
+    TreeMembership.objects.filter(tree=person.tree_id, user=request.user, me=person).update(me=None)
     return Status(204, None)

@@ -4,6 +4,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from relationtree.ai import ToolCall
+
 
 class FakePhotoStorage:
     """Stands in for R2 in tests: no network, records what was deleted."""
@@ -29,6 +31,8 @@ class FakeChatModel:
         self.calls: list[dict[str, Any]] = []
         self.error: Exception | None = None
         self.first_chunk_delay = 0.0
+        # Scripted assistant turns for stream_turn: answer text and ToolCalls, in order.
+        self.turns: list[list[str | ToolCall]] = []
 
     async def stream(
         self, messages: list[dict[str, str]], *, model: str, options: dict[str, Any], think: bool
@@ -42,6 +46,30 @@ class FakeChatModel:
             await asyncio.sleep(self.first_chunk_delay)
         for chunk in self.chunks:
             yield chunk
+
+    async def stream_turn(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]],
+        model: str,
+        options: dict[str, Any],
+        think: bool,
+    ) -> AsyncGenerator[str | ToolCall]:
+        """Plays the next scripted turn from `turns`; with none left, answers "Done."."""
+        self.calls.append(
+            {
+                "messages": list(messages),
+                "tools": tools,
+                "model": model,
+                "options": options,
+                "think": think,
+            }
+        )
+        if self.error is not None:
+            raise self.error
+        for event in self.turns.pop(0) if self.turns else ["Done."]:
+            yield event
 
 
 # Topics the fake embedder "understands": text mentioning any keyword lands on that topic's axis.

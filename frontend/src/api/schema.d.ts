@@ -143,6 +143,24 @@ export interface paths {
         patch: operations["relationtree_people_api_update_person"];
         trace?: never;
     };
+    "/api/people/{person_id}/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark As Me */
+        put: operations["relationtree_people_api_mark_as_me"];
+        post?: never;
+        /** Unmark As Me */
+        delete: operations["relationtree_people_api_unmark_as_me"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/people/{person_id}/photo/upload-url": {
         parameters: {
             query?: never;
@@ -246,6 +264,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask */
+        post: operations["relationtree_ask_api_ask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -317,6 +352,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Is Me
+             * @description Whether the current user marked this person "This is me"
+             */
+            is_me: boolean;
         };
         /**
          * RelationshipCategory
@@ -468,6 +508,11 @@ export interface components {
             /** Label */
             label: string;
             other_person: components["schemas"]["PersonOut"];
+        };
+        /** AskIn */
+        AskIn: {
+            /** Question */
+            question: string;
         };
     };
     responses: never;
@@ -750,6 +795,48 @@ export interface operations {
             };
         };
     };
+    relationtree_people_api_mark_as_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+        };
+    };
+    relationtree_people_api_unmark_as_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     relationtree_photos_api_create_upload_url: {
         parameters: {
             query?: never;
@@ -943,6 +1030,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    relationtree_ask_api_ask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskIn"];
+            };
+        };
+        responses: {
+            /** @description Newline-delimited JSON events while the model works: {"tool": progress text}, {"text": answer text}, an {"error": message} if the AI stops mid-answer, and finally {"people": [{"id", "name"}]} for those mentioned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": string;
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
             };
         };
     };

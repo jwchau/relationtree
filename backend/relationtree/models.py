@@ -28,6 +28,12 @@ class TreeMembership(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="tree_memberships"
     )
     role = models.CharField(max_length=10, choices=Role.choices)
+    # The person in this tree who is this user ("This is me"), so questions like "how am I
+    # connected to Priya?" have a starting point. Per membership: each member can mark
+    # themselves in a shared tree. Must be in this tree (checked where it's set).
+    me = models.ForeignKey(
+        "Person", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
