@@ -1,4 +1,4 @@
-"""Graph Q&A: the local model answers a question by calling read-only tools over the user's
+"""Graph Q&A: the local model answers a question by calling read-only tools over one tree's
 people (graph.py), then writes a short answer.
 
 Measured on a 15-person tree with 12 graph questions (tests/eval_ask.py, qwen3.8:27b):
@@ -17,7 +17,7 @@ from django.contrib.auth.models import User
 
 from relationtree.ai import ToolCall, get_chat_model
 from relationtree.graph import find_people, get_person, path_between, people_with_relationship
-from relationtree.models import Person, TreeMembership
+from relationtree.models import Person, Tree, TreeMembership
 from relationtree.prompts import build_ask_messages
 from relationtree.search import search_people
 
@@ -71,24 +71,24 @@ TOOLS = [
 ]
 
 
-def _search(user: User, query: str) -> list[dict[str, Any]]:
+def _search(tree: Tree, query: str) -> list[dict[str, Any]]:
     return [
         {"id": str(p.id), "name": p.name, "about": p.context or None}
-        for p, _ in search_people(user, query)
+        for p, _ in search_people(tree, query)
     ]
 
 
-def run_tool(user: User, call: ToolCall) -> Any:
+def run_tool(tree: Tree, call: ToolCall) -> Any:
     """Runs one tool call. Mistakes go back to the model as an error it can correct."""
     args = call.arguments
     tools: dict[str, Callable[[], Any]] = {
-        "find_people": lambda: find_people(user, str(args["name"])),
-        "get_person": lambda: get_person(user, UUID(str(args["id"]))),
-        "people_with_relationship": lambda: people_with_relationship(user, str(args["role"])),
+        "find_people": lambda: find_people(tree, str(args["name"])),
+        "get_person": lambda: get_person(tree, UUID(str(args["id"]))),
+        "people_with_relationship": lambda: people_with_relationship(tree, str(args["role"])),
         "path_between": lambda: path_between(
-            user, UUID(str(args["from_id"])), UUID(str(args["to_id"]))
+            tree, UUID(str(args["from_id"])), UUID(str(args["to_id"]))
         ),
-        "semantic_search": lambda: _search(user, str(args["query"])),
+        "semantic_search": lambda: _search(tree, str(args["query"])),
     }
     if call.name not in tools:
         return {"error": f"There is no tool called {call.name!r}."}
@@ -126,16 +126,18 @@ def _collect_people(result: Any, seen: dict[str, str]) -> None:
             _collect_people(item, seen)
 
 
-def _me(user: User) -> Person | None:
+def _me(user: User, tree: Tree) -> Person | None:
     membership = (
-        TreeMembership.objects.filter(user=user, me__isnull=False).select_related("me").first()
+        TreeMembership.objects.filter(user=user, tree=tree, me__isnull=False)
+        .select_related("me")
+        .first()
     )
     return membership.me if membership else None
 
 
-async def answer(user: User, question: str) -> AsyncGenerator[dict[str, Any]]:
+async def answer(user: User, tree: Tree, question: str) -> AsyncGenerator[dict[str, Any]]:
     """Events for the client: {"tool": progress}, {"text": delta}, then {"people": [...]}."""
-    me = await sync_to_async(_me)(user)
+    me = await sync_to_async(_me)(user, tree)
     messages: list[dict[str, Any]] = build_ask_messages(question, me)
     seen: dict[str, str] = {}
     text = ""
@@ -168,7 +170,7 @@ async def answer(user: User, question: str) -> AsyncGenerator[dict[str, Any]]:
         )
         for call in calls:
             yield {"tool": progress(call)}
-            result = await sync_to_async(run_tool)(user, call)
+            result = await sync_to_async(run_tool)(tree, call)
             _collect_people(result, seen)
             messages.append({"role": "tool", "tool_name": call.name, "content": json.dumps(result)})
     else:

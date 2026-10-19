@@ -18,7 +18,7 @@ from django.db import connections
 from relationtree import ai
 from relationtree.access import default_tree_for
 from relationtree.ask import answer
-from relationtree.models import Connection, Person, TreeMembership
+from relationtree.models import Connection, Person, Tree, TreeMembership
 from relationtree.relationships import canonical_pair
 from relationtree.search import embed_pending
 
@@ -82,9 +82,9 @@ QUESTIONS = [
 ]
 
 
-async def ask(user: User, question: str) -> tuple[str, int]:
+async def ask(user: User, tree: Tree, question: str) -> tuple[str, int]:
     text, tools_used = "", 0
-    async for event in answer(user, question):
+    async for event in answer(user, tree, question):
         text += event.get("text", "")
         tools_used += "tool" in event
     return text, tools_used
@@ -114,14 +114,14 @@ def test_eval() -> None:
     TreeMembership.objects.filter(user=user).update(me=people[ME])
 
     # One event loop for every question: the cached Ollama client is bound to the loop it ran on.
-    asyncio.run(ask_all(user))
+    asyncio.run(ask_all(user, tree))
 
 
-async def ask_all(user: User) -> None:
+async def ask_all(user: User, tree: Tree) -> None:
     passed, times = 0, []
     for question, expected in QUESTIONS:
         start = time.monotonic()
-        text, tools_used = await ask(user, question)
+        text, tools_used = await ask(user, tree, question)
         elapsed = time.monotonic() - start
         times.append(elapsed)
         ok = all(word.lower() in text.lower() for word in expected)

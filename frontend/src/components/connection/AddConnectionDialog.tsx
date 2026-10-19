@@ -36,16 +36,18 @@ import {
 export interface AddConnectionDialogProps {
   personId: string;
   personName: string;
+  /** The person's tree: new people are added to it, and only its people can be picked. */
+  treeId: string;
 }
 
-export function AddConnectionDialog({ personId, personName }: AddConnectionDialogProps) {
+export function AddConnectionDialog({ personId, personName, treeId }: AddConnectionDialogProps) {
   const [open, setOpen] = useState(false);
   const [otherPerson, setOtherPerson] = useState<Person | null>(null);
   const [newPersonName, setNewPersonName] = useState<string | null>(null);
   const [newPersonCategory, setNewPersonCategory] = useState<RelationshipCategory>('FRIEND');
   const [relationshipType, setRelationshipType] = useState<RelationshipType>('FRIEND');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const createPerson = useCreatePerson();
+  const createPerson = useCreatePerson(treeId);
   const createConnection = useCreateConnection();
 
   function reset() {
@@ -118,6 +120,7 @@ export function AddConnectionDialog({ personId, personName }: AddConnectionDialo
           <div className="space-y-2">
             <Label>Person</Label>
             <PersonPicker
+              treeId={treeId}
               excludePersonId={personId}
               value={otherPerson}
               onChange={(person) => {

@@ -2,7 +2,9 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
+from uuid import UUID
 
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.http import StreamingHttpResponse
 from ninja import Router, Schema
@@ -10,6 +12,7 @@ from ninja.responses import Status
 from ninja.security import django_auth
 from pydantic import StringConstraints
 
+from relationtree.access import tree_for
 from relationtree.ai import AIUnavailable
 from relationtree.ask import answer
 from relationtree.schemas import ErrorOut
@@ -40,8 +43,11 @@ def _line(event: dict[str, Any]) -> bytes:
 
 
 @router.post("/ask", response={503: ErrorOut}, openapi_extra={"responses": STREAMED_EVENTS})
-async def ask(request: AuthedRequest, payload: AskIn) -> StreamingHttpResponse | Status[ErrorOut]:
-    events = answer(request.user, payload.question)
+async def ask(
+    request: AuthedRequest, payload: AskIn, tree: UUID | None = None
+) -> StreamingHttpResponse | Status[ErrorOut]:
+    scope = await sync_to_async(tree_for)(request.user, tree)
+    events = answer(request.user, scope, payload.question)
 
     # As with summaries: wait for the first event before committing to a 200, so "Ollama is off"
     # becomes a clean 503 instead of a stream that dies straight away.

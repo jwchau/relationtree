@@ -8,10 +8,10 @@ from ninja.security import django_auth
 from pydantic import Field, StringConstraints, field_validator
 
 from relationtree.access import (
-    default_tree_for,
-    people_visible_to,
     person_editable_by,
     person_visible_to,
+    require_write_access,
+    tree_for,
 )
 from relationtree.models import Person, TreeMembership
 from relationtree.photos import get_photo_storage
@@ -59,6 +59,7 @@ class PersonPatch(Schema):
 
 class PersonOut(Schema):
     id: UUID
+    tree_id: UUID
     name: str
     relationship_category: Person.RelationshipCategory | None
     context: str
@@ -95,14 +96,19 @@ def me_ids(request: AuthedRequest) -> set[UUID]:
     return request._me_ids  # type: ignore[attr-defined,no-any-return]
 
 
+# `tree` picks which of the user's trees; without it, their default tree (see tree_for).
 @router.get("", response=list[PersonOut])
-def list_people(request: AuthedRequest) -> list[Person]:
-    return list(people_visible_to(request.user).order_by("name"))
+def list_people(request: AuthedRequest, tree: UUID | None = None) -> list[Person]:
+    return list(tree_for(request.user, tree).people.order_by("name"))
 
 
 @router.post("", response={201: PersonOut})
-def create_person(request: AuthedRequest, payload: PersonIn) -> Status[Person]:
-    person = Person.objects.create(tree=default_tree_for(request.user), **payload.dict())
+def create_person(
+    request: AuthedRequest, payload: PersonIn, tree: UUID | None = None
+) -> Status[Person]:
+    target = tree_for(request.user, tree)
+    require_write_access(request.user, target.id)
+    person = Person.objects.create(tree=target, **payload.dict())
     return Status(201, person)
 
 

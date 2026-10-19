@@ -2,14 +2,12 @@
 queries are embedded on demand; Postgres/pgvector does the nearest-neighbour ranking."""
 
 from django.conf import settings
-from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import F
 from pgvector.django import CosineDistance
 
-from relationtree.access import people_visible_to
 from relationtree.ai import get_embedder
-from relationtree.models import Person
+from relationtree.models import Person, Tree
 from relationtree.relationships import relationship_summary
 
 # qwen3-embedding format: documents as-is, queries prefixed with a task instruction. Measured on
@@ -73,11 +71,10 @@ def _check_dimensions(vectors: list[list[float]]) -> None:
             )
 
 
-def search_people(user: User, query: str, limit: int = 10) -> list[tuple[Person, float]]:
+def search_people(tree: Tree, query: str, limit: int = 10) -> list[tuple[Person, float]]:
     [vector] = get_embedder().embed([QUERY_PREFIX + query])
     people = (
-        people_visible_to(user)
-        .filter(embedding__isnull=False)
+        tree.people.filter(embedding__isnull=False)
         .annotate(distance=CosineDistance("embedding", vector))
         .order_by("distance")[:limit]
     )
@@ -88,6 +85,6 @@ def search_people(user: User, query: str, limit: int = 10) -> list[tuple[Person,
     return [(p, score) for p, score in ranked if score >= best - MATCH_WINDOW]
 
 
-def pending_count(user: User) -> int:
-    """How many of the user's people aren't searchable with their latest text yet."""
-    return people_visible_to(user).exclude(embedded_version=F("content_version")).count()
+def pending_count(tree: Tree) -> int:
+    """How many of the tree's people aren't searchable with their latest text yet."""
+    return tree.people.exclude(embedded_version=F("content_version")).count()

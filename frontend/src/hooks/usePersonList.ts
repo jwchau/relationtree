@@ -5,10 +5,12 @@ export type PersonSummary = Person;
 
 export const peopleQueryKey = ['people'] as const;
 
-export function usePersonList() {
+/** Everyone in one tree. Waits until the tree is known. */
+export function usePersonList(treeId: string | undefined) {
   const query = useQuery({
-    queryKey: peopleQueryKey,
-    queryFn: () => unwrap(api.GET('/api/people')),
+    queryKey: [...peopleQueryKey, 'tree', treeId],
+    enabled: Boolean(treeId),
+    queryFn: () => unwrap(api.GET('/api/people', { params: { query: { tree: treeId } } })),
   });
   return { people: query.data ?? [], loading: query.isPending, error: query.error?.message ?? null };
 }

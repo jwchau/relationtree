@@ -7,7 +7,8 @@ Convention: 404 when the user can't see a record at all (so ids don't leak),
 from uuid import UUID
 
 from django.contrib.auth.models import User
-from django.db.models import QuerySet
+from django.db.models import Case, QuerySet, When
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from ninja.errors import HttpError
 
@@ -17,13 +18,34 @@ WRITE_ROLES = (TreeMembership.Role.OWNER, TreeMembership.Role.EDITOR)
 
 
 def default_tree_for(user: User) -> Tree:
-    """Where new records go while the UI has no tree switcher: the user's oldest owned tree."""
+    """The tree to use when a request doesn't name one: the user's oldest owned tree, or the
+    oldest they belong to if they've left or handed over all their own."""
     membership = (
         TreeMembership.objects.select_related("tree")
-        .filter(user=user, role=TreeMembership.Role.OWNER)
-        .earliest("created_at")
+        .filter(user=user)
+        .order_by(Case(When(role=TreeMembership.Role.OWNER, then=0), default=1), "created_at")
+        .first()
     )
+    if membership is None:
+        raise Http404("You aren't in any tree")
     return membership.tree
+
+
+def membership_in(user: User, tree_id: UUID) -> TreeMembership:
+    """The user's membership of a tree; 404 if they aren't a member."""
+    return get_object_or_404(TreeMembership.objects.select_related("tree"), tree=tree_id, user=user)
+
+
+def tree_for(user: User, tree_id: UUID | None) -> Tree:
+    """The tree a request is about: the one it names (404 unless a member), else the default."""
+    if tree_id is None:
+        return default_tree_for(user)
+    return membership_in(user, tree_id).tree
+
+
+def require_owner(membership: TreeMembership) -> None:
+    if membership.role != TreeMembership.Role.OWNER:
+        raise HttpError(403, "Only the tree's owners can do that")
 
 
 def require_write_access(user: User, tree_id: UUID) -> None:

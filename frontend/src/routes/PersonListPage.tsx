@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useCurrentTree } from '@/hooks/useCurrentTree';
 import { usePersonList } from '@/hooks/usePersonList';
 import { AskPeople } from '@/components/person/AskPeople';
 import { PersonCard } from '@/components/person/PersonCard';
@@ -16,7 +17,10 @@ import {
 } from '@/components/ui/select';
 
 export default function PersonListPage() {
-  const { people, loading, error } = usePersonList();
+  const { tree, canEdit, loading: treesLoading, error: treesError } = useCurrentTree();
+  const { people, loading: peopleLoading, error: peopleError } = usePersonList(tree?.id);
+  const loading = treesLoading || (tree !== null && peopleLoading);
+  const error = treesError ?? peopleError;
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('ALL');
 
@@ -29,12 +33,21 @@ export default function PersonListPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">People</h1>
-        <Button asChild>
-          <Link to="/people/new">Add person</Link>
-        </Button>
+        {canEdit && (
+          <Button asChild>
+            <Link to="/people/new">Add person</Link>
+          </Button>
+        )}
       </div>
 
-      <AskPeople />
+      {!loading && !error && !tree && (
+        <p className="text-muted-foreground">
+          You aren&apos;t in any tree. Create one from the tree menu at the top.
+        </p>
+      )}
+
+      {/* Keyed by tree: switching trees starts a fresh question. */}
+      {tree && <AskPeople key={tree.id} treeId={tree.id} />}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Input
@@ -61,9 +74,11 @@ export default function PersonListPage() {
       {loading && <p className="text-muted-foreground">Loading...</p>}
       {error && <p className="text-destructive">{error}</p>}
 
-      {!loading && !error && people.length === 0 && (
+      {!loading && !error && tree && people.length === 0 && (
         <p className="text-muted-foreground">
-          No one here yet. Add your first person to get started.
+          {canEdit
+            ? 'No one here yet. Add your first person to get started.'
+            : 'No one in this tree yet.'}
         </p>
       )}
 

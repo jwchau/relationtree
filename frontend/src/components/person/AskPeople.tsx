@@ -16,11 +16,11 @@ const SHOWN = 5;
  * show up straight away (semantic search), and the AI writes an answer above them by looking up
  * connections (graph Q&A), which takes a few seconds.
  */
-export function AskPeople() {
+export function AskPeople({ treeId }: { treeId: string }) {
   const [draft, setDraft] = useState('');
   const [question, setQuestion] = useState('');
-  const search = usePeopleSearch(question);
-  const { answer, ask, reset } = useAsk();
+  const search = usePeopleSearch(treeId, question);
+  const { answer, ask, reset } = useAsk(treeId);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();

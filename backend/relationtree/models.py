@@ -45,6 +45,31 @@ class TreeMembership(models.Model):
         return f"{self.user} → {self.tree} ({self.role})"
 
 
+class Invite(models.Model):
+    """A one-time link that adds someone to a tree (see invites.py). Only the token's SHA-256
+    is stored, so the database alone can't be used to join."""
+
+    tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name="invites")
+    role = models.CharField(max_length=10, choices=TreeMembership.Role.choices)
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    used_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    def __str__(self) -> str:
+        return f"{self.role} invite to {self.tree}"
+
+
 class Person(models.Model):
     class RelationshipCategory(models.TextChoices):
         FAMILY = "FAMILY"

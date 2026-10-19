@@ -15,16 +15,24 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export interface PersonPickerProps {
+  /** Only people in this tree can be picked: a connection can't cross trees. */
+  treeId: string;
   excludePersonId?: string;
   value: Person | null;
   onChange: (person: Person | null) => void;
   onCreateNew: (name: string) => void;
 }
 
-export function PersonPicker({ excludePersonId, value, onChange, onCreateNew }: PersonPickerProps) {
+export function PersonPicker({
+  treeId,
+  excludePersonId,
+  value,
+  onChange,
+  onCreateNew,
+}: PersonPickerProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const people = usePersonList().people.filter((p) => p.id !== excludePersonId);
+  const people = usePersonList(treeId).people.filter((p) => p.id !== excludePersonId);
 
   const filtered = people.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const exactMatch = people.some((p) => p.name.toLowerCase() === search.trim().toLowerCase());

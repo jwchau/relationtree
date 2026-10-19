@@ -33,6 +33,7 @@ describe('toFormValues', () => {
       birthday: '1990-04-02',
       photo_url: null,
       is_me: false,
+      tree_id: 'tree-1',
       notes: 'Likes climbing',
       last_contacted_date: null,
       created_at: '2026-01-01T00:00:00Z',

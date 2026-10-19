@@ -31,10 +31,12 @@ export function usePerson(personId: string | undefined) {
 
 // Mutations invalidate the ['people'] prefix, which also refreshes every ['people', id] query.
 
-export function useCreatePerson() {
+/** Adds a person to the given tree (the current one, or the tree of the person being linked). */
+export function useCreatePerson(treeId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: PersonInput) => unwrap(api.POST('/api/people', { body })),
+    mutationFn: (body: PersonInput) =>
+      unwrap(api.POST('/api/people', { params: { query: { tree: treeId } }, body })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
   });
 }

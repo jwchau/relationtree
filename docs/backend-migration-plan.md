@@ -33,7 +33,7 @@ Person(id UUID, tree → Tree, name, relationship_category, context, phone, emai
 Connection(id UUID, tree → Tree, person_a → Person, person_b → Person, type)
 ```
 - **Tree-level sharing** (Google-Drive-folder model). Every query is scoped through `TreeMembership`.
-  The MVP UI hides trees entirely (one default tree per user, no switcher).
+  The UI shows one tree at a time, picked in the header (see Sharing (M15)).
 - **Deleting a user deletes the trees they solely own** (a `pre_delete` signal), with their
   people, connections and photos. A tree with another owner survives; editors and viewers
   alone don't keep it alive.
@@ -167,7 +167,7 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
 - The Ask box does two things at once: semantic search cards appear straight away, and
   `POST /api/ask` streams an answer above them. Single questions only (no follow-ups).
 - `ask.py` runs a tool loop on `CHAT_MODEL` (at most 6 rounds; then a polite give-up). Tools
-  (`graph.py`, read-only, scoped by `TreeMembership`, never contact details): `find_people`,
+  (`graph.py`, read-only, scoped to one tree, never contact details): `find_people`,
   `get_person`, `people_with_relationship` (role-based: "Child" lists parents), `path_between`
   (shortest chain, max 6 steps, 2 queries at any size), `semantic_search`. Unknown tools and bad
   arguments go back to the model as errors.
@@ -181,6 +181,41 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
   11/12, median 3.8 s, max 8.7 s; thinking off 8/12 with confident wrong answers ("your kids are
   Maya and Ava" for a spouse and a child). So `think=True`. The miss: an aunt by marriage
   (the model named the blood uncle only). Re-run the eval when changing the model or prompt.
+
+### Sharing (M15)
+- **One tree at a time.** List, create, search and Ask take `?tree=<id>` (404 unless a member);
+  without it they use the default tree: the user's oldest owned tree, else the oldest they're in.
+  The default keeps an older frontend working against a newer API. Graph tools, search and the
+  "me" marker are all per tree, so answers never mix trees. `PersonOut.tree_id` lets the UI
+  work out the role for any person.
+- **Trees:** `GET/POST /api/trees` (my trees with my role and member count; creating makes me
+  owner), `PATCH /api/trees/{id}` (rename, owners).
+- **Members:** `GET /api/trees/{id}/members` (any member; usernames and roles only),
+  `POST` by username (owners; 404 unknown, 409 already a member), `PATCH …/{user_id}` role
+  (owners), `DELETE …/{user_id}` (owners remove anyone; anyone can leave). A tree always keeps
+  an owner: demoting or removing the last one is a 409, checked under a row lock.
+- **Frontend:** the header switcher remembers the tree per browser (`localStorage`, falling back
+  to an owned tree); opening a person from another tree switches to it. `/trees/:id` has rename,
+  members and leave. Viewers don't see add, edit, delete, photo or connection controls; the API
+  enforces the same rules. Deleting a tree isn't offered yet.
+
+### Invites (M16)
+- `Invite(tree, role, token_hash, created_by, expires_at, used_at, used_by)`. The token
+  (`secrets.token_urlsafe(32)`) is returned once, when made; only its SHA-256 is stored, so a
+  leaked database or backup can't be used to join. Links last 7 days and work once.
+- Owners: `POST/GET /api/trees/{id}/invites` (create; list pending, never tokens),
+  `DELETE …/{invite_id}` (revoke). Public: `GET /api/invites/{token}` (tree, role, inviter,
+  expiry). Unknown, expired, used and revoked links all get the same 404.
+- `POST /api/invites/{token}/accept` (logged in; 409 and the invite stays usable if already a
+  member) and `POST /api/invites/{token}/signup {username, password}` (explicit CSRF check like
+  login; Django's username and password validators; usernames unique ignoring case). Both lock
+  the invite row (`select_for_update`), so one link can't be used twice at once. Sign-up logs
+  the new user in; like every account they also get their own empty tree.
+- This is the only way to sign up. axes doesn't cover sign-up, so prod's Cloudflare rate-limit
+  rule covers `/api/invites/` as well as login (one rule on the free plan).
+- Frontend: the owner's settings page makes a link (shown once, with Copy) and lists or revokes
+  pending ones; `/invite/:token` is public: join with one click, sign up, or sign in and come
+  back; it then opens the joined tree.
 
 ### Background jobs
 - **No job queue.** Each `Person` tracks `content_version` (bumped in SQL when a searchable field
@@ -262,6 +297,6 @@ relationtree/
 | M12 | **Semantic search.** pgvector, `embed_worker` (version-tracked, no queue), qwen3-embedding. | "Who works in finance?" works |
 | M13 | **Prod cutover.** `start.ps1`/`stop.ps1`, `cloudflared` in compose, Pages deploy, GHCR pull, event-based backups + **tested restore**, healthchecks.io. Done 2026-10-18; healthchecks.io deferred (`HEALTHCHECK_URL` empty). | Prod runs from home; real data only after backups work |
 | M14 | **Graph Q&A** in the Ask box: tool-calling agent over connections, streamed answer with progress, "This is me" marker. | "How is Leo connected to Priya?" works |
-| M15 | **Sharing.** Tree switcher (one tree at a time); owners manage members and roles; role-aware UI. | Two users share a tree |
-| M16 | **Invites.** One-time `Invite(token, tree, role, expires_at)` links the owner copies; creates an account or adds the tree for a logged-in user. | Invite a new person end to end |
+| M15 | **Sharing.** Tree switcher (one tree at a time); owners manage members and roles; role-aware UI. Owners add existing users by username. | Two users share a tree |
+| M16 | **Invites.** One-time `Invite(token, tree, role, expires_at)` links the owner copies; creates an account or adds the tree for a logged-in user. Only the token's hash is stored. | Invite a new person end to end |
 | M17 | **Free-text extraction.** Paste a note → proposed people/connections (matched to existing people) to confirm. | "Met Jordan at Alex's wedding" adds Jordan |

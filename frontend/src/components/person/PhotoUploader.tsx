@@ -7,7 +7,7 @@ import { ALLOWED_PHOTO_TYPES, photoProblem } from '@/lib/photoStorage';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 
-export function PhotoUploader({ person }: { person: Person }) {
+export function PhotoUploader({ person, readOnly = false }: { person: Person; readOnly?: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const uploadPhoto = useUploadPhoto(person.id);
   const removePhoto = useRemovePhoto(person.id);
@@ -44,32 +44,34 @@ export function PhotoUploader({ person }: { person: Person }) {
           <User className="size-8" />
         </AvatarFallback>
       </Avatar>
-      <div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ALLOWED_PHOTO_TYPES.join(',')}
-          className="hidden"
-          onChange={handleFileChange}
-        />
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => inputRef.current?.click()}
-          >
-            {uploadPhoto.isPending ? 'Uploading...' : person.photo_url ? 'Replace photo' : 'Upload photo'}
-          </Button>
-          {person.photo_url && (
-            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={handleRemove}>
-              Remove
+      {!readOnly && (
+        <div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ALLOWED_PHOTO_TYPES.join(',')}
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => inputRef.current?.click()}
+            >
+              {uploadPhoto.isPending ? 'Uploading...' : person.photo_url ? 'Replace photo' : 'Upload photo'}
             </Button>
-          )}
+            {person.photo_url && (
+              <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={handleRemove}>
+                Remove
+              </Button>
+            )}
+          </div>
+          <p className="text-muted-foreground mt-1 text-xs">JPEG, PNG, WebP or GIF, max 5MB</p>
         </div>
-        <p className="text-muted-foreground mt-1 text-xs">JPEG, PNG, WebP or GIF, max 5MB</p>
-      </div>
+      )}
     </div>
   );
 }
