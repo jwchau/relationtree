@@ -384,6 +384,73 @@
         ]
       }
     },
+    "/api/people/{person_id}/me": {
+      "put": {
+        "operationId": "relationtree_people_api_mark_as_me",
+        "summary": "Mark As Me",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "person_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "people"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "relationtree_people_api_unmark_as_me",
+        "summary": "Unmark As Me",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "person_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        },
+        "tags": [
+          "people"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/people/{person_id}/photo/upload-url": {
       "post": {
         "operationId": "relationtree_photos_api_create_upload_url",
@@ -696,6 +763,53 @@
           }
         ]
       }
+    },
+    "/api/ask": {
+      "post": {
+        "operationId": "relationtree_ask_api_ask",
+        "summary": "Ask",
+        "parameters": [],
+        "responses": {
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Newline-delimited JSON events while the model works: {\"tool\": progress text}, {\"text\": answer text}, an {\"error\": message} if the AI stops mid-answer, and finally {\"people\": [{\"id\", \"name\"}]} for those mentioned.",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "ai"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -865,6 +979,11 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "is_me": {
+            "description": "Whether the current user marked this person \"This is me\"",
+            "title": "Is Me",
+            "type": "boolean"
           }
         },
         "required": [
@@ -880,7 +999,8 @@
           "notes",
           "last_contacted_date",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "is_me"
         ],
         "title": "PersonOut",
         "type": "object"
@@ -1267,6 +1387,21 @@
           "other_person"
         ],
         "title": "PersonConnectionOut",
+        "type": "object"
+      },
+      "AskIn": {
+        "properties": {
+          "question": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "AskIn",
         "type": "object"
       }
     },

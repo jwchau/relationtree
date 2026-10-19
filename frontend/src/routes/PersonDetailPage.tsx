@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { useDeletePerson, usePerson, useUpdatePerson } from '@/hooks/usePerson';
+import { useDeletePerson, usePerson, useSetMe, useUpdatePerson } from '@/hooks/usePerson';
 import { useConnections } from '@/hooks/useConnections';
 import { PersonForm } from '@/components/person/PersonForm';
 import { CatchUpCard } from '@/components/person/CatchUpCard';
@@ -12,6 +12,7 @@ import { EgoGraph } from '@/components/graph/EgoGraph';
 import { toFormValues, toPersonInput } from '@/lib/personInput';
 import type { PersonFormValues } from '@/lib/validation';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +33,7 @@ export default function PersonDetailPage() {
     useConnections(personId);
   const updatePerson = useUpdatePerson(personId);
   const deletePerson = useDeletePerson(personId);
+  const setMe = useSetMe(personId);
 
   async function handleSubmit(values: PersonFormValues) {
     try {
@@ -66,29 +68,43 @@ export default function PersonDetailPage() {
         <ArrowLeft className="size-4" />
         Back to people
       </Link>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{person.name}</h1>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive" disabled={deletePerson.isPending}>
-              Delete
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete {person.name}?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {connections.length > 0
-                  ? `This permanently removes ${person.name} and their ${connections.length} connection${connections.length === 1 ? '' : 's'}. This cannot be undone.`
-                  : `This permanently removes ${person.name} and cannot be undone.`}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="flex items-center gap-2 text-2xl font-semibold">
+          {person.name}
+          {person.is_me && <Badge>You</Badge>}
+        </h1>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setMe.mutate(!person.is_me)}
+            disabled={setMe.isPending}
+            title="Lets Ask understand questions like “how am I connected to…?”"
+          >
+            <UserCheck />
+            {person.is_me ? 'Not me' : 'This is me'}
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" disabled={deletePerson.isPending}>
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {person.name}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {connections.length > 0
+                    ? `This permanently removes ${person.name} and their ${connections.length} connection${connections.length === 1 ? '' : 's'}. This cannot be undone.`
+                    : `This permanently removes ${person.name} and cannot be undone.`}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

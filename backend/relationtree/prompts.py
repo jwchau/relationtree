@@ -43,6 +43,29 @@ def build_summary_context(person: Person, today: date | None = None) -> str:
     return "\n".join(lines)
 
 
+ASK_SYSTEM_PROMPT = (
+    "You answer questions about the people in someone's life, using only the tools to look "
+    "things up. Never guess at relationships: look them up. Roles are always the other "
+    "person's role relative to the one you looked up (in get_person, a connection with role "
+    "'Child' is that person's child). Answer in one or two short sentences of plain text (no "
+    "markdown, bold or lists), naming people by their full name. If the tools don't give an "
+    "answer, say you don't know."
+)
+
+
+def build_ask_messages(question: str, me: Person | None) -> list[dict[str, str]]:
+    messages = [{"role": "system", "content": ASK_SYSTEM_PROMPT}]
+    if me is not None:
+        messages.append(
+            {
+                "role": "system",
+                "content": f'The user is {me.name} (id {me.id}). "I", "me" and "my" mean them.',
+            }
+        )
+    messages.append({"role": "user", "content": question})
+    return messages
+
+
 def build_summary_messages(person: Person) -> list[dict[str, str]]:
     return [
         {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},

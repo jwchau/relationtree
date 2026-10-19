@@ -19,6 +19,7 @@ export function PersonCard({ person }: { person: PersonSummary }) {
               </AvatarFallback>
             </Avatar>
             <span className="flex-1">{person.name}</span>
+            {person.is_me && <Badge>You</Badge>}
             {person.relationship_category && (
               <Badge variant="secondary">{categoryLabel(person.relationship_category)}</Badge>
             )}

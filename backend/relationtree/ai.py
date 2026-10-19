@@ -1,6 +1,7 @@
 """Local LLM access through Ollama. Prompts never leave the home server."""
 
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 import httpx
@@ -12,10 +13,28 @@ class AIUnavailable(Exception):
     """Ollama is down, unreachable, or didn't start answering in time."""
 
 
+@dataclass(frozen=True)
+class ToolCall:
+    name: str
+    arguments: dict[str, Any]
+
+
 class ChatModel(Protocol):
     def stream(
         self, messages: list[dict[str, str]], *, model: str, options: dict[str, Any], think: bool
     ) -> AsyncGenerator[str]: ...
+
+    def stream_turn(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]],
+        model: str,
+        options: dict[str, Any],
+        think: bool,
+    ) -> AsyncGenerator[str | ToolCall]:
+        """One assistant turn with tools: answer text as it's written, and any tool calls."""
+        ...
 
 
 class OllamaChatModel:
@@ -52,6 +71,34 @@ class OllamaChatModel:
             async for part in response:
                 if part.message.content:
                     yield part.message.content
+        except (httpx.HTTPError, ResponseError, ConnectionError) as err:
+            raise AIUnavailable(str(err)) from err
+
+    async def stream_turn(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]],
+        model: str,
+        options: dict[str, Any],
+        think: bool,
+    ) -> AsyncGenerator[str | ToolCall]:
+        try:
+            response = await self._client.chat(
+                model=model,
+                messages=messages,
+                tools=tools,
+                stream=True,
+                think=think,
+                options=options,
+                keep_alive=self._keep_alive,
+            )
+            # Thinking arrives in part.message.thinking and is deliberately dropped.
+            async for part in response:
+                if part.message.content:
+                    yield part.message.content
+                for call in part.message.tool_calls or []:
+                    yield ToolCall(call.function.name, dict(call.function.arguments))
         except (httpx.HTTPError, ResponseError, ConnectionError) as err:
             raise AIUnavailable(str(err)) from err
 

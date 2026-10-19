@@ -3,6 +3,7 @@ from django.http import HttpRequest
 from ninja import NinjaAPI, Schema
 from ninja.responses import Status
 
+from relationtree.ask_api import router as ask_router
 from relationtree.auth_api import router as auth_router
 from relationtree.connections_api import router as connections_router
 from relationtree.people_api import router as people_router
@@ -18,6 +19,7 @@ api.add_router("/people", people_router)
 api.add_router("/people", photos_router)
 api.add_router("/people", summary_router)
 api.add_router("", connections_router)
+api.add_router("", ask_router)
 
 
 class HealthOut(Schema):
