@@ -180,6 +180,7 @@ export default function PersonDetailPage() {
             )}
           </SectionHead>
           <ConnectionList
+            key={person.id}
             connections={connections}
             loading={connectionsLoading}
             error={connectionsError}
