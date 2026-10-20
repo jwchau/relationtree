@@ -180,6 +180,7 @@ export default function PersonDetailPage() {
             )}
           </SectionHead>
           <ConnectionList
+            key={person.id}
             connections={connections}
             loading={connectionsLoading}
             error={connectionsError}
@@ -193,6 +194,7 @@ export default function PersonDetailPage() {
             centerId={person.id}
             centerName={person.name}
             centerPhotoUrl={person.photo_url}
+            centerBirthday={person.birthday}
             connections={connections}
           />
         </section>

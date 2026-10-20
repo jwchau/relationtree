@@ -8,6 +8,14 @@ export interface PersonNodeData extends Record<string, unknown> {
   isCenter: boolean;
 }
 
+const SIDES = ['top', 'bottom', 'left', 'right'] as const;
+const POSITIONS = {
+  top: Position.Top,
+  bottom: Position.Bottom,
+  left: Position.Left,
+  right: Position.Right,
+};
+
 export function PersonNode({ data }: NodeProps) {
   const { name, photoUrl, isCenter } = data as PersonNodeData;
 
@@ -20,10 +28,15 @@ export function PersonNode({ data }: NodeProps) {
           : 'hover:bg-surface-3 cursor-pointer',
       )}
     >
-      <Handle type="target" position={Position.Top} className="opacity-0" />
       <PersonAvatar name={name} photoUrl={photoUrl} className={isCenter ? 'size-12' : 'size-9'} />
       <span className="max-w-28 truncate text-[13px] leading-[18px] font-semibold">{name}</span>
-      <Handle type="source" position={Position.Bottom} className="opacity-0" />
+      {/* Edges pick the side facing the other person (see graphLayout.ts). */}
+      {SIDES.map((side) => (
+        <Handle key={`s-${side}`} id={side} type="source" position={POSITIONS[side]} className="opacity-0" />
+      ))}
+      {SIDES.map((side) => (
+        <Handle key={`t-${side}`} id={side} type="target" position={POSITIONS[side]} className="opacity-0" />
+      ))}
     </div>
   );
 }

@@ -4,22 +4,27 @@ import { ReactFlow, Background, Controls } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { buildEgoGraph } from '@/components/graph/graphLayout';
 import { PersonNode } from '@/components/graph/PersonNode';
+import { GroupLabelNode } from '@/components/graph/GroupLabelNode';
+import { LabeledEdge } from '@/components/graph/LabeledEdge';
 import type { ConnectionWithPerson } from '@/hooks/useConnections';
 
-const nodeTypes = { person: PersonNode };
+const nodeTypes = { person: PersonNode, groupLabel: GroupLabelNode };
+const edgeTypes = { labeled: LabeledEdge };
+const defaultEdgeOptions = { type: 'labeled' };
 
 export interface EgoGraphProps {
   centerId: string;
   centerName: string;
   centerPhotoUrl: string | null;
+  centerBirthday: string | null;
   connections: ConnectionWithPerson[];
 }
 
-export function EgoGraph({ centerId, centerName, centerPhotoUrl, connections }: EgoGraphProps) {
+export function EgoGraph({ centerId, centerName, centerPhotoUrl, centerBirthday, connections }: EgoGraphProps) {
   const navigate = useNavigate();
   const { nodes, edges } = useMemo(
-    () => buildEgoGraph(centerId, centerName, centerPhotoUrl, connections),
-    [centerId, centerName, centerPhotoUrl, connections],
+    () => buildEgoGraph(centerId, centerName, centerPhotoUrl, connections, centerBirthday),
+    [centerId, centerName, centerPhotoUrl, connections, centerBirthday],
   );
 
   if (connections.length === 0) {
@@ -36,9 +41,12 @@ export function EgoGraph({ centerId, centerName, centerPhotoUrl, connections }: 
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        defaultEdgeOptions={defaultEdgeOptions}
         onNodeClick={(_, node) => {
-          if (node.id !== centerId) navigate(`/people/${node.id}`);
+          if (node.type === 'person' && node.id !== centerId) navigate(`/people/${node.id}`);
         }}
+        nodeOrigin={[0.5, 0.5]}
         fitView
         nodesDraggable={false}
         nodesConnectable={false}
