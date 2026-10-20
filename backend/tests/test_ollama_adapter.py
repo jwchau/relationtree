@@ -101,3 +101,56 @@ def test_embedder_connection_failures_become_ai_unavailable() -> None:
 
     with pytest.raises(AIUnavailable):
         embedder.embed(["a"])
+
+
+async def test_complete_asks_for_structured_output_and_returns_the_text() -> None:
+    sent: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "model": "m",
+                "message": {"role": "assistant", "content": '{"a": 1}'},
+                "done": True,
+            },
+        )
+
+    model = OllamaChatModel(
+        "http://ollama.test",
+        connect_timeout=1,
+        keep_alive="1h",
+        transport=httpx.MockTransport(handler),
+    )
+    schema = {"type": "object", "properties": {"a": {"type": "integer"}}}
+
+    text = await model.complete(
+        [{"role": "user", "content": "hi"}],
+        format=schema,
+        model="m",
+        options={"num_ctx": 8},
+        think=True,
+    )
+
+    assert text == '{"a": 1}'
+    [request] = sent
+    assert request["format"] == schema
+    assert request["stream"] is False
+    assert request["think"] is True
+    assert request["keep_alive"] == "1h"
+
+
+async def test_complete_connection_failures_become_ai_unavailable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    model = OllamaChatModel(
+        "http://ollama.test",
+        connect_timeout=1,
+        keep_alive="1h",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(AIUnavailable):
+        await model.complete([], format={}, model="m", options={}, think=False)

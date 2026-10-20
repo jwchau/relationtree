@@ -217,6 +217,25 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
   pending ones; `/invite/:token` is public: join with one click, sign up, or sign in and come
   back; it then opens the joined tree.
 
+### Free-text extraction (M17)
+- `POST /api/extract?tree= {text}` (editors and owners, up to 2,000 characters) returns a proposal
+  and saves nothing: people `{ref, name, match_id, category, context, note}` and connections
+  `{a, b, type}` between refs. `POST /api/extract/apply?tree=` takes the reviewed proposal back
+  and saves it in one transaction: new people (with category and context), a dated line
+  appended to matched people's notes, connections (existing ones skipped). A match outside the
+  tree or a dangling ref is a 422 and nothing is written.
+- One non-streamed `CHAT_MODEL` call with Ollama structured output (`EXTRACT_FORMAT`) and
+  thinking on. The prompt gets the note, the tree's ids and names (no contact details) and who
+  "me" is. `extract.clean` re-checks everything the model says: ids must be in the tree (else an
+  exact name match, else new), names are merged, unknown types, dangling ends and self-links
+  are dropped. Unreadable output is a 502, Ollama down a 503.
+- **Measured** (`tests/eval_extract.py`, 8 people, 10 notes): 10/10 with the final prompt
+  (median 13.6 s); thinking off scored 8/10 and invented links from shared surnames. Telling
+  the model that being at the same event isn't a connection fixed made-up friendships.
+- Frontend: "Add from a note" on the People page (editors and owners). The review lets you
+  skip people, edit new people's names and categories, re-match or un-match, edit or untick
+  each note line, and untick connections; connections to skipped people drop out.
+
 ### Background jobs
 - **No job queue.** Each `Person` tracks `content_version` (bumped in SQL when a searchable field
   changes, including admin edits) and `embedded_version`. `manage.py embed_worker` embeds rows

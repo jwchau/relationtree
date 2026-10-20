@@ -36,6 +36,18 @@ class ChatModel(Protocol):
         """One assistant turn with tools: answer text as it's written, and any tool calls."""
         ...
 
+    async def complete(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        format: dict[str, Any],
+        model: str,
+        options: dict[str, Any],
+        think: bool,
+    ) -> str:
+        """The whole answer at once, constrained to JSON matching the `format` schema."""
+        ...
+
 
 class OllamaChatModel:
     def __init__(
@@ -101,6 +113,29 @@ class OllamaChatModel:
                     yield ToolCall(call.function.name, dict(call.function.arguments))
         except (httpx.HTTPError, ResponseError, ConnectionError) as err:
             raise AIUnavailable(str(err)) from err
+
+    async def complete(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        format: dict[str, Any],
+        model: str,
+        options: dict[str, Any],
+        think: bool,
+    ) -> str:
+        try:
+            response = await self._client.chat(
+                model=model,
+                messages=messages,
+                format=format,
+                stream=False,
+                think=think,
+                options=options,
+                keep_alive=self._keep_alive,
+            )
+        except (httpx.HTTPError, ResponseError, ConnectionError) as err:
+            raise AIUnavailable(str(err)) from err
+        return response.message.content or ""
 
 
 _chat_model: ChatModel | None = None

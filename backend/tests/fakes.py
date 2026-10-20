@@ -33,6 +33,8 @@ class FakeChatModel:
         self.first_chunk_delay = 0.0
         # Scripted assistant turns for stream_turn: answer text and ToolCalls, in order.
         self.turns: list[list[str | ToolCall]] = []
+        # Scripted whole answers for complete(), in order.
+        self.completions: list[str] = []
 
     async def stream(
         self, messages: list[dict[str, str]], *, model: str, options: dict[str, Any], think: bool
@@ -70,6 +72,29 @@ class FakeChatModel:
             raise self.error
         for event in self.turns.pop(0) if self.turns else ["Done."]:
             yield event
+
+    async def complete(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        format: dict[str, Any],
+        model: str,
+        options: dict[str, Any],
+        think: bool,
+    ) -> str:
+        """Returns the next scripted answer from `completions`."""
+        self.calls.append(
+            {
+                "messages": messages,
+                "format": format,
+                "model": model,
+                "options": options,
+                "think": think,
+            }
+        )
+        if self.error is not None:
+            raise self.error
+        return self.completions.pop(0)
 
 
 # Topics the fake embedder "understands": text mentioning any keyword lands on that topic's axis.

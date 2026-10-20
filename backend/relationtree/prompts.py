@@ -71,3 +71,85 @@ def build_summary_messages(person: Person) -> list[dict[str, str]]:
         {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
         {"role": "user", "content": build_summary_context(person)},
     ]
+
+
+EXTRACT_SYSTEM_PROMPT = (
+    "You turn a short note someone wrote about people in their life into structured data. "
+    "List every person the note mentions by name, except the user who wrote it. For each, set "
+    "existing_id to the id of the person in the known list when it is clearly the same person "
+    "(a first name alone matches if only one known person has it), otherwise null. Set "
+    "category (FAMILY, FRIEND, COWORKER, ACQUAINTANCE, OTHER) only when the note makes clear "
+    "how that person relates to the user, not to someone else: a friend's sister isn't the "
+    "user's FAMILY. Set about to one short sentence of what the note says about that person, "
+    'written for the user (call them "you", never "the writer"), or null.\n'
+    "List connections the note states or clearly implies, naming people exactly as in your "
+    "people list (or the known list). Types: SPOUSE, SIBLING, FRIEND, COWORKER, ACQUAINTANCE "
+    "have no direction. PARENT means from is to's parent; MANAGER means from is to's manager. "
+    "Only add a connection when the note states how two people are related (family, "
+    "friends, work together, manages): being at the same event, meeting someone, or doing "
+    "something together is not a connection. Never invent people or connections the note "
+    "doesn't support. If the user is in the known list, connections to them use their name; "
+    "otherwise leave the user out."
+)
+
+# What the model must return (Ollama structured output); extract.py checks it again.
+EXTRACT_FORMAT: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "people": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "existing_id": {"type": ["string", "null"]},
+                    "category": {
+                        "type": ["string", "null"],
+                        "enum": ["FAMILY", "FRIEND", "COWORKER", "ACQUAINTANCE", "OTHER", None],
+                    },
+                    "about": {"type": ["string", "null"]},
+                },
+                "required": ["name", "existing_id", "category", "about"],
+            },
+        },
+        "connections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "from": {"type": "string"},
+                    "to": {"type": "string"},
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "SPOUSE",
+                            "SIBLING",
+                            "FRIEND",
+                            "COWORKER",
+                            "ACQUAINTANCE",
+                            "PARENT",
+                            "MANAGER",
+                        ],
+                    },
+                },
+                "required": ["from", "to", "type"],
+            },
+        },
+    },
+    "required": ["people", "connections"],
+}
+
+
+def build_extract_messages(
+    note: str, known: list[tuple[str, str]], me: Person | None
+) -> list[dict[str, str]]:
+    """`known` is the tree's people as (id, name): names only, never contact details."""
+    lines = [f"{person_id}: {name}" for person_id, name in known]
+    context = "Known people (id: name):\n" + ("\n".join(lines) if lines else "(none yet)")
+    if me is not None:
+        context += f'\n\nThe user is {me.name} (id {me.id}). "I", "me" and "my" mean them.'
+    return [
+        {"role": "system", "content": EXTRACT_SYSTEM_PROMPT},
+        {"role": "system", "content": context},
+        {"role": "user", "content": note},
+    ]
