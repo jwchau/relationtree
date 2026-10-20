@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Person } from '@/api/client';
 import { useCreatePerson } from '@/hooks/usePerson';
@@ -104,7 +105,8 @@ export function AddConnectionDialog({ personId, personName, treeId }: AddConnect
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="secondary">
+          <Plus />
           Add connection
         </Button>
       </DialogTrigger>
@@ -116,7 +118,7 @@ export function AddConnectionDialog({ personId, personName, treeId }: AddConnect
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="space-y-2">
             <Label>Person</Label>
             <PersonPicker
@@ -135,8 +137,8 @@ export function AddConnectionDialog({ personId, personName, treeId }: AddConnect
           </div>
 
           {newPersonName && (
-            <div className="space-y-2 rounded-md border p-3">
-              <p className="text-sm">
+            <div className="bg-surface-2 space-y-3 rounded-[12px] p-4">
+              <p className="text-[15px]">
                 Creating a new person: <span className="font-medium">{newPersonName}</span>
               </p>
               <Label>Category</Label>
@@ -176,7 +178,7 @@ export function AddConnectionDialog({ personId, personName, treeId }: AddConnect
               </SelectContent>
             </Select>
             {otherName && (
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground text-[15px] leading-[22px]">
                 {personName} is the {relationshipLabel(relationshipType).toLowerCase()} of{' '}
                 {otherName}.
               </p>

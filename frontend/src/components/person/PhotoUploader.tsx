@@ -1,10 +1,9 @@
 import { useRef } from 'react';
 import { toast } from 'sonner';
-import { User } from 'lucide-react';
 import type { Person } from '@/api/client';
 import { useRemovePhoto, useUploadPhoto } from '@/hooks/usePerson';
 import { ALLOWED_PHOTO_TYPES, photoProblem } from '@/lib/photoStorage';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PersonAvatar } from '@/components/person/PersonAvatar';
 import { Button } from '@/components/ui/button';
 
 export function PhotoUploader({ person, readOnly = false }: { person: Person; readOnly?: boolean }) {
@@ -38,14 +37,9 @@ export function PhotoUploader({ person, readOnly = false }: { person: Person; re
 
   return (
     <div className="flex items-center gap-4">
-      <Avatar className="size-20">
-        <AvatarImage src={person.photo_url ?? undefined} alt={person.name} />
-        <AvatarFallback>
-          <User className="size-8" />
-        </AvatarFallback>
-      </Avatar>
+      <PersonAvatar name={person.name} photoUrl={person.photo_url} className="size-20 text-2xl" />
       {!readOnly && (
-        <div>
+        <div className="min-w-0">
           <input
             ref={inputRef}
             type="file"
@@ -53,10 +47,10 @@ export function PhotoUploader({ person, readOnly = false }: { person: Person; re
             className="hidden"
             onChange={handleFileChange}
           />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               size="sm"
               disabled={busy}
               onClick={() => inputRef.current?.click()}
@@ -69,7 +63,7 @@ export function PhotoUploader({ person, readOnly = false }: { person: Person; re
               </Button>
             )}
           </div>
-          <p className="text-muted-foreground mt-1 text-xs">JPEG, PNG, WebP or GIF, max 5MB</p>
+          <p className="text-muted-foreground mt-2 text-[14px] leading-5">JPEG, PNG, WebP or GIF, max 5MB</p>
         </div>
       )}
     </div>

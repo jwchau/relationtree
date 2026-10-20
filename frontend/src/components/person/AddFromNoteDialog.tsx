@@ -110,7 +110,7 @@ export function AddFromNoteDialog({ treeId }: { treeId: string }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline">
+        <Button variant="band">
           <FileText />
           Add from a note
         </Button>
@@ -136,7 +136,7 @@ export function AddFromNoteDialog({ treeId }: { treeId: string }) {
               autoFocus
             />
             {extract.error && (
-              <p role="alert" className="text-destructive text-sm">
+              <p role="alert" className="text-accent-text text-[14.7px] leading-[21px] font-medium">
                 {extract.error.message}
               </p>
             )}
@@ -150,9 +150,9 @@ export function AddFromNoteDialog({ treeId }: { treeId: string }) {
         ) : (
           <div className="space-y-6">
             <section className="space-y-3">
-              <h3 className="text-sm font-medium">People</h3>
+              <h3 className="display-face text-[18px] leading-6">People</h3>
               {review.people.length === 0 && (
-                <p className="text-muted-foreground text-sm">No one found in that note.</p>
+                <p className="text-muted-foreground text-[15px]">No one found in that note.</p>
               )}
               {review.people.map((p) => (
                 <PersonRow
@@ -166,17 +166,17 @@ export function AddFromNoteDialog({ treeId }: { treeId: string }) {
 
             {review.connections.length > 0 && (
               <section className="space-y-2">
-                <h3 className="text-sm font-medium">Connections</h3>
+                <h3 className="display-face text-[18px] leading-6">Connections</h3>
                 {review.connections.map((c, i) => {
                   const dropped = !keptRefs.has(c.a) || !keptRefs.has(c.b);
                   return (
                     <label
                       key={`${c.a}-${c.b}-${c.type}`}
-                      className="flex items-center gap-2 text-sm has-disabled:opacity-50"
+                      className="bg-surface-2 hover:bg-ghost-hover flex min-h-12 cursor-pointer items-center gap-3 rounded-[12px] px-4 py-2 text-[15px] transition-colors duration-200 has-disabled:cursor-not-allowed has-disabled:opacity-50"
                     >
                       <input
                         type="checkbox"
-                        className="accent-primary size-4"
+                        className="size-5 shrink-0"
                         checked={c.include && !dropped}
                         disabled={dropped}
                         onChange={(e) =>
@@ -244,13 +244,13 @@ function PersonRow({
 
   return (
     <div
-      className="space-y-2 rounded-md border p-3 data-[skipped=true]:opacity-50"
+      className="bg-surface-2 space-y-3 rounded-[12px] p-3 data-[skipped=true]:opacity-50 sm:p-4"
       data-skipped={!person.include}
     >
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="checkbox"
-          className="accent-primary size-4"
+          className="size-5 shrink-0"
           checked={person.include}
           onChange={(e) => onChange({ include: e.target.checked })}
           aria-label={`Include ${person.name}`}
@@ -260,19 +260,19 @@ function PersonRow({
             value={person.name}
             onChange={(e) => onChange({ name: e.target.value })}
             aria-label="Name"
-            className="h-8 w-48"
+            className="h-10 w-48 font-semibold"
             disabled={!person.include}
           />
         ) : (
-          <span className="font-medium">{displayName(person, people)}</span>
+          <span className="font-semibold">{displayName(person, people)}</span>
         )}
-        <Badge variant={isNew ? 'default' : 'secondary'}>{isNew ? 'New' : 'Already here'}</Badge>
+        <Badge variant={isNew ? 'outline' : 'secondary'}>{isNew ? 'New' : 'Already here'}</Badge>
         <Select
           value={person.matchId ?? NEW}
           onValueChange={(v) => onChange({ matchId: v === NEW ? null : v })}
           disabled={!person.include}
         >
-          <SelectTrigger className="h-8 w-44" aria-label={`Who ${person.name} is`}>
+          <SelectTrigger size="sm" className="w-44" aria-label={`Who ${person.name} is`}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -290,7 +290,7 @@ function PersonRow({
             onValueChange={(v) => onChange({ category: v as PersonReview['category'] })}
             disabled={!person.include}
           >
-            <SelectTrigger className="h-8 w-36" aria-label="Category">
+            <SelectTrigger size="sm" className="w-36" aria-label="Category">
               <SelectValue placeholder="Category" />
             </SelectTrigger>
             <SelectContent>
@@ -304,24 +304,24 @@ function PersonRow({
         )}
       </div>
       {person.text && (
-        <div className="flex items-start gap-2 pl-6">
+        <div className="flex items-start gap-3 sm:pl-8">
           <input
             id={id}
             type="checkbox"
-            className="accent-primary mt-1 size-4"
+            className="mt-0.5 size-5 shrink-0"
             checked={person.includeText}
             onChange={(e) => onChange({ includeText: e.target.checked })}
             disabled={!person.include}
           />
           <div className="flex-1 space-y-1">
-            <Label htmlFor={id} className="text-muted-foreground text-xs">
+            <Label htmlFor={id} className="text-muted-foreground">
               {isNew ? 'Save as how you know them' : 'Add to their notes, dated today'}
             </Label>
             <Input
               value={person.text}
               onChange={(e) => onChange({ text: e.target.value })}
               aria-label={`What the note says about ${person.name}`}
-              className="h-8"
+              className="h-10"
               disabled={!person.include || !person.includeText}
             />
           </div>

@@ -6,6 +6,7 @@ import { useMe } from '@/hooks/useAuth';
 import { useAcceptInvite, useInviteDetails, useSignupWithInvite } from '@/hooks/useInvites';
 import { rememberTree } from '@/lib/currentTreeStorage';
 import { expiresIn, inviteHeadline } from '@/lib/invites';
+import { NarrowFrame, Note } from '@/components/kiln/Page';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,42 +28,40 @@ export default function InvitePage() {
     navigate('/', { replace: true });
   }
 
-  let body;
   if (invite.isPending || me.isPending) {
-    body = <p className="text-muted-foreground">Loading...</p>;
-  } else if (invite.error) {
-    body = <p className="text-destructive">{invite.error.message}</p>;
-  } else if (!invite.data) {
-    body = (
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">This invite link is invalid or has expired</h1>
-        <p className="text-muted-foreground text-sm">
-          Links work once and last a week. Ask whoever sent it for a new one.
-        </p>
-      </div>
-    );
-  } else {
-    body = (
-      <div className="space-y-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">{inviteHeadline(invite.data)}</h1>
-          <p className="text-muted-foreground text-sm">
-            This link {expiresIn(invite.data.expires_at)} and works once.
-          </p>
-        </div>
-        {me.data ? (
-          <JoinAs username={me.data.username} token={token} onJoined={openTree} />
-        ) : (
-          <SignupForm token={token} onJoined={openTree} />
-        )}
-      </div>
+    return (
+      <NarrowFrame title="Loading...">
+        <span />
+      </NarrowFrame>
     );
   }
-
+  if (invite.error) {
+    return (
+      <NarrowFrame title="Invite">
+        <Note tone="error">{invite.error.message}</Note>
+      </NarrowFrame>
+    );
+  }
+  if (!invite.data) {
+    return (
+      <NarrowFrame title="This invite link is invalid or has expired">
+        <div className="panel p-5">
+          <Note>Links work once and last a week. Ask whoever sent it for a new one.</Note>
+        </div>
+      </NarrowFrame>
+    );
+  }
   return (
-    <div className="flex min-h-svh items-center justify-center px-4">
-      <div className="w-full max-w-sm">{body}</div>
-    </div>
+    <NarrowFrame
+      title={inviteHeadline(invite.data)}
+      meta={`This link ${expiresIn(invite.data.expires_at)} and works once.`}
+    >
+      {me.data ? (
+        <JoinAs username={me.data.username} token={token} onJoined={openTree} />
+      ) : (
+        <SignupForm token={token} onJoined={openTree} />
+      )}
+    </NarrowFrame>
   );
 }
 
@@ -78,19 +77,16 @@ function JoinAs({
   const accept = useAcceptInvite(token);
 
   return (
-    <div className="space-y-3">
+    <div className="panel space-y-3 p-5 sm:p-6">
       <Button
+        size="lg"
         className="w-full"
         disabled={accept.isPending}
         onClick={() => accept.mutate(undefined, { onSuccess: onJoined })}
       >
         {accept.isPending ? 'Joining...' : `Join as ${username}`}
       </Button>
-      {accept.error && (
-        <p role="alert" className="text-destructive text-sm">
-          {accept.error.message}
-        </p>
-      )}
+      {accept.error && <Note tone="error">{accept.error.message}</Note>}
     </div>
   );
 }
@@ -109,8 +105,8 @@ function SignupForm({ token, onJoined }: { token: string; onJoined: (tree: Tree)
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="text-sm font-medium">Create your account</p>
+    <form onSubmit={handleSubmit} className="panel space-y-5 p-5 sm:p-6">
+      <h2 className="display-face text-[20px] leading-[26px]">Create your account</h2>
       <div className="space-y-2">
         <Label htmlFor="username">Username</Label>
         <Input
@@ -145,22 +141,18 @@ function SignupForm({ token, onJoined }: { token: string; onJoined: (tree: Tree)
           aria-invalid={mismatch}
           required
         />
-        {mismatch && <p className="text-destructive text-sm">Passwords don&apos;t match</p>}
+        {mismatch && <Note tone="error">Passwords don&apos;t match</Note>}
       </div>
-      {signup.error && (
-        <p role="alert" className="text-destructive text-sm">
-          {signup.error.message}
-        </p>
-      )}
-      <Button type="submit" className="w-full" disabled={signup.isPending || mismatch}>
+      {signup.error && <Note tone="error">{signup.error.message}</Note>}
+      <Button type="submit" size="lg" className="w-full" disabled={signup.isPending || mismatch}>
         {signup.isPending ? 'Creating account...' : 'Create account and join'}
       </Button>
-      <p className="text-muted-foreground text-center text-sm">
+      <p className="text-muted-foreground text-center text-[15px]">
         Already have an account?{' '}
         <Link
           to="/login"
           state={{ from: `/invite/${token}` }}
-          className="text-foreground underline underline-offset-4"
+          className="text-accent-text font-medium underline underline-offset-4"
         >
           Sign in
         </Link>

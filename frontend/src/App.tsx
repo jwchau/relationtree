@@ -1,6 +1,7 @@
-import { BrowserRouter, Routes, Route, Link, Outlet } from 'react-router-dom'
-import { UserPlus } from 'lucide-react'
+import { BrowserRouter, Routes, Route, Link, Outlet, useLocation } from 'react-router-dom'
+import { LogOut, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { BrandMark } from '@/components/kiln/Page'
 import { CurrentTreeProvider } from '@/components/CurrentTreeProvider'
 import { RequireAuth } from '@/components/RequireAuth'
 import { TreeSwitcher } from '@/components/TreeSwitcher'
@@ -17,29 +18,39 @@ import TreeSettingsPage from '@/routes/TreeSettingsPage'
 function AppHeader() {
   const logout = useLogout()
   const { canEdit } = useCurrentTree()
+  // The People page carries Add person as its primary action, so the bar doesn't repeat it.
+  const onPeople = useLocation().pathname === '/'
   return (
-    <header className="flex items-center justify-between border-b px-6 py-3">
-      <nav className="flex items-center gap-6">
-        <Link to="/" className="font-semibold">
-          RelationTree
+    <header className="ink sticky top-0 z-[6] border-b border-band-divider">
+      <div className="mx-auto flex min-h-16 max-w-[1200px] items-center gap-2 px-[var(--gutter)] sm:gap-4">
+        <Link
+          to="/"
+          className="focus-ring -ml-2 flex h-12 items-center gap-2.5 rounded-[12px] px-2"
+          aria-label="RelationTree, people"
+        >
+          <BrandMark />
+          <span className="display-face hidden text-[16px] leading-6 sm:inline">RelationTree</span>
         </Link>
         <TreeSwitcher />
-        <Link to="/" className="text-muted-foreground hover:text-foreground text-sm">
-          People
-        </Link>
-      </nav>
-      <div className="flex items-center gap-2">
-        {canEdit && (
-          <Button asChild variant="outline" size="sm">
-            <Link to="/people/new">
-              <UserPlus />
-              Add person
-            </Link>
+        <div className="ml-auto flex items-center gap-2">
+          {canEdit && !onPeople && (
+            <Button asChild variant="band" className="max-sm:size-11 max-sm:px-0">
+              <Link to="/people/new" aria-label="Add person">
+                <UserPlus />
+                <span className="max-sm:sr-only">Add person</span>
+              </Link>
+            </Button>
+          )}
+          <Button
+            variant="band"
+            className="max-sm:size-11 max-sm:px-0"
+            onClick={() => logout.mutate()}
+            aria-label="Sign out"
+          >
+            <LogOut />
+            <span className="max-sm:sr-only">Sign out</span>
           </Button>
-        )}
-        <Button variant="ghost" size="sm" onClick={() => logout.mutate()}>
-          Sign out
-        </Button>
+        </div>
       </div>
     </header>
   )
@@ -51,7 +62,7 @@ function AppLayout() {
       <CurrentTreeProvider>
         <div className="min-h-svh">
           <AppHeader />
-          <main className="mx-auto max-w-5xl px-6 py-8">
+          <main>
             <Outlet />
           </main>
         </div>

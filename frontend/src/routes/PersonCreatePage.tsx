@@ -1,9 +1,9 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useCurrentTree } from '@/hooks/useCurrentTree';
 import { useCreatePerson } from '@/hooks/usePerson';
 import { PersonForm } from '@/components/person/PersonForm';
+import { PageBand, PageBody } from '@/components/kiln/Page';
 import { toPersonInput } from '@/lib/personInput';
 import type { PersonFormValues } from '@/lib/validation';
 
@@ -23,21 +23,21 @@ export default function PersonCreatePage() {
   }
 
   return (
-    <div className="max-w-xl space-y-6">
-      <Link
-        to="/"
-        className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="size-4" />
-        Back to people
-      </Link>
-      <h1 className="text-2xl font-semibold">Add person</h1>
-      {tree && <p className="text-muted-foreground text-sm">Adding to {tree.name}</p>}
-      <PersonForm
-        onSubmit={handleSubmit}
-        submitLabel="Add person"
-        isSubmitting={createPerson.isPending}
+    <>
+      <PageBand
+        back={{ to: '/', label: 'Back to people' }}
+        title="Add person"
+        meta={tree && <span>Adding to {tree.name}</span>}
       />
-    </div>
+      <PageBody>
+        <div className="panel max-w-[640px] p-5 sm:p-6">
+          <PersonForm
+            onSubmit={handleSubmit}
+            submitLabel="Add person"
+            isSubmitting={createPerson.isPending}
+          />
+        </div>
+      </PageBody>
+    </>
   );
 }

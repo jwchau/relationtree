@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useLogin, useMe } from '@/hooks/useAuth';
+import { NarrowFrame, Note } from '@/components/kiln/Page';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,9 +23,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center px-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-6">
-        <h1 className="text-2xl font-semibold">Sign in to RelationTree</h1>
+    <NarrowFrame title="Sign in to RelationTree">
+      <form onSubmit={handleSubmit} className="panel space-y-5 p-5 sm:p-6">
         <div className="space-y-2">
           <Label htmlFor="username">Username</Label>
           <Input
@@ -47,15 +47,11 @@ export default function LoginPage() {
             required
           />
         </div>
-        {login.error && (
-          <p role="alert" className="text-destructive text-sm">
-            {login.error.message}
-          </p>
-        )}
-        <Button type="submit" className="w-full" disabled={login.isPending}>
+        {login.error && <Note tone="error">{login.error.message}</Note>}
+        <Button type="submit" size="lg" className="w-full" disabled={login.isPending}>
           {login.isPending ? 'Signing in...' : 'Sign in'}
         </Button>
       </form>
-    </div>
+    </NarrowFrame>
   );
 }

@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-20T12:00:00Z",
+  "title": "Design System: Kiln",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Brand Orange", "canonical": "#E68435" },
+      "on-primary": { "role": "primary", "displayName": "On Ember", "canonical": "#231306" },
+      "secondary": { "role": "secondary", "displayName": "Safety Amber", "canonical": "#DFAE4E" },
+      "surface": { "role": "neutral", "displayName": "Dark Surface Primary", "canonical": "#1A1A1A" },
+      "on-surface": { "role": "neutral", "displayName": "Soft White", "canonical": "#EEECE9" },
+      "ink": { "role": "neutral", "displayName": "Ink Black", "canonical": "#111111" },
+      "accent-text-dark": { "role": "primary", "displayName": "Orange Text on Dark", "canonical": "#EA9557" },
+      "accent-text-light": { "role": "primary", "displayName": "Orange Text on Light", "canonical": "#9E5019" }
+    },
+    "typographyMeta": {
+      "display-hero": { "displayName": "Display / Hero", "purpose": "Kiln reference only; RelationTree does not use marketing-sized type." },
+      "h3": { "displayName": "Heading 3", "purpose": "Kiln reference; RelationTree page titles run Unbounded 700 at 28/32 (32/36 from 768px)." }
+    },
+    "shadows": [
+      { "name": "elevation-3", "value": "0 0 0 1px rgba(255,255,255,0.1), 0 1px 2px rgba(0,0,0,0.05)", "purpose": "Panels, dialogs, popovers, graph nodes. Light theme: ring in black at .1." },
+      { "name": "shadow-float", "value": "0 8px 24px rgba(0,0,0,0.3)", "purpose": "Dialogs, popovers and toasts, under the elevation-3 ring." },
+      { "name": "focus", "value": "0 0 0 3px rgba(230,132,53,0.4)", "purpose": "Every focus-visible ring." }
+    ],
+    "motion": [
+      { "name": "ease", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Entrances (Catch up panel, 300ms)." },
+      { "name": "state", "value": "200ms ease-in-out", "purpose": "Colour, background and shadow transitions on buttons, rows, chips and fields." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "max", "value": "1200px" }
+    ],
+    "asShipped": {
+      "relationtree": {
+        "recordedAt": "2026-10-20",
+        "source": "Built code: frontend/src/index.css, frontend/src/App.tsx, frontend/src/components/kiln/Page.tsx, frontend/src/components/ui/*, frontend/src/components/person/*, frontend/src/components/connection/*, frontend/src/components/graph/*, frontend/src/routes/*, frontend/public/favicon.svg",
+        "designMdSection": "DESIGN.md > As shipped in RelationTree",
+        "scope": ["App bar", "People (/) with Ask", "Add person (/people/new)", "Person (/people/:id): Catch up, Details, Connections, Graph", "Tree settings (/trees/:id)", "Sign in (/login)", "Invite (/invite/:token)", "Dialogs", "Toasts"],
+        "theme": { "default": "dark", "lightWhen": "prefers-color-scheme: light" },
+        "tokens": [
+          { "name": "--ground", "dark": "linear-gradient(180deg, #1c1c1c 0%, #161616 100%)", "light": "linear-gradient(180deg, #ffffff 0%, #f6f4f1 100%)", "role": "Page body (fixed)" },
+          { "name": "--ink", "dark": "linear-gradient(180deg, #151515 0%, #0e0e0e 100%)", "light": null, "role": "App bar, page bands, signed-out bar and strip, offline banner; stays dark" },
+          { "name": "--panel", "dark": "linear-gradient(180deg, #262626 0%, #1f1f1f 100%)", "light": "linear-gradient(180deg, #ffffff 0%, #f6f4f1 100%)", "role": "Cards: roster, Ask, Catch up, Details, Connections, graph, notes, settings" },
+          { "name": "--surface", "dark": "#1a1a1a", "light": "#ffffff", "role": "Root background, dialogs, selected chip label" },
+          { "name": "--surface-2", "dark": "#232323", "light": "#f6f4f1", "role": "Popovers, menus, Ask answer block, invite-link box, graph nodes" },
+          { "name": "--surface-3", "dark": "#2b2b2b", "light": "#e0e0e0", "role": "Initials tile, skeleton avatars, hovered graph node" },
+          { "name": "--text", "dark": "#eeece9", "light": "#111111", "role": "Body and headings; selected chip fill" },
+          { "name": "--muted", "dark": "#a3a3a3", "light": "#333333", "role": "Secondary text" },
+          { "name": "--subtle", "dark": "#999999", "light": "#6b6b6b", "role": "Placeholders only" },
+          { "name": "--accent-text", "dark": "#ea9557", "light": "#9e5019", "role": "Focus edge, links, errors, destructive label, graph centre ring, stale-contact dot" },
+          { "name": "--hairline", "dark": "rgba(255,255,255,0.1)", "light": "rgba(0,0,0,0.1)", "role": "Borders, row rules, outline badges, graph dot grid" },
+          { "name": "--field-border", "dark": "#4d4d4d", "light": "#4d4d4d", "role": "Field edges, heavy in both themes" },
+          { "name": "--line", "dark": "#4d4d4d", "light": "#e0e0e0", "role": "Graph edges, scrollbar" },
+          { "name": "--ghost / --ghost-hover / --ghost-active", "dark": "rgba(255,255,255,0.1) / 0.15 / 0.2", "light": "rgba(0,0,0,0.06) / 0.1 / 0.15", "role": "Secondary fills, chips, category badges, hover" },
+          { "name": "--amber", "dark": "#dfae4e", "light": "#dfae4e", "role": "Declared, unused as a fill" },
+          { "name": "--amber-tint", "dark": "rgba(223,174,78,0.1)", "light": "rgba(223,174,78,0.2)", "role": "You badge fill" },
+          { "name": "--amber-text", "dark": "#dfae4e", "light": "#9e5019", "role": "You badge label" },
+          { "name": "--ember", "dark": "linear-gradient(135deg, #ee9148 0%, #d8742c 100%)", "light": "same", "role": "The one primary action; brand tile" },
+          { "name": "--ember-hover", "dark": "linear-gradient(135deg, #f29a52 0%, #e0803a 100%)", "light": "same", "role": "Primary hover" },
+          { "name": "--ember-active", "dark": "linear-gradient(135deg, #d57a33 0%, #c66a25 100%)", "light": "same", "role": "Primary active" },
+          { "name": "--on-ember", "dark": "#231306", "light": "same", "role": "Label and mark on ember" },
+          { "name": "--ember-solid", "dark": "#e68435", "light": "same", "role": "Caret, accent-color, --primary" },
+          { "name": "--ember-glow", "dark": "radial-gradient(circle at 80% 20%, rgba(230,132,53,0.14) 0%, rgba(230,132,53,0) 60%)", "light": "same", "role": "People band only" },
+          { "name": "--selection", "dark": "rgba(230,132,53,0.4)", "light": "same", "role": "::selection" },
+          { "name": "--focus", "dark": "0 0 0 3px rgba(230,132,53,0.4)", "light": "same", "role": "Focus ring" },
+          { "name": "--elevation-3", "dark": "0 0 0 1px rgba(255,255,255,0.1), 0 1px 2px rgba(0,0,0,0.05)", "light": "0 0 0 1px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.05)", "role": "Panels, dialogs, popovers, graph nodes" },
+          { "name": "--shadow-float", "dark": "0 8px 24px rgba(0,0,0,0.3)", "light": "same", "role": "Dialogs, popovers, toasts" },
+          { "name": "--scrim", "dark": "rgba(0,0,0,0.5)", "light": "same", "role": "Behind dialogs" },
+          { "name": "--band-text / --band-muted / --band-accent", "dark": "#eeece9 / #a3a3a3 / #ea9557", "light": "same", "role": "Text and accent on ink" },
+          { "name": "--band-ghost / --band-ghost-hover", "dark": "rgba(255,255,255,0.1) / 0.15", "light": "same", "role": "Band button fills; toast border" },
+          { "name": "--band-divider", "dark": "rgba(255,255,255,0.08)", "light": "same", "role": "App bar rule; ring round the band photo" },
+          { "name": "--toast", "dark": "#232323", "light": "same", "role": "Toast fill, dark in both themes" },
+          { "name": "--gutter", "dark": "16px; 24px from 768px; 40px from 1024px", "light": "same", "role": "Page padding" },
+          { "name": "--section-gap", "dark": "32px; 40px from 768px; 48px from 1024px", "light": "same", "role": "Section spacing on a person's page" },
+          { "name": "--ease", "dark": "cubic-bezier(0.22, 1, 0.36, 1)", "light": "same", "role": "Entrances" }
+        ],
+        "type": [
+          { "role": "Page title", "font": "Unbounded", "weight": 700, "size": "28/32, 32/36 from 768px", "tracking": "-0.02em" },
+          { "role": "Signed-out title", "font": "Unbounded", "weight": 700, "size": "28/32", "tracking": "-0.02em" },
+          { "role": "Section head", "font": "Unbounded", "weight": 700, "size": "20/26", "tracking": "-0.01em" },
+          { "role": "Dialog title", "font": "Unbounded", "weight": 700, "size": "22/26.4" },
+          { "role": "Dialog sub-head", "font": "Unbounded", "weight": 700, "size": "18/24" },
+          { "role": "Brand word", "font": "Unbounded", "weight": 700, "size": "16/24" },
+          { "role": "Avatar initials", "font": "Unbounded", "weight": 700, "size": "14px (20px on a band)" },
+          { "role": "Body", "font": "Inter", "weight": 400, "size": "16/24" },
+          { "role": "Catch up text", "font": "Inter", "weight": 400, "size": "16.8/26, max 70ch" },
+          { "role": "Note / status", "font": "Inter", "weight": 400, "size": "15/22" },
+          { "role": "Field label", "font": "Inter", "weight": 600, "size": "14.7/21" },
+          { "role": "Band meta", "font": "Inter", "weight": 500, "size": "14.7/21" },
+          { "role": "Context, last talked, form error", "font": "Inter", "weight": "400-500", "size": "14/20" },
+          { "role": "Column head, badge", "font": "Inter", "weight": 600, "size": "13/20" },
+          { "role": "Graph node name", "font": "Inter", "weight": 600, "size": "13/18" },
+          { "role": "Button", "font": "DM Sans", "weight": 500, "size": "16/24" },
+          { "role": "Chip, answer link, back link", "font": "DM Sans", "weight": 500, "size": "15px" },
+          { "role": "Primary button label", "font": "Manrope", "weight": 700, "size": "16/24" }
+        ],
+        "radii": {
+          "0": "Fields (input, textarea, select)",
+          "4": "Skeleton lines",
+          "8": "Brand tile, menus, popovers, menu items, xs buttons, toast actions",
+          "12": "Buttons, chips, badges, roster and connection rows, graph nodes, Ask answer block, invite-link box, toasts, graph controls",
+          "14": "Icon buttons",
+          "16": "Panels, dialogs, band bottom corners",
+          "round": "Avatars"
+        },
+        "rules": [
+          { "name": "The ember gradient is for the one primary action on a view", "body": "Add person on the People band, Save changes or the create submit, Sign in, the invite submit, Copy once an invite link is made, and the confirming action in a dialog. The brand tile and favicon carry it as the mark." },
+          { "name": "Amber marks you, and nothing else", "body": "Only the You badge (--amber-tint fill, --amber-text label): roster, person band, members list." },
+          { "name": "Ink is for the app bar and page bands", "body": "--ink fills the app bar, page bands, signed-out bar and strip and the offline banner in both themes; everything on it uses --band-* tokens." },
+          { "name": "The ember glow is for the People band only", "body": "No other surface uses --ember-glow." },
+          { "name": "Orange text is for focus, links, errors and the stale-contact dot", "body": "--accent-text (--band-accent on ink) never decorates." },
+          { "name": "Kiln has no red", "body": "--destructive is --accent-text; errors read in accent text; destructive controls are ghosts with an accent label." },
+          { "name": "Targets are 48px", "body": "Buttons, chips, fields and links 48px; rows and sign-in submits 56px. Known smaller targets not to copy: 44px menu items and phone app-bar buttons, 40px icon-sm/sm buttons and Ask answer links, the 32px Retry." },
+          { "name": "The roster stays dense", "body": "One panel of 56px rows, never a card grid; hover fill and focus ring move together; last talked reads in words, stale (90+ days or never) gets the accent dot." }
+        ],
+        "deviationsFromKiln": [
+          "Light --subtle is #6b6b6b (5.3:1 on white), not #333333, so placeholders don't read as values.",
+          "Light ghost fills are black at .06/.10/.15.",
+          "Toasts stay dark in both themes.",
+          "Page titles Unbounded 28/32 -> 32/36 from 768px; section heads Unbounded 20/26.",
+          "Body Inter 16/24; buttons DM Sans 500.",
+          "--section-gap 32/40/48px.",
+          "Menus and popovers 8px radius; no 48px or 104px radii.",
+          "No amber gradient or amber action links; amber is only the You tint."
+        ],
+        "notCanonized": [
+          "Sub-48px targets: 44px menu items and phone app-bar buttons, 40px icon-sm/sm buttons and Ask answer links, the 32px Retry.",
+          "ServerStatusBanner's dot halo is a literal rgba(234,149,87,0.3), not a token."
+        ]
+      }
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button (Ember)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action on a view.",
+      "html": "<button class=\"ds-btn-primary\">Add person</button>",
+      "css": ".ds-btn-primary { height: 48px; padding: 0 20px; border: 0; border-radius: 12px; background-image: var(--ember); color: var(--on-ember); font-family: 'Manrope', system-ui, sans-serif; font-weight: 700; font-size: 16px; line-height: 24px; cursor: pointer; transition: background-image 200ms ease-in-out, box-shadow 200ms ease-in-out; } .ds-btn-primary:hover { background-image: var(--ember-hover); } .ds-btn-primary:active { background-image: var(--ember-active); } .ds-btn-primary:focus-visible { outline: none; box-shadow: var(--focus); }"
+    },
+    {
+      "name": "Secondary Button (Ghost)",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Every other action on theme grounds.",
+      "html": "<button class=\"ds-btn-ghost\">Add connection</button>",
+      "css": ".ds-btn-ghost { height: 48px; padding: 0 20px; border: 0; border-radius: 12px; background: var(--ghost); color: var(--text); font-family: 'DM Sans Variable', system-ui, sans-serif; font-weight: 500; font-size: 16px; line-height: 24px; cursor: pointer; transition: background-color 200ms ease-in-out; } .ds-btn-ghost:hover { background: var(--ghost-hover); } .ds-btn-ghost:active { background: var(--ghost-active); } .ds-btn-ghost:focus-visible { outline: none; box-shadow: var(--focus); }"
+    },
+    {
+      "name": "Band Button",
+      "kind": "button",
+      "refersTo": "button-band",
+      "description": "Actions on ink (app bar, page bands), whatever the device theme.",
+      "html": "<div class=\"ds-ink\"><button class=\"ds-btn-band\">Sign out</button></div>",
+      "css": ".ds-ink { background-image: var(--ink); padding: 12px; } .ds-btn-band { height: 48px; padding: 0 20px; border: 0; border-radius: 12px; background: var(--band-ghost); color: var(--band-text); font-family: 'DM Sans Variable', system-ui, sans-serif; font-weight: 500; font-size: 16px; cursor: pointer; transition: background-color 200ms ease-in-out; } .ds-btn-band:hover { background: var(--band-ghost-hover); } .ds-btn-band:focus-visible { outline: none; box-shadow: var(--focus); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Square field with a heavy 1px edge and an ember focus ring.",
+      "html": "<input class=\"ds-input\" placeholder=\"Filter by name...\" />",
+      "css": ".ds-input { height: 48px; width: 100%; padding: 0 14px; border: 1px solid var(--field-border); border-radius: 0; background: transparent; color: var(--text); font-family: 'Inter Variable', system-ui, sans-serif; font-size: 16px; transition: border-color 200ms, box-shadow 200ms; } .ds-input::placeholder { color: var(--subtle); } .ds-input:focus-visible { outline: none; border-color: var(--accent-text); box-shadow: var(--focus); }"
+    },
+    {
+      "name": "Category Chip",
+      "kind": "chip",
+      "refersTo": "chip-category",
+      "description": "People filter; selected inverts to a text fill.",
+      "html": "<button class=\"ds-chip\" aria-pressed=\"true\">All categories <span>12</span></button> <button class=\"ds-chip\" aria-pressed=\"false\">Friend <span>4</span></button>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--ghost); color: var(--text); font-family: 'DM Sans Variable', system-ui, sans-serif; font-weight: 500; font-size: 15px; cursor: pointer; transition: background-color 200ms; } .ds-chip span { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; } .ds-chip:hover { background: var(--ghost-hover); } .ds-chip[aria-pressed=\"true\"] { background: var(--text); color: var(--surface); } .ds-chip[aria-pressed=\"true\"] span { color: inherit; opacity: .7; } .ds-chip:focus-visible { outline: none; box-shadow: var(--focus); }"
+    },
+    {
+      "name": "You Badge",
+      "kind": "chip",
+      "refersTo": "badge-you",
+      "description": "Amber marks you, and nothing else.",
+      "html": "<span class=\"ds-badge-you\">You</span>",
+      "css": ".ds-badge-you { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 12px; background: var(--amber-tint); color: var(--amber-text); font-family: 'Inter Variable', system-ui, sans-serif; font-weight: 600; font-size: 13px; line-height: 20px; }"
+    },
+    {
+      "name": "Roster",
+      "kind": "custom",
+      "refersTo": "roster",
+      "description": "The signature: one dense panel of 56px person rows; last talked in words, stale contacts dotted in accent.",
+      "html": "<ul class=\"ds-roster\"><li><a class=\"ds-row\" href=\"#\"><span class=\"ds-av\">AR</span><span class=\"ds-name\">Ann Rivera<small>College roommate</small></span><span class=\"ds-when\"><i></i>Never</span></a></li><li><a class=\"ds-row\" href=\"#\"><span class=\"ds-av\">SR</span><span class=\"ds-name\">Sam Rivera<small>Met at a conference</small></span><span class=\"ds-when\">2 weeks ago</span></a></li></ul>",
+      "css": ".ds-roster { list-style: none; margin: 0; padding: 6px 8px; background-image: var(--panel); border-radius: 16px; box-shadow: var(--elevation-3); font-family: 'Inter Variable', system-ui, sans-serif; } .ds-roster li { position: relative; } .ds-roster li + li::before { content: ''; position: absolute; top: 0; left: 12px; right: 12px; height: 1px; background: var(--hairline); } .ds-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 12px; border-radius: 12px; color: var(--text); text-decoration: none; transition: background-color 200ms; } .ds-row:hover { background: var(--ghost-hover); } .ds-row:focus-visible { outline: none; box-shadow: var(--focus); } .ds-av { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-3); font-family: 'Unbounded', system-ui, sans-serif; font-weight: 700; font-size: 14px; } .ds-name { flex: 1; font-weight: 600; } .ds-name small { display: block; font-weight: 400; font-size: 14px; line-height: 20px; color: var(--muted); } .ds-when { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; } .ds-when i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-text); }"
+    },
+    {
+      "name": "Page Band",
+      "kind": "nav",
+      "refersTo": "page-band",
+      "description": "The ink band naming every signed-in page; only People takes the ember glow.",
+      "html": "<section class=\"ds-band\"><div><h1>People</h1><p>dev's tree · 2 people</p></div><button class=\"ds-band-cta\">Add person</button></section>",
+      "css": ".ds-band { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; padding: 16px 24px 24px; border-radius: 0 0 16px 16px; background-image: var(--ember-glow), var(--ink); color: var(--band-text); } .ds-band h1 { margin: 0; font-family: 'Unbounded', system-ui, sans-serif; font-weight: 700; font-size: 32px; line-height: 36px; letter-spacing: -0.02em; } .ds-band p { margin: 4px 0 0; font-family: 'Inter Variable', system-ui, sans-serif; font-weight: 500; font-size: 14.7px; line-height: 21px; color: var(--band-muted); } .ds-band-cta { height: 48px; padding: 0 20px; border: 0; border-radius: 12px; background-image: var(--ember); color: var(--on-ember); font-family: 'Manrope', system-ui, sans-serif; font-weight: 700; font-size: 16px; cursor: pointer; } .ds-band-cta:hover { background-image: var(--ember-hover); } .ds-band-cta:focus-visible { outline: none; box-shadow: var(--focus); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "A warm kiln-lit workbench",
+    "overview": "RelationTree as a warm kiln-lit workbench: an ink band names the page, and one dense roster of people sits below it. Kiln at app scale: ink app bar and page bands, charcoal surface gradient, panel-gradient cards with a 16px radius and the elevation-3 hairline ring, square fields with an ember focus ring, ghost buttons, and one ember button per view.",
+    "keyCharacteristics": [
+      "Ink app bar and page bands in both themes",
+      "One dense roster panel of 56px rows, not a card grid",
+      "One ember primary per view; amber only for you",
+      "Unbounded for titles and section heads at working scale; Inter as the working face",
+      "Dark by default, Kiln light grounds under prefers-color-scheme: light"
+    ],
+    "rules": [
+      { "name": "The ember gradient is for the one primary action on a view", "body": "Every other action is secondary, ghost or band; the brand tile carries ember as the mark.", "section": "colors" },
+      { "name": "Amber marks you, and nothing else", "body": "Only the You badge.", "section": "colors" },
+      { "name": "Ink is for the app bar and page bands", "body": "Everything on ink uses the --band-* tokens.", "section": "colors" },
+      { "name": "The ember glow is for the People band only", "body": "No other surface uses --ember-glow.", "section": "elevation" },
+      { "name": "Orange text is for focus, links, errors and the stale-contact dot", "body": "It never decorates.", "section": "colors" },
+      { "name": "Kiln has no red", "body": "Errors read in accent text; destructive controls are ghosts with an accent label.", "section": "colors" },
+      { "name": "Targets are 48px", "body": "Rows and sign-in submits 56px.", "section": "typography" },
+      { "name": "The roster stays dense", "body": "One panel of 56px rows; last talked in words.", "section": "typography" }
+    ],
+    "dos": [],
+    "donts": []
+  }
+}
