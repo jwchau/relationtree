@@ -1,16 +1,21 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { categoryLabel } from '@/lib/relationshipTypes';
 import { lastTalked } from '@/lib/people';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { PersonAvatar } from '@/components/person/PersonAvatar';
 import type { PersonSummary } from '@/hooks/usePersonList';
 
 const COLUMNS = 'md:grid-cols-[minmax(0,1fr)_8.5rem_9.5rem]';
+const PAGE_SIZE = 10;
 
 /**
  * People as one dense list: photo or initials, name, how you know them, category and when you
- * last talked. Each whole row opens the person.
+ * last talked. Each whole row opens the person. Longer lists page by PAGE_SIZE, with the pager
+ * at the top so you can turn pages without scrolling down.
  */
 export function PersonRoster({
   people,
@@ -21,8 +26,44 @@ export function PersonRoster({
   showHeads?: boolean;
   label: string;
 }) {
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(people.length / PAGE_SIZE));
+  // Clamped, so a list that shrank (filtered, someone deleted) never shows an empty page.
+  const shown = Math.min(page, pageCount - 1);
+  const pageItems = people.slice(shown * PAGE_SIZE, (shown + 1) * PAGE_SIZE);
+
   return (
     <div className="panel px-1.5 py-1.5 sm:px-2">
+      {pageCount > 1 && (
+        <nav
+          aria-label={`${label} pages`}
+          className="after:bg-hairline relative mb-1 flex items-center justify-between gap-2 pb-1.5 pl-3 after:absolute after:inset-x-3 after:bottom-0 after:h-px"
+        >
+          <span className="tabular text-[14px] leading-5 font-semibold" aria-live="polite">
+            Page {shown + 1} <span className="text-muted-foreground font-medium">of {pageCount}</span>
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setPage(shown - 1)}
+              disabled={shown === 0}
+              aria-label="Previous page"
+            >
+              <ChevronLeft />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setPage(shown + 1)}
+              disabled={shown === pageCount - 1}
+              aria-label="Next page"
+            >
+              <ChevronRight />
+            </Button>
+          </div>
+        </nav>
+      )}
       {showHeads && (
         <div
           aria-hidden
@@ -36,8 +77,9 @@ export function PersonRoster({
           <span className="text-right">Last contacted</span>
         </div>
       )}
-      <ul aria-label={label}>
-        {people.map((person) => (
+      {/* When paged, a short last page keeps a full page's height (rows are min-h-14). */}
+      <ul aria-label={label} style={pageCount > 1 ? { minHeight: `${PAGE_SIZE * 3.5}rem` } : undefined}>
+        {pageItems.map((person) => (
           <PersonRow key={person.id} person={person} />
         ))}
       </ul>

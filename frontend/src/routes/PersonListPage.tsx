@@ -146,7 +146,8 @@ export default function PersonListPage() {
         )}
 
         {!loading && visiblePeople.length > 0 && (
-          <PersonRoster people={visiblePeople} label="People" />
+          // Keyed by the search and filter so changing either starts again at page 1.
+          <PersonRoster key={`${category}|${search}`} people={visiblePeople} label="People" />
         )}
       </PageBody>
     </>
