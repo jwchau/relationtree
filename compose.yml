@@ -6,6 +6,13 @@
 # quietly mount the dev database volume.
 name: relationtree-prod
 
+# Docker keeps container logs forever by default; cap each container at 3 x 10 MB.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 x-app: &app
   image: ghcr.io/jwchau/relationtree-api:${IMAGE_TAG:-latest}
   env_file: .env.prod
@@ -19,6 +26,7 @@ x-app: &app
     db:
       condition: service_healthy
   restart: unless-stopped
+  logging: *logging
 
 services:
   db:
@@ -35,6 +43,7 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped
+    logging: *logging
 
   api:
     <<: *app
@@ -60,6 +69,7 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+    logging: *logging
 
 volumes:
   pgdata:
