@@ -47,3 +47,6 @@ __pycache__/
 
 # django collectstatic output (built into the Docker image)
 backend/staticfiles/
+
+# Impeccable review screenshots (local only)
+.impeccable/review/
