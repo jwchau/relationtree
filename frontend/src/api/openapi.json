@@ -1528,6 +1528,148 @@
           "required": true
         }
       }
+    },
+    "/api/extract": {
+      "post": {
+        "operationId": "relationtree_extract_api_extract",
+        "summary": "Extract",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tree",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tree"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Proposal"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Proposes people and connections from a note. Saves nothing.",
+        "tags": [
+          "ai"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtractIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/extract/apply": {
+      "post": {
+        "operationId": "relationtree_extract_api_apply_proposal",
+        "summary": "Apply Proposal",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tree",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tree"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppliedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Saves a reviewed proposal in one go: new people, notes on matched ones, connections.",
+        "tags": [
+          "ai"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Proposal"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2360,6 +2502,166 @@
           "password"
         ],
         "title": "SignupIn",
+        "type": "object"
+      },
+      "Proposal": {
+        "description": "People (new, or matched to someone in the tree) and connections between them, by ref.\nReturned by /extract for review, and sent back, edited, to /extract/apply.",
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/ProposedPerson"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/ProposedConnection"
+            },
+            "title": "Connections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "people",
+          "connections"
+        ],
+        "title": "Proposal",
+        "type": "object"
+      },
+      "ProposedConnection": {
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "string"
+          },
+          "b": {
+            "title": "B",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/RelationshipType"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "type"
+        ],
+        "title": "ProposedConnection",
+        "type": "object"
+      },
+      "ProposedPerson": {
+        "properties": {
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "match_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelationshipCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "ref",
+          "name"
+        ],
+        "title": "ProposedPerson",
+        "type": "object"
+      },
+      "ExtractIn": {
+        "properties": {
+          "text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ExtractIn",
+        "type": "object"
+      },
+      "AppliedOut": {
+        "properties": {
+          "created": {
+            "items": {
+              "$ref": "#/components/schemas/PersonOut"
+            },
+            "title": "Created",
+            "type": "array"
+          },
+          "updated": {
+            "items": {
+              "$ref": "#/components/schemas/PersonOut"
+            },
+            "title": "Updated",
+            "type": "array"
+          },
+          "connections_added": {
+            "title": "Connections Added",
+            "type": "integer"
+          },
+          "connections_skipped": {
+            "title": "Connections Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "updated",
+          "connections_added",
+          "connections_skipped"
+        ],
+        "title": "AppliedOut",
         "type": "object"
       }
     },

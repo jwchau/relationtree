@@ -22,7 +22,7 @@ the resulting graph.
 | M14 Graph Q&A in Ask (tool-calling agent, "This is me") | ✅ |
 | M15 Sharing (tree switcher, members and roles) | ✅ on `dev` |
 | M16 Invite links (one-time, the only way to sign up) | ✅ on `dev` |
-| M17 Free-text extraction | next |
+| M17 Free-text extraction ("Add from a note", reviewed before saving) | ✅ on `dev` |
 
 Production runs at https://relationtree.johnchau.org since 2026-10-18. Merging `dev` to
 `main` is what deploys (see [Production](#production)).

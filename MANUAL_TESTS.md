@@ -22,4 +22,5 @@ Re-run this checklist by hand before merging `dev` → `main`.
 - [ ] As a viewer of a shared tree: no Add person, Delete, photo, connection or edit controls; "This is me" still works; Leave works
 - [ ] Invite links (owner, tree settings): create one, Copy puts it on the clipboard, it's listed as pending; Revoke removes it and the link then says it's invalid
 - [ ] Open an invite link signed out in a private window: create an account, land in the invited tree with the invite's role; the same link afterwards says it's invalid
+- [ ] Add from a note (needs Ollama): a note naming someone new and someone existing proposes one new and one matched person plus the connection; edit a name, untick a note line, save; check both people's pages, the dated note, and that the toast's Open button works
 - [ ] Open an invite link signed in (as someone not in the tree): "Join as …" adds the tree and switches to it; "Sign in" from a signed-out invite page comes back to the invite

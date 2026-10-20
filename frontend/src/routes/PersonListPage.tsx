@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCurrentTree } from '@/hooks/useCurrentTree';
 import { usePersonList } from '@/hooks/usePersonList';
+import { AddFromNoteDialog } from '@/components/person/AddFromNoteDialog';
 import { AskPeople } from '@/components/person/AskPeople';
 import { PersonCard } from '@/components/person/PersonCard';
 import { filterAndSortPeople, type CategoryFilter } from '@/lib/personListFilters';
@@ -33,10 +34,13 @@ export default function PersonListPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">People</h1>
-        {canEdit && (
-          <Button asChild>
-            <Link to="/people/new">Add person</Link>
-          </Button>
+        {canEdit && tree && (
+          <div className="flex gap-2">
+            <AddFromNoteDialog treeId={tree.id} />
+            <Button asChild>
+              <Link to="/people/new">Add person</Link>
+            </Button>
+          </div>
         )}
       </div>
 

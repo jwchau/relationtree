@@ -6,6 +6,7 @@ from ninja.responses import Status
 from relationtree.ask_api import router as ask_router
 from relationtree.auth_api import router as auth_router
 from relationtree.connections_api import router as connections_router
+from relationtree.extract_api import router as extract_router
 from relationtree.invites_api import router as invites_router
 from relationtree.people_api import router as people_router
 from relationtree.photos_api import router as photos_router
@@ -24,6 +25,7 @@ api.add_router("", connections_router)
 api.add_router("", ask_router)
 api.add_router("", trees_router)
 api.add_router("", invites_router)
+api.add_router("", extract_router)
 
 
 class HealthOut(Schema):
