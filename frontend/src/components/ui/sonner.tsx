@@ -7,15 +7,13 @@ import {
   OctagonXIcon,
   TriangleAlertIcon,
 } from "lucide-react"
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
+  // Kiln toasts stay dark in both themes, like the app bar.
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="dark"
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,
@@ -26,12 +24,20 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          "--normal-bg": "var(--toast)",
+          "--normal-text": "var(--band-text)",
+          "--normal-border": "var(--band-ghost)",
+          "--border-radius": "12px",
         } as React.CSSProperties
       }
+      toastOptions={{
+        classNames: {
+          toast: "font-sans! shadow-[var(--shadow-float)]!",
+          error: "border-band-accent! [&_[data-icon]]:text-band-accent!",
+          success: "[&_[data-icon]]:text-band-accent!",
+          actionButton: "bg-band-ghost! text-band-text! font-nav! font-medium! rounded-[8px]! hover:bg-band-ghost-hover!",
+        },
+      }}
       {...props}
     />
   )

@@ -24,14 +24,14 @@ export function EgoGraph({ centerId, centerName, centerPhotoUrl, connections }: 
 
   if (connections.length === 0) {
     return (
-      <div className="text-muted-foreground flex h-48 items-center justify-center rounded-md border text-sm">
+      <div className="panel text-muted-foreground flex h-48 items-center justify-center p-5 text-[15px]">
         No connections to visualize yet.
       </div>
     );
   }
 
   return (
-    <div className="h-80 rounded-md border">
+    <div className="panel h-96 overflow-hidden">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -45,7 +45,7 @@ export function EgoGraph({ centerId, centerName, centerPhotoUrl, connections }: 
         elementsSelectable={false}
         proOptions={{ hideAttribution: true }}
       >
-        <Background />
+        <Background gap={24} size={1.5} />
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>

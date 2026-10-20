@@ -40,9 +40,9 @@ export function TreeSwitcher() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="max-w-56">
+          <Button variant="band" className="max-w-[min(14rem,45vw)] px-3 max-sm:h-11">
             <span className="truncate">{tree?.name ?? 'No tree'}</span>
-            <ChevronsUpDown className="opacity-50" />
+            <ChevronsUpDown className="text-band-muted" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">
@@ -51,7 +51,7 @@ export function TreeSwitcher() {
             {trees.map((t) => (
               <DropdownMenuRadioItem key={t.id} value={t.id}>
                 <span className="truncate">{t.name}</span>
-                <span className="text-muted-foreground ml-auto text-xs capitalize">{t.role}</span>
+                <span className="text-muted-foreground ml-auto text-[13px] capitalize">{t.role}</span>
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>

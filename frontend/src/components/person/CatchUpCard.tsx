@@ -1,33 +1,37 @@
-import { Sparkles } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 import { useSummary } from '@/hooks/useSummary';
 import { Button } from '@/components/ui/button';
+import { Note, SectionHead } from '@/components/kiln/Page';
 
 export function CatchUpCard({ personId, personName }: { personId: string; personName: string }) {
   const { text, status, error, generate } = useSummary(personId);
   const busy = status === 'waiting' || status === 'streaming';
 
   return (
-    <div className="space-y-3 rounded-md border p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Catch up</h2>
-        <Button variant="outline" size="sm" onClick={generate} disabled={busy}>
-          <Sparkles />
-          {status === 'idle' ? `Catch me up on ${personName}` : busy ? 'Writing...' : 'Regenerate'}
+    <section aria-labelledby="catch-up-head">
+      <SectionHead id="catch-up-head" title="Catch up">
+        <Button variant="secondary" onClick={generate} disabled={busy} className="max-w-full">
+          {busy ? <Loader2 className="animate-spin" /> : <Sparkles />}
+          <span className="truncate">
+            {status === 'idle' ? `Catch me up on ${personName}` : busy ? 'Writing...' : 'Regenerate'}
+          </span>
         </Button>
-      </div>
+      </SectionHead>
 
-      {status === 'waiting' && (
-        <p className="text-muted-foreground text-sm">
-          Thinking... The first summary after the server starts can take a couple of minutes
-          while the AI model loads.
-        </p>
+      {status !== 'idle' && (
+        <div className="panel animate-in fade-in-0 slide-in-from-top-1 space-y-3 p-5 duration-300 ease-[var(--ease)]">
+          {status === 'waiting' && (
+            <Note>
+              Thinking... The first summary after the server starts can take a couple of minutes
+              while the AI model loads.
+            </Note>
+          )}
+          {text && (
+            <p className="max-w-[70ch] text-[16.8px] leading-[26px] whitespace-pre-wrap">{text}</p>
+          )}
+          {status === 'error' && <Note tone="error">{error}</Note>}
+        </div>
       )}
-      {text && <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>}
-      {status === 'error' && (
-        <p role="alert" className="text-destructive text-sm">
-          {error}
-        </p>
-      )}
-    </div>
+    </section>
   );
 }

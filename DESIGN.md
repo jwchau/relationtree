@@ -1,507 +1,976 @@
-# Claude Trader v2 — Design
-
-Status: **design locked 2026-10-12, not yet implemented.** v1 (daily LLM ETF
-rebalance via Claude Code scheduled routines) is frozen at tag `v1-final`;
-its design lives in [`archive/v1/DESIGN.md`](archive/v1/DESIGN.md).
-
 ---
-
-## 1. Scope and intent
-
-An always-on, single-user paper-trading app that runs in one Docker container.
-While the market is open, a **local LLM (Ollama)** is asked every minute to
-manage positions in a curated watchlist of up to 25 US stocks/ETFs by emitting
-**individual orders**. Protective exits are **broker-side trailing stops** on
-Alpaca. A React dashboard shows positions, orders, trades, the LLM's decisions,
-and exposes settings, manual trade commands and the model's memory.
-
-Goals:
-- Observe whether a small local model, given good precomputed features and a
-  self-maintained memory, can trade intraday with positive expectancy.
-- Never leave a position unprotected; never let the model exceed hard limits.
-
-### Non-goals (v2)
-- Live money by default (possible only behind deliberate friction, §14).
-- Short selling, options, margin/leverage, limit-order entries.
-- Overnight holding — every session ends flat (§7).
-- Fine-tuning the model. "Learning" = better prompt context (§10).
-- Paid market data. Free Alpaca IEX feed only.
-- Multi-user, remote access, auth. Dashboard binds to localhost only.
-
+name: Kiln
+colors:
+  primary: "#E68435"
+  on-primary: "#231306"
+  secondary: "#DFAE4E"
+  on-secondary: "#000000"
+  surface: "#1A1A1A"
+  on-surface: "#EEECE9"
+  surface-secondary: "#232323"
+  surface-tertiary: "#2B2B2B"
+  ink: "#111111"
+  accent-text-dark: "#EA9557"
+  accent-text-light: "#9E5019"
+  muted: "#A3A3A3"
+  subtle: "#999999"
+  border: "#4D4D4D"
+  focus-ring: "rgba(230, 132, 53, 0.4)"
+gradients:
+  brand: "linear-gradient(135deg, #EE9148 0%, #D8742C 100%)"
+  brand-hover: "linear-gradient(135deg, #F29A52 0%, #E0803A 100%)"
+  brand-active: "linear-gradient(135deg, #D57A33 0%, #C66A25 100%)"
+  amber: "linear-gradient(135deg, #E8B85A 0%, #D6A241 100%)"
+  amber-hover: "linear-gradient(135deg, #D6A241 0%, #CC9638 100%)"
+  surface: "linear-gradient(180deg, #1C1C1C 0%, #161616 100%)"
+  ink: "linear-gradient(180deg, #151515 0%, #0E0E0E 100%)"
+  panel: "linear-gradient(180deg, #262626 0%, #1F1F1F 100%)"
+  card: "linear-gradient(160deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.04) 100%)"
+  ember-glow: "radial-gradient(circle at 80% 20%, rgba(230, 132, 53, 0.14) 0%, rgba(230, 132, 53, 0) 60%)"
+  light: "linear-gradient(180deg, #FFFFFF 0%, #F6F4F1 100%)"
+typography:
+  display-hero:
+    fontFamily: Unbounded
+    fontSize: 72px
+    fontWeight: 700
+    lineHeight: 64.8px
+  h1-large:
+    fontFamily: Unbounded
+    fontSize: 56px
+    fontWeight: 700
+    lineHeight: 48px
+  h2-large:
+    fontFamily: Unbounded
+    fontSize: 48px
+    fontWeight: 700
+    lineHeight: 48px
+  h3:
+    fontFamily: Unbounded
+    fontSize: 36px
+    fontWeight: 400
+    lineHeight: 36px
+  body-large:
+    fontFamily: Manrope
+    fontSize: 20px
+    fontWeight: 400
+    lineHeight: 26px
+  body-emphasis:
+    fontFamily: Manrope
+    fontSize: 16px
+    fontWeight: 500
+    lineHeight: 19.2px
+  button-ui:
+    fontFamily: DM Sans
+    fontSize: 16px
+    fontWeight: 400
+    lineHeight: 24px
+  h1-medium:
+    fontFamily: Inter
+    fontSize: 37.8px
+    fontWeight: 600
+    lineHeight: 42px
+  h2-medium:
+    fontFamily: Inter
+    fontSize: 22px
+    fontWeight: 700
+    lineHeight: 26.4px
+  h2-small:
+    fontFamily: Inter
+    fontSize: 16.8px
+    fontWeight: 600
+    lineHeight: 25.2px
+  h3-ui:
+    fontFamily: Inter
+    fontSize: 14.7px
+    fontWeight: 600
+    lineHeight: 21px
+  body-standard:
+    fontFamily: Inter
+    fontSize: 16.8px
+    fontWeight: 400
+    lineHeight: 25.2px
+  button-small:
+    fontFamily: Inter
+    fontSize: 14.7px
+    fontWeight: 400
+    lineHeight: 25.2px
+  input:
+    fontFamily: Inter
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 20px
+  caption:
+    fontFamily: Inter
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 20px
+rounded:
+  sharp: 0px
+  subtle: 8px
+  standard: 12px
+  rounded: 14px
+  xrounded: 16px
+  very: 48px
+  max: 104px
+spacing:
+  xxs: 4px
+  xs: 8px
+  sm: 12px
+  md: 16px
+  lg: 20px
+  xl: 24px
+  2xl: 32px
+  3xl: 40px
+  4xl: 48px
+  5xl: 56px
+  6xl: 80px
+  8xl: 120px
 ---
-
-## 2. Principles (carried from v1)
-
-- **Alpaca is the source of truth** for positions, orders and cash. Local state
-  records what happened; it is reconciled against Alpaca, never trusted over it.
-- **The LLM proposes, deterministic Python disposes.** Every action — LLM or
-  manual — passes the same validator. The model cannot change risk settings.
-- **Fail safe, not fail open.** Bad output, timeouts and crashes result in *no
-  new action*; existing positions stay protected by broker-side stops.
-
----
-
-## 3. Architecture
-
-```
-            ┌──────────────────────── Docker container ────────────────────────┐
-            │                                                                  │
- Alpaca ◄──►│  broker/      ◄── orders, stops, account, clock, bar websocket   │
- (paper)    │     ▲                                                            │
-            │     │                                                            │
-            │  engine/  1-min loop: sync → features → LLM → validate → submit  │
-            │     │          ▲                │                                │
-            │     ▼          │                ▼                                │
-            │  store/ (SQLite /data/trader.db)   llm/ ──► Ollama (host)        │
-            │     ▲                                                            │
-            │  api/ FastAPI (REST + WebSocket) ──► web/ React static build     │
-            │                                                                  │
-            └────────────── 127.0.0.1:8000 ──────────── /data volume ──────────┘
-```
-
-One Python process: FastAPI app with the trading engine as an asyncio
-background task. The React app is built in a multi-stage Dockerfile and served
-as static files by FastAPI.
-
----
-
-## 4. The trading loop
-
-Every minute, aligned to the bar close, while the loop is `running` and Alpaca's
-clock says open:
-
-1. **Sync** positions, open orders, account from Alpaca (REST) + latest 1-min
-   bars (websocket buffer). Record fills since last pass.
-2. **Protect:** any LLM- or manual-tagged position without a live trailing stop
-   gets one immediately at `DEFAULT_TRAIL_PERCENT` (§7).
-3. **Guards:** if `DAILY_LOSS_LIMIT` breached → entries blocked for the day
-   (§6). If within `FLATTEN_LEAD_MIN` of close → flatten and stop (§7).
-4. **Features:** compute per-symbol row + signal score (§8).
-5. **Prompt** the LLM with features, account block, memory, last few passes'
-   actions/outcomes (§9).
-6. **Parse** response against the action schema (§5). Malformed → pass recorded
-   as `parse_failed`, no actions, **no retry**.
-7. **Validate** each action independently (§6). Rejected actions are logged with
-   reason; valid ones proceed.
-8. **Submit** valid actions to Alpaca. Entry fills trigger their trailing stop
-   placement (§5).
-9. **Record** the pass: prompt hash, latency, raw output, parsed actions,
-   validation results, order ids.
-
-**No overlap:** if the previous pass is still running when the next minute
-arrives, the new pass is skipped (`skipped:llm_busy`). LLM call timeout
-`LLM_TIMEOUT_SEC` (default 45) → pass recorded as `timeout`, no actions.
-
-Pass statuses: `ok | no_action | parse_failed | timeout | llm_error | error |
-skipped:llm_busy | skipped:market_closed | skipped:paused | skipped:warming_up |
-halted:daily_loss | flattening`.
-
-**Pause stops the LLM only.** Protection, the daily-loss guard and the flatten
-still run every minute while paused — otherwise a paused engine would carry
-positions overnight. A flatten that leaves anything open is retried every pass.
-
-**Ownership and daily counters are re-derived from today's Alpaca order history
-every pass** (client_order_id prefixes; protective stops are always `sys-`, so
-`llm-` orders = the LLM's order usage). The same code rebuilds state after a
-restart, and a buy that is stopped out between two syncs still starts its
-cooldown, stamped at the fill time. *(Implemented: `trader/engine/`.)*
-
----
-
-## 5. Action schema
-
-The LLM emits exactly this JSON (sent as `response_format` JSON schema to
-Ollama; validated by Pydantic regardless):
-
-```json
-{
-  "as_of": "2026-10-12T14:31:00-04:00",
-  "actions": [
-    {"type": "buy",          "symbol": "NVDA", "qty": 10, "trail_percent": 3.0, "reason": "..."},
-    {"type": "stop_buy",     "symbol": "AMD",  "qty": 20, "stop_price": 172.50, "trail_percent": 2.5, "reason": "..."},
-    {"type": "sell",         "symbol": "TSLA", "qty": 5, "reason": "..."},
-    {"type": "adjust_trail", "symbol": "NVDA", "trail_percent": 1.5, "reason": "..."},
-    {"type": "cancel",       "order_id": "...", "reason": "..."}
-  ],
-  "memo_update": "optional, short — stored in the pass log, not memory.md"
-}
-```
-
-| Type | Alpaca call | Notes |
-|---|---|---|
-| `buy` | Market order, `DAY` | `trail_percent` required. On fill → `TrailingStopOrderRequest` (sell, qty filled, `DAY`) |
-| `stop_buy` | `StopOrderRequest` (buy), `DAY` | `trail_percent` required; trailing stop placed when the stop-buy fills |
-| `sell` | Cancel the symbol's trailing stop, then market sell | Partial sell → stop re-placed for remaining qty |
-| `adjust_trail` | Replace order on the existing trailing stop | |
-| `cancel` | Cancel order | Cannot target a protective trailing stop on a held position (use `sell`) |
-
-- `qty` = whole shares (Alpaca stop orders don't accept fractional qty).
-- `actions: []` is valid and expected most minutes.
-- Market entries only; no limit orders, no shorts.
-
-> **Verified 2026-10-13 (paper):** Alpaca rejects a trailing stop as an OTO leg
-> (`oto orders require stop_loss.stop_price`), so entry → stop placement stays
-> two-step.
-
----
-
-## 6. Risk limits
-
-Stored in SQLite `settings`, editable in the GUI, seeded from
-`config/defaults.yaml` on first start. The LLM sees them but cannot change them.
-
-| Setting | Default | Rule |
-|---|---|---|
-| `MAX_POSITION_PCT` | 0.10 | Post-trade position value ≤ 10% of equity |
-| `SYMBOL_CAPS` | per-symbol | Optional tighter per-symbol max % (overrides above when lower) |
-| `MAX_ORDER_NOTIONAL` | 10000 | Single order ≤ $10k |
-| `MAX_OPEN_POSITIONS` | 10 | |
-| `MAX_ORDERS_PER_DAY` | 100 | Counts LLM-originated orders only |
-| `SYMBOL_COOLDOWN_MIN` | 15 | No LLM re-entry within 15 min of exiting a symbol |
-| `TRAIL_PERCENT_MIN/MAX` | 1.0 / 10.0 | Bounds on any `trail_percent` |
-| `DEFAULT_TRAIL_PERCENT` | 3.0 | Used for orphan-position protection |
-| `TRAIL_TIGHTEN_MIN_GAIN` | 0.005 | LLM `adjust_trail` may tighten (lower) a trail only when the position is up ≥ 0.5% vs avg entry; widening always allowed; unknown current trail counts as tightening; 0 disables. Manual commands exempt. *(Added 2026-10-14 after the model tightened FAST at +0.16%.)* |
-| `MIN_CASH_PCT` | 0.10 | Post-trade cash ≥ 10% of equity |
-| `DAILY_LOSS_LIMIT` | −0.02 | Equity vs start-of-day equity. Breach → cancel pending entries, keep stops, block new entries for the rest of the session. Auto-resets next session |
-| `FLATTEN_LEAD_MIN` | 10 | Minutes before Alpaca's reported close |
-
-Also enforced: symbol ∈ watchlist; LLM may not act on `source=manual` positions
-unless that position has `llm_managed=true`; no action while loop is halted;
-**no entries while Alpaca's clock says the market is closed** (LLM or manual).
-Alpaca accepts market and stop orders after hours and queues them for the next
-open, where they would fill before any trailing stop exists. Exits stay allowed.
-*(Added 2026-10-13.)*
-
-Manual commands (§11) obey all limits **except** `MAX_ORDERS_PER_DAY` and
-`SYMBOL_COOLDOWN_MIN`.
-
-There is **no** v1-style ATR trailing drawdown halt and no manual-reset kill
-switch; `DAILY_LOSS_LIMIT` replaces both.
-
----
-
-## 7. Session lifecycle
-
-- **Open:** loop starts passes once Alpaca's clock reports open. No pass runs
-  before ~60 min of warm-up bars are loaded (fetched via historical API at
-  startup, so normally immediate).
-- **Flatten:** at `close − FLATTEN_LEAD_MIN` (15:50 normal days, 12:50 on early
-  closes — always derived from Alpaca's clock, never hard-coded): stop LLM passes,
-  cancel all orders, market-sell all positions (manual included), verify flat.
-- **After close:** reflection pass (§10) ~15 min after flatten.
-- All orders are `DAY`; nothing carries overnight.
-
----
-
-## 8. Market data and features
-
-- **Feed:** Alpaca free plan, IEX. Websocket subscription to 1-min bars for the
-  watchlist; historical bars API for warm-up. IEX is a subset of consolidated
-  volume — prices/volumes differ slightly from SIP. Accepted.
-- **Per-symbol feature row** (computed in Python, sent as a compact table):
-  `symbol | last | %chg 1m / 5m / 15m / day | vs VWAP % | vol vs 20-bar avg |
-  day hi / lo | RSI(14) | ATR(14) % | EMA9 vs EMA20 | score | position qty |
-  avg cost | unrealized P&L | active stop (trail %, stop price) | source |
-  cooldown remaining`
-- **Signal score (0–100):** `50 + 50 × weighted mean` of components, each
-  clipped to [−1, 1] and scaled by the symbol's own ATR so quiet ETFs and
-  volatile stocks compare:
-  - *momentum* — 15-min change ÷ (ATR·√15), saturating at 2;
-  - *trend* — (EMA9 − EMA20) ÷ ATR;
-  - *rsi* — 30→70 maps to −1→+1, then fades (80 → 0, 90+ → −1): overbought
-    is not rewarded;
-  - *volume* — surges only, `(last ÷ 20-bar mean − 1) / 2`, signed by 5-min
-    direction;
-  - *vwap* — distance from session VWAP ÷ 2·ATR.
-  Default weights 0.25 / 0.25 / 0.15 / 0.15 / 0.20 (`config/defaults.yaml`).
-  Weights are user-set in settings; the reflection pass may *propose* new
-  weights, applied only on user approval.
-- Bars outside 09:30–16:00 ET are dropped (IEX includes extended hours).
-  Indicators use a cross-session buffer (warm at the open); VWAP, day high/low
-  use the current session; day change is vs the prior session's last close.
-- **Account block:** equity, cash, day P&L, orders used / `MAX_ORDERS_PER_DAY`,
-  distance to `DAILY_LOSS_LIMIT`, minutes to flatten, open positions count.
-
-Target prompt size ≈ 2–3k tokens.
-
----
-
-## 9. LLM integration
-
-- OpenAI-compatible `/v1/chat/completions` (Ollama). Settings:
-  - `LLM_BASE_URL` default `http://host.docker.internal:11434/v1`
-    (inside the container `localhost` is the container itself)
-  - `LLM_MODEL` — dropdown populated from `/v1/models`
-  - `LLM_TEMPERATURE` default 0.2
-  - `LLM_TIMEOUT_SEC` default 45
-  - "Test connection" button (round-trips a tiny prompt, shows latency)
-- Structured output via `response_format` JSON schema.
-- Only local hosts allowed for `LLM_BASE_URL` (localhost, 127.0.0.1,
-  host.docker.internal, *.local) — same rule as `verify_qwen.py`.
-- **Latency is the binding constraint.** A 27B model (e.g. `qwen3.8:27b`) may
-  not fit a 45 s budget every minute on consumer hardware; the dashboard shows
-  p50/p95 latency and skip/timeout rates so model choice is data-driven.
-  Thinking/reasoning modes should be disabled for the per-minute pass.
-
-**Measured 2026-10-13** (qwen3.8:27b, Ollama 0.40.3, this host;
-`python -m trader.llm.bench`, real prompts replayed from the 2026-10-12 fixture):
-
-| Mode | Latency | Output |
-|---|---|---|
-| thinking on (default) | 51 s on a 100-token prompt | sensible — but over budget |
-| `think: false` | — | HTTP 500 "token repeat limit reached" |
-| `reasoning_effort: none` + static schema | 5.8 s | garbage: 10 cancels of invented order ids |
-| `reasoning_effort: none` + per-pass schema | p50 2.5–3.1 s, p95 ≤ 4.6 s, ~1.2–1.6k prompt tokens | 0 parse failures in 190 calls; all action types used correctly |
-
-So the default is thinking **off** with a **per-pass narrowed schema**
-(`trader/llm/schema.py`): `symbol` is an enum of the watchlist; `cancel` exists
-only when there are cancellable orders and takes aliases `o1, o2…` mapped back to
-Alpaca ids; `type` is first in each action; a short `analysis` field precedes
-`actions` as a cheap scratchpad. The static Pydantic schema is still what the
-parser and validator enforce.
-
-**Behavior:** with an empty memory the model held all 38 sampled minutes of a
-choppy day (its reasoning cited score/VWAP/volume correctly). With an activity-
-encouraging *Pinned (user)* memory it traded, tightened trails on winners and
-exited by close. Aggressiveness is therefore steered by memory/prompt, not a
-code limit. The watchlist table carries a `maxbuy` column (largest share count
-that passes every sizing rule, mirroring the validator) which cut rejections
-from 30% to 22% of actions; the remainder are left to the validator — the LLM
-proposes, Python disposes, no silent resizing.
-
----
-
-## 10. Memory and learning
-
-1. **Trade journal** (SQLite): every round trip with entry/exit actions, the
-   feature row at decision time, the model's stated reason, fills, P&L, holding
-   time, exit cause (`trailing_stop | sell | flatten | manual`), source.
-2. **`/data/memory.md`**, capped ~1,500 tokens, injected into every prompt.
-   Sections: *Rules that worked · Patterns to avoid · Per-symbol notes ·
-   Current biases · Pinned (user)*.
-3. **Reflection pass** once per session after flatten (no tight time budget):
-   input = day's journal stats (win rate, avg win/loss, P&L by symbol and by
-   trail %, early stop-outs) + current memory. Output = rewritten memory within
-   the cap, plus optional proposed scoring-weight changes.
-4. Every memory version is stored (`memory_versions`), diffable and
-   restorable in the GUI. The *Pinned (user)* section is never rewritten by the
-   model; user edits always win.
-
-Memory is never updated intra-day.
-
-*Implemented (phase 5):* `trader/memory.py`, `trader/reflection.py`. Cap 6,000
-chars (≈1,500 tokens): the model's sections are trimmed from the end of the
-longest; a user save over the cap is refused. A direct edit of `memory.md` on disk
-is detected and versioned as a user edit. Reflection runs with
-`reasoning_effort: medium`, 15-min timeout, and is skipped when there were no
-round trips. Close-out (journal → daily P&L → reflection → backup) runs once per
-session, 15 min after the flatten; if the app is down then, run `reflect` by hand.
-
----
-
-## 11. Commands
-
-A single command layer (`trader/commands.py`) used by the API (GUI) and the CLI.
-
-- **Trade:** `buy`, `stop_buy`, `sell`, `adjust_trail`, `cancel` — same shapes
-  as §5, `source=manual`. Manual buys also require `trail_percent`.
-- **Control:** `pause`, `resume`, `flatten` (GUI confirm), `cancel-all`,
-  `reflect`. `pause` stops LLM passes only (§4). `flatten` sells everything and
-  **pauses** the engine (resume to let the LLM trade again). `cancel-all` cancels
-  every order **except protective stops** — cancelling those would leave
-  positions naked.
-- **CLI:** `docker exec trader python -m trader <command> ...`
-  (e.g. `python -m trader buy NVDA 10 --trail 3`) — calls the local API.
-- Positions carry `source = manual | llm` and `llm_managed` (manual default
-  false). The GUI can toggle `llm_managed` per position.
-
----
-
-## 12. Storage
-
-SQLite at `/data/trader.db` (WAL mode). Tables (indicative):
-
-`settings` · `watchlist` · `scoring_weights` · `passes` · `actions` (proposed,
-validation result, reason) · `orders` (mirrors Alpaca, incl. stops) · `fills` ·
-`positions_snapshots` · `round_trips` (journal) · `daily_pnl` ·
-`memory_versions` · `weight_proposals` · `engine_state` (running/paused, last
-pass) · `events` (halts, flattens, reconciliations, errors).
-
-Exports: CSV/JSON of trades and orders from the GUI. Nightly copy of the DB to
-`/data/backups/` (keep last 14).
-
-*Implemented (phase 5):* `trader/store/` — `db.py` (schema v1 via
-`PRAGMA user_version`), `journal.py` (round trip = one symbol's flat→flat
-lifecycle; exit cause from the closing order: trailing stop / LLM sell / manual /
-`sys-` market sell = flatten), `records.py`. `positions_snapshots` is replaced by
-an `equity` column on `passes` (the dashboard equity curve). Minute passes while
-the market is closed are not stored. The order mirror is refreshed after every
-pass or command that touched the broker, so the journal never lags a fill.
-
-Git is for code only — no more state commits.
-
----
-
-## 13. GUI
-
-React + TypeScript (Vite), built into the image, served by FastAPI. Live
-updates over a WebSocket. Pages:
-
-1. **Dashboard** — equity / day P&L curve, open positions with live stop levels,
-   loop status (running / paused / halted / flat), LLM health (latency, skip
-   and parse-fail rates), order ticket, control buttons.
-2. **Orders** — open/pending (incl. trailing stops), full history, filters.
-3. **Trades** — journal of round trips, entry/exit reasons, P&L, CSV export.
-4. **Decisions** — every pass: features seen, raw output, actions, rejections.
-5. **Settings** — watchlist (validated against Alpaca assets, cap 25), risk
-   limits, per-symbol caps, scoring weights, LLM connection.
-6. **Memory** — `memory.md` editor, version history/diff/restore, pending
-   weight proposals to approve/reject.
-
-Bound to `127.0.0.1` only. No auth in v2; remote access requires adding auth
-or a private network (e.g. Tailscale) first.
-
----
-
-## 14. Deployment
-
-- `docker compose` single service `trader`:
-  `restart: unless-stopped`, ports `127.0.0.1:8000:8000`, volume `./data:/data`,
-  `env_file: .env`, `extra_hosts: host.docker.internal:host-gateway`,
-  `HEALTHCHECK` on `/healthz`.
-- `.env`: `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `ALPACA_ENV=paper|live`,
-  `I_UNDERSTAND_LIVE_TRADING` (default unset). Secrets never in the image or DB.
-- **Live mode** requires `ALPACA_ENV=live` **and**
-  `I_UNDERSTAND_LIVE_TRADING=true` + restart; no GUI toggle. The app refuses to
-  start live with equity < $25k (pattern day trader rule) and shows a permanent
-  red LIVE banner.
-- Time: all market logic in `America/New_York` via Alpaca's clock; host TZ
-  irrelevant.
-
-### Startup / recovery
-
-*Implemented (phase 5):* `trader/runtime.py` + `python -m trader serve`. The LLM
-is warmed at startup and ~10 min before each open (a cold model load took 43 s,
-which would time out the first pass).
-
-1. Load settings, restore `engine_state` (resume if it was running, stay paused
-   if paused).
-2. Reconcile with Alpaca: import positions/orders, cancel stale entry orders,
-   **place a trailing stop on any unprotected position**.
-3. If started after the flatten time with open positions → flatten immediately.
-4. Warm up bars, then start the loop.
-
----
-
-## 15. Folder structure (target)
-
-```
-trader/                 Python package (python -m trader)
-  broker/               Alpaca client (from lib/alpaca_client.py), stream
-  engine/               loop, features, scoring, reconciliation, flatten
-  llm/                  OpenAI-compatible client, prompt builder, schema
-  risk/                 validator (from lib/validator.py pattern)
-  store/                SQLite schema, repositories, migrations
-  api/                  FastAPI routes + WebSocket
-  actions.py            action schema + decision parser (LLM and manual)
-  settings.py           typed risk settings
-  commands.py           shared command layer
-  __main__.py           CLI
-web/                    React + Vite app
-config/defaults.yaml    seed settings (from state/config.yaml)
-tests/
-archive/v1/             v1 design, routines, state
-Dockerfile, docker-compose.yml, .env.example
-```
-
----
-
-## 16. Migration from v1
-
-| v1 piece | Fate |
-|---|---|
-| `lib/alpaca_client.py` | Refactor into `trader/broker/` — keep retry/transient logic, clock, snapshot; add stop/trailing/replace/cancel, bars, stream; env-var creds |
-| `lib/validator.py` | Rewrite to per-action rules; keep `ValidationResult` + collect-all-violations pattern |
-| `lib/plan_schema.py` | Replaced by action schema |
-| `lib/executor.py` | Retired (weights→deltas no longer applies); notional cap moves to validator |
-| `lib/drawdown.py` | Retired (replaced by `DAILY_LOSS_LIMIT`) |
-| `lib/state.py` | Retired (SQLite); keep atomic-write helper for `memory.md` |
-| `lib/config.py` | Refactor to settings seeding |
-| `cli.py` | Retired; `liquidate` → `flatten` command |
-| `routines/`, `DESIGN.md` | Moved to `archive/v1/` |
-| scheduled tasks `claude-trader-eod-trade`, `-post-close-summary` | Prompts replaced with no-op stubs 2026-10-12 (originals in `SKILL.md.v1-backup`); disable in the Claude Code Scheduled sidebar |
-| `state/` | Move to `archive/v1/state/`; not imported. `universe.yaml` informs initial watchlist |
-| `pandas-market-calendars` | Dropped |
-| tests (148) | Keep/adapt client, validator-pattern and config tests; rewrite the rest |
-
----
-
-## 17. Build phases
-
-1. **Broker:** extend Alpaca client (orders, stops, replace, cancel, bars,
-   stream) with tests against a fake.
-2. **Schema + risk:** action schema, validator, settings — test-first.
-3. **Engine:** loop, features/score, reconciliation, flatten — driven by a fake
-   LLM and fake broker; replay a recorded day. *Done 2026-10-13:*
-   `python -m trader.engine.replay run tests/fixtures/session_2026-10-12.json`.
-4. **LLM:** Ollama client, prompt builder, structured output, latency metrics.
-   *Done 2026-10-13:* `trader/llm/` (config, schema, prompt, client, decider,
-   health, bench).
-5. **Store + API:** SQLite, FastAPI routes, WebSocket, command layer, CLI.
-   *Done 2026-10-13:* `trader/store/`, `memory.py`, `reflection.py`,
-   `commands.py`, `runtime.py`, `api/app.py`, `__main__.py`; smoke-tested live
-   against paper Alpaca + local Ollama.
-6. **Web:** React pages. *Done 2026-10-13:* `web/` (Vite + React + TS) in the
-   owner's Kiln visual system (`web/design.md`); product record in `PRODUCT.md`.
-   Session page = day band + the session chart (equity over a 390-minute status
-   strip; click a minute for the pass sheet: analysis, verdicts, prompt, raw
-   reply); Decisions, Trades, Orders, Memory (diff/restore, weight proposals),
-   Settings; Manage drawer for controls and the manual order ticket. Amber marks
-   gains only; losses are plain text with a minus (no red/green). Served by
-   FastAPI from `web/dist` with SPA fallback. `python -m trader.demo` serves a
-   replayed, labelled demo session for UI work.
-7. **Docker:** Dockerfile (multi-stage), compose, healthcheck, `.env.example`.
-   *Done 2026-10-13:* node:24 builds `web/`, python:3.14-slim runs it as uid
-   10001 (446 MB). Verified with compose against the paper account: healthy,
-   published on 127.0.0.1 only, IEX stream connects, Ollama reachable at
-   `host.docker.internal`, state persists in `./data`, SIGTERM shuts down
-   cleanly and the pause flag survives a restart. Runtime deps only in the image
-   (`requirements.txt`); tests and v1's pandas are in `requirements-dev.txt`.
-8. **Paper soak:** run supervised; reflection + memory loop on. Live remains
-   locked until 20+ sessions show positive expectancy after realistic slippage.
-   *Started 2026-10-14 (first session):* watchlist = SCHD's top 25 holdings;
-   *Pinned (user)* memory seeded with an activity bias (entries at score ≥ 60
-   above VWAP with rising 15m momentum, ~5% of equity, 1.5% trail, tighten to 1%
-   at +0.5%, sell under score 40) because an empty memory held all day in
-   testing. Pre-run check on a real 25-symbol prompt: ~3k prompt tokens,
-   ~3.7 s per warm call, valid and consistent decisions. Out-of-RTH order
-   acceptance remains an open item, deferred; entries are now blocked while the
-   market is closed (§6), so it only matters for exits placed after hours.
-
----
-
-## 18. Open items
-
-- ~~Verify Alpaca constraints~~ — paper-tested 2026-10-13 (1 SPY share):
-  market buy/sell, trailing stop sell (hwm + stop_price populated at submit),
-  stop buy accept/cancel all work. Trailing stop as OTO leg: rejected.
-  `replace` returns a new order id; the old one goes to `replaced`. The
-  replacement gets a bare-UUID client_order_id unless one is sent, so
-  `replace_trail` now requires the owner prefix. Still open: acceptance windows
-  outside RTH.
-- ~~Pick the default model by measured latency~~ — qwen3.8:27b with thinking off
-  fits easily (§9). Re-run the bench if the model or host changes.
-- ~~Reflection pass~~ — phase 5.
-- Initial watchlist seed (14 liquid names: AAPL AMD AMZN GOOGL IWM META MSFT NVDA
-  QQQ SPY TSLA XLE XLF XLK) is a placeholder; curate before the paper soak. v1's
-  bond/staples ETFs barely move intraday.
-- Default prompt may be too passive to generate learning data; decide during the
-  paper soak whether to seed *Pinned (user)* memory with an activity bias.
-- ~~Exact scoring formula and default weights~~ — §8 (phase 3).
-- ~~Partial-fill handling~~ — the protect step keeps stop coverage equal to
-  held whole shares every pass: tops up as fills arrive, re-places if stops
-  ever cover more than held (which could otherwise go short).
-- Early-close days: bars 13:00–16:00 ET are not filtered as after-hours. Harmless
-  (flatten is clock-derived) but features on those bars are wrong.
-- Replay fills are idealized (market at last close, stops at stop price or the
-  gap open); real slippage is worse. Treat replay P&L as an upper bound.
+# Kiln Design System
+
+## 1. Visual Theme & Atmosphere
+
+Kiln's design system embraces a warm, youthful, and energetic aesthetic centered around community and connection. The palette combines deep charcoal and near-black tones with a warm amber-orange ember accent and soft same-hue gradients, creating a calm yet approachable interface that is easy on the eyes. The brand exudes playfulness through rounded corners, generous spacing, and illustrative character elements, while maintaining a modern, tech-forward sensibility. The visual language is confident and bold—oversized typography commands attention, high contrast ensures legibility, and strategic use of transparency and subtle shadows create depth without clutter. This is a design system built for social engagement: every element invites interaction, every color choice energizes, and every space breathes with intentional whitespace.
+
+**Key Characteristics:**
+- Deep charcoal and near-black backgrounds with warm ember and amber accents, softened by two-stop gradients
+- Bold, oversized typography with confident hierarchy
+- Generous padding and margin creating spacious, uncluttered layouts
+- Rounded corners ranging from subtle to highly pronounced
+- High contrast between text and backgrounds for accessibility
+- Playful, illustrative supplementary imagery
+- Strategic use of transparency and semi-transparent elements
+- Emphasis on interactive states and visual feedback
+
+## 2. Color Palette & Roles
+
+### Primary
+- **Brand Orange** (`#E68435`): Core interactive elements, primary call-to-action buttons, brand identity (large fills use the Ember gradient below)
+- **Ink Black** (`#111111`): Dominant text color on light grounds; deepest dark background
+
+### Accent Colors
+- **Copper Accent** (`#C98A5E`): Secondary interactive states, accent highlights
+- **Safety Amber** (`#DFAE4E`): Success states, positive actions, link highlights
+- **Orange Muted** (`#C27A45`): Subtle interactive elements, hover states for primary orange
+- **Orange Text on Light** (`#9E5019`): Orange text, links and nav states on white or light grounds (5.8:1 on white)
+- **Orange Text on Dark** (`#EA9557`): Soft ember for text, links, eyebrow labels, active nav and focus borders on every dark surface (6.0:1 or better)
+
+### Interactive
+- **Button Background Light** (`#FFFFFF`): Secondary buttons, light mode backgrounds
+- **Button Overlay** (`rgba(255, 255, 255, 0.1)`): Ghost buttons, transparent interactive overlays
+- **Input Background** (`rgba(0, 0, 0, 0)`): Transparent input fields with subtle borders
+
+### Neutral Scale
+- **Pure White** (`#FFFFFF`): Light backgrounds and light cards
+- **On Ember** (`#231306`): Warm dark-brown labels and icons on orange fills and the Ember gradient
+- **Soft White** (`#EEECE9`): Body text and headings on dark surfaces — softer than pure white to reduce glare (14.8:1 on `#1A1A1A`)
+- **Pure Black** (`#000000`): Fallback text color, sharp contrast
+- **Light Gray** (`#F6F4F1`): Subtle background tints, light section dividers
+- **Medium Gray** (`#A3A3A3`): Secondary text, disabled states, metadata on dark surfaces (use Charcoal Gray on light grounds)
+- **Dark Gray** (`#999999`): Tertiary text, captions on dark surfaces (4.9:1 or better on every dark surface)
+- **Very Light Gray** (`#E0E0E0`): Minimal borders, dividers
+- **Charcoal Gray** (`#333333`): Deep neutral for text on light backgrounds
+
+### Surface & Borders
+- **Dark Surface Primary** (`#1A1A1A`): Dark mode primary surface
+- **Dark Surface Secondary** (`#232323`): Dark mode secondary surface
+- **Dark Surface Tertiary** (`#2B2B2B`): Dark mode tertiary surface
+- **Dark Surface Quarternary** (`#262626`): Dark mode interactive surface
+- **Border Gray** (`#4D4D4D`): Subtle borders, dividing lines
+
+### Gradients
+Two-stop, same-hue gradients replace flat fills wherever a surface is large enough to show one. They lower glare and add depth without new hues. Rules: fills only (never gradient text); any text on a gradient passes 4.5:1 at **both** stops; lightness shifts stay small; no multi-hue blends.
+- **Ember** (`linear-gradient(135deg, #EE9148 0%, #D8742C 100%)`): Primary buttons, featured cards, CTA bands, brand panels — dark-brown `#231306` labels (5.5:1 to 7.5:1)
+- **Ember Hover** (`linear-gradient(135deg, #F29A52 0%, #E0803A 100%)`) and **Ember Active** (`linear-gradient(135deg, #D57A33 0%, #C66A25 100%)`)
+- **Amber** (`linear-gradient(135deg, #E8B85A 0%, #D6A241 100%)`): Action links, success fills — black labels (9.1:1 or better); hover `linear-gradient(135deg, #D6A241 0%, #CC9638 100%)`
+- **Surface** (`linear-gradient(180deg, #1C1C1C 0%, #161616 100%)`): Dark page background
+- **Ink** (`linear-gradient(180deg, #151515 0%, #0E0E0E 100%)`): Headers, footers, rails, banners
+- **Panel** (`linear-gradient(180deg, #262626 0%, #1F1F1F 100%)`): Raised sections, pricing tiers, sidebars
+- **Card** (`linear-gradient(160deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.04) 100%)`): Feature cards and stat tiles
+- **Ember Glow** (`radial-gradient(circle at 80% 20%, rgba(230, 132, 53, 0.14) 0%, rgba(230, 132, 53, 0) 60%)`): Faint warmth over hero sections only
+- **Light** (`linear-gradient(180deg, #FFFFFF 0%, #F6F4F1 100%)`): Light page grounds and light cards
+
+## 3. Typography Rules
+
+### Font Family
+**Primary:** Manrope, Unbounded (display and heading emphasis)
+Fallback: `system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+
+**Secondary:** DM Sans, Inter (body, navigation, and UI text)
+Fallback: `system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+
+### Hierarchy
+
+| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
+|------|------|------|--------|-------------|-----------------|-------|
+| Display / Hero | Unbounded | 72px | 700 | 64.8px | Normal | Maximum impact, homepage hero titles |
+| Heading 1 (Large) | Unbounded | 56px | 700 | 48px | Normal | Page section headers |
+| Heading 1 (Medium) | Inter | 37.8px | 600 | 42px | Normal | Section introductions |
+| Heading 2 (Large) | Unbounded | 48px | 700 | 48px | Normal | Major section breaks |
+| Heading 2 (Medium) | Inter | 22px | 700 | 26.4px | Normal | Subsection titles |
+| Heading 2 (Small) | Inter | 16.8px | 600 | 25.2px | Normal | Card titles, feature blocks |
+| Heading 3 | Unbounded | 36px | 400 | 36px | Normal | Section accent headers |
+| Heading 3 (UI) | Inter | 14.7px | 600 | 21px | Normal | Component labels |
+| Body (Large) | Manrope | 20px | 400 | 26px | Normal | Hero copy, prominent descriptions |
+| Body (Standard) | Inter | 16.8px | 400 | 25.2px | Normal | Main content, paragraphs |
+| Body Emphasis | Manrope | 16px | 500 | 19.2px | Normal | Emphasized copy, callouts |
+| Button / UI Text | DM Sans | 16px | 400 | 24px | Normal | Button labels, navigation items |
+| Button (Small) | Inter | 14.7px | 400 | 25.2px | Normal | Compact button text |
+| Input / Form | Inter | 14px | 400 | 20px | Normal | Form fields, input text |
+| Caption / Metadata | Inter | 14px | 400 | 20px | Normal | Helper text, timestamps |
+
+### Principles
+- Typography follows a strict modular scale with clear hierarchy—each level is visibly distinct
+- Display sizes (56px–72px) are reserved for hero moments and maximum impact
+- Body copy defaults to 16.8px–20px for comfortable reading
+- All interactive text (buttons, links, navigation) is explicitly weighted (600–700) for clear affordance
+- Line height consistently exceeds font size for generous, readable spacing
+- Font family changes signal semantic role: display fonts for hierarchy, sans-serif for neutral UI
+
+## 4. Component Stylings
+
+### Buttons
+
+#### Primary Button (Large)
+- **Background:** Ember gradient `linear-gradient(135deg, #EE9148 0%, #D8742C 100%)` (solid fallback `#E68435`)
+- **Text Color:** `#231306` warm dark brown (7.5:1 at the light stop, 5.5:1 at the deep stop; white fails at 2.7:1)
+- **Font:** Manrope, 20px, weight 400
+- **Padding:** `19.5px 24px`
+- **Border Radius:** `12px`
+- **Line Height:** 26px
+- **Height:** 65px
+- **Hover State:** `background: linear-gradient(135deg, #F29A52 0%, #E0803A 100%)` (6.3:1 or better with the dark-brown label)
+- **Active State:** `background: linear-gradient(135deg, #D57A33 0%, #C66A25 100%)` (4.7:1 or better with the dark-brown label)
+- **Disabled State:** `opacity: 0.5; cursor: not-allowed`
+
+#### Secondary Button (Light)
+- **Background:** `#FFFFFF`
+- **Text Color:** `#232323`
+- **Font:** Manrope, 20px, weight 400
+- **Padding:** `15px 24px`
+- **Border Radius:** `12px`
+- **Line Height:** 26px
+- **Height:** 65px
+- **Hover State:** `background: #F0F0F0`
+- **Border:** `1px solid #E0E0E0`
+- **Active State:** `background: #E8E8E8`
+
+#### Ghost Button (Dark Overlay)
+- **Background:** `rgba(255, 255, 255, 0.1)`
+- **Text Color:** `#EEECE9`
+- **Font:** Manrope, 16px, weight 400
+- **Padding:** `17.5px 24px`
+- **Border Radius:** `16px`
+- **Line Height:** 24px
+- **Height:** 56px
+- **Border:** None
+- **Hover State:** `background: rgba(255, 255, 255, 0.15)`
+- **Active State:** `background: rgba(255, 255, 255, 0.2)`
+
+#### Icon Button (Compact)
+- **Background:** `rgba(255, 255, 255, 0.1)`
+- **Text Color:** `#EEECE9`
+- **Font:** DM Sans, 16px, weight 400
+- **Padding:** `0px`
+- **Border Radius:** `14px`
+- **Width:** 40px
+- **Height:** 40px
+- **Hover State:** `background: rgba(255, 255, 255, 0.15)`
+
+### Links
+
+#### Primary Link (Action)
+- **Background:** Amber gradient `linear-gradient(135deg, #E8B85A 0%, #D6A241 100%)`
+- **Text Color:** `#000000`
+- **Font:** Manrope, 16px, weight 500
+- **Padding:** `13px 24px`
+- **Border Radius:** `12px`
+- **Line Height:** 22px
+- **Height:** 48px
+- **Hover State:** `background: linear-gradient(135deg, #D6A241 0%, #CC9638 100%)`
+- **Active State:** `background: #C28C33`
+
+#### Secondary Link (Text)
+- **Background:** Transparent
+- **Text Color:** `#333333`
+- **Font:** DM Sans, 16px, weight 400
+- **Padding:** `0px`
+- **Border Radius:** `0px`
+- **Line Height:** 24px
+- **Height:** 40px
+- **Hover State:** `text-decoration: underline; color: #9E5019`
+- **Active State:** `color: #7E3F14`
+
+#### Light Link (On Dark)
+- **Background:** Transparent
+- **Text Color:** `#EEECE9`
+- **Font:** Manrope, 16px, weight 500
+- **Padding:** `10px 16px`
+- **Border Radius:** `12px`
+- **Line Height:** 19.2px
+- **Hover State:** `background: rgba(255, 255, 255, 0.1)`
+- **Active State:** `background: rgba(255, 255, 255, 0.15)`
+
+### Cards & Containers
+
+#### Feature Card (Dark)
+- **Background:** Card gradient `linear-gradient(160deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.04) 100%)`
+- **Text Color:** `#EEECE9`
+- **Font:** Inter, 16px, weight 400
+- **Padding:** `56px`
+- **Border Radius:** `48px`
+- **Line Height:** 24px
+- **Border:** None
+- **Box Shadow:** Elevation Level 1 (see Section 6)
+- **Hover State:** `background: rgba(255, 255, 255, 0.12)`
+
+#### Large Container (Full Width)
+- **Background:** Transparent
+- **Text Color:** `#EEECE9`
+- **Font:** Inter, 14px, weight 400
+- **Padding:** `0px`
+- **Border Radius:** `104px`
+- **Line Height:** 20px
+- **Border:** None
+- **Width:** 1200px
+- **Height:** Auto (variable content)
+
+#### Content Card (Light)
+- **Background:** `#FFFFFF`
+- **Text Color:** `#000000`
+- **Font:** Manrope, 24px, weight 500
+- **Padding:** `40px`
+- **Border Radius:** `0px`
+- **Line Height:** 28.8px
+- **Border:** None
+- **Box Shadow:** None
+
+### Inputs & Forms
+
+#### Text Input (Dark Mode)
+- **Background:** `rgba(0, 0, 0, 0)`
+- **Text Color:** `#F2F2F2`
+- **Font:** Inter, 14.7px, weight 400
+- **Padding:** `10.5px 14.7px 10.5px 42px`
+- **Border Radius:** `0px`
+- **Border:** `1px solid #3A3A3A`
+- **Line Height:** 21px
+- **Height:** 63px
+- **Width:** 384px
+- **Placeholder:** `#999999`
+- **Focus State:** `border-color: #EA9557; box-shadow: 0 0 0 3px rgba(230, 132, 53, 0.4)`
+- **Disabled State:** `opacity: 0.5; cursor: not-allowed`
+
+#### Text Input (Light Mode)
+- **Background:** `rgba(0, 0, 0, 0)`
+- **Text Color:** `#333333`
+- **Font:** Inter, 14px, weight 400
+- **Padding:** `0px`
+- **Border Radius:** `0px`
+- **Border:** None
+- **Line Height:** 20px
+- **Height:** 38px
+- **Focus State:** `border-bottom: 2px solid #9E5019`
+
+### Navigation
+
+#### Main Navigation Item
+- **Background:** Transparent
+- **Text Color:** `#333333`
+- **Font:** DM Sans, 16px, weight 400
+- **Padding:** `0px`
+- **Border Radius:** `0px`
+- **Line Height:** 24px
+- **Height:** Auto
+- **Hover State:** `color: #9E5019; border-bottom: 2px solid #9E5019`
+- **Active State:** `color: #9E5019; border-bottom: 2px solid #9E5019; font-weight: 600`
+
+#### Dropdown Navigation
+- **Background:** `#FFFFFF`
+- **Text Color:** `#333333`
+- **Font:** DM Sans, 16px, weight 400
+- **Padding:** `12px 16px`
+- **Border Radius:** `8px`
+- **Line Height:** 21px
+- **Border:** `1px solid #E0E0E0`
+- **Box Shadow:** Elevation Level 2
+- **Hover Item:** `background: #F6F4F1`
+
+## 5. Layout Principles
+
+### Spacing System
+
+**Base Unit:** 4px
+
+**Scale:**
+- **Micro:** 4px (tight spacing within components)
+- **Extra Small:** 8px (small padding, gaps)
+- **Small:** 12px (standard button padding)
+- **Medium:** 16px (standard gap between elements)
+- **Large:** 20px (padding within cards)
+- **Extra Large:** 24px (section margin)
+- **2X Large:** 32px (major gap between sections)
+- **3X Large:** 40px (substantial card padding)
+- **4X Large:** 48px (large section spacing)
+- **5X Large:** 56px (very large card/container padding)
+- **6X Large:** 80px (major layout padding)
+- **8X Large:** 120px (hero section padding)
+
+**Usage Context:**
+- Buttons use 12px–20px padding vertically and horizontally for touchable comfort
+- Card interiors use 40px–56px padding for breathing room
+- Section gaps use 24px–48px based on hierarchy importance
+- Hero sections use 80px–120px for maximum visual impact
+
+### Grid & Container
+
+**Max Width:** 1200px (primary content container)
+
+**Column Strategy:** 12-column flexible grid with gutter support
+
+**Section Patterns:**
+- Hero section spans full width with centered 1200px max-width content
+- Feature sections stack 2–4 columns on desktop, collapse to single column on mobile
+- Navigation sits fixed or sticky at 64px height, full width
+- Footer regions use full-width sections with 1200px centered max-width content
+
+### Whitespace Philosophy
+
+Kiln's whitespace strategy creates breathing room and visual hierarchy. The system favors generous vertical spacing (56px–120px between major sections) over cramped layouts. Horizontal padding is consistent at 40px–80px for desktop, creating comfortable margins. Internal card padding (40px–56px) prevents content from feeling claustrophobic. This approach signals premium, high-confidence design—space equals value. Negative space is used strategically to guide the eye and separate concerns.
+
+### Border Radius Scale
+
+- **Sharp (0px):** Input fields, text links, minimal UI (horizontal rules, dividers)
+- **Subtle (8px):** Dropdown menus, small modals
+- **Standard (12px):** Buttons, small cards, badges
+- **Rounded (14px):** Icon buttons, compact interactive elements
+- **Extra Rounded (16px):** Ghost buttons, medium cards
+- **Very Rounded (48px):** Large feature cards, container accents
+- **Maximum (104px):** Full-width hero containers, section backgrounds
+
+## 6. Depth & Elevation
+
+| Level | Treatment | Use |
+|-------|-----------|-----|
+| Base | No shadow | Body text, primary backgrounds, neutral states |
+| Elevation 1 | `0px 0px 0px 2px rgba(0, 0, 0, 0.05)` | Subtle focus rings, small cards |
+| Elevation 2 | `0px 0px 0px 1px oklab(0.442733 0 0 / 0.3)` | Buttons, hover states, interactive elements |
+| Elevation 3 | `0px 0px 0px 1px oklab(0.376763 0 0 / 0.25), 0px 1px 2px 0px rgba(0, 0, 0, 0.05)` | Elevated cards, modals, dropdowns |
+
+**Shadow Philosophy:**
+Kiln minimizes heavy shadows in favor of subtle border and opacity-based depth. This creates a flatter, more modern aesthetic while maintaining visual separation. Shadows are used sparingly—primarily for interactive feedback (hover, focus) and modal layering. The system relies on color contrast, transparency, and careful spacing to establish hierarchy rather than dramatic shadow work. When shadows do appear, they are soft and subtle, never harsh or posterizing.
+
+### Opacity Levels
+
+- **10%** (`0.10`): Barely perceptible overlays, minimal visual weight
+- **50%** (`0.50`): Moderate transparency, semi-visible (disabled states)
+- **65%** (`0.65`): Significant transparency, clearly visible but secondary
+- **89%** (`0.89`): Nearly opaque, subtle transparency
+- **90%** (`0.90`): Nearly full opacity, slight transparency for refinement
+- **Disabled:** 50% opacity with `cursor: not-allowed`
+- **Hover Overlay:** 10–15% opacity increase from base state
+- **Focus Ring:** 10–20% opacity for non-intrusive visual feedback
+
+### Z-index / Layering
+
+- **Base Layer (1–3):** Body content, primary sections, standard cards
+- **Lifted Layer (4–5):** Floating elements, semi-sticky components, elevated cards
+- **Sticky Layer (6–7):** Fixed navigation, sticky headers
+- **Dropdown Layer (10):** Dropdown menus, select lists, popovers
+- **Modal Layer (20+):** Modals, overlays, critical interruptions
+- **Toast Layer (30+):** Notifications, toasts, temporary messages
+
+Stacking context is managed carefully to prevent unexpected layering conflicts. Each layer type has explicit z-index ranges to maintain predictable visual hierarchy.
+
+## 7. Do's and Don'ts
+
+### Do
+
+- **Use the Ember gradient** (`#EE9148` → `#D8742C`) with dark-brown `#231306` labels for all primary call-to-action buttons and key interactive moments
+- **Prefer gradients over flat fills** on any surface large enough to show one—two stops, same hue, text checked at both ends
+- **Maintain generous spacing** between sections—minimum 24px gaps, preferably 40px–80px for major sections
+- **Prioritize high contrast** for readability—always ensure WCAG AA compliance (4.5:1 for body text)
+- **Apply rounded corners consistently** using the defined scale (12px for buttons, 48px for cards, 104px for containers)
+- **Use the Manrope font** for display/hero content and emphasis, **Inter** for neutral UI and body copy
+- **Follow the modular typography scale**—never introduce arbitrary font sizes between defined roles
+- **Implement hover states** on all interactive elements with visual feedback (color shift, background change, shadow)
+- **Use opacity-based transparency** (10%–20%) for subtle depth rather than heavy shadows
+- **Group related navigation items** in dropdowns with consistent padding and hover states
+- **Reserve bright accent colors** (`#DFAE4E`, `#C98A5E`) for success states, positive actions, or secondary emphasis
+
+### Don't
+
+- **Avoid mixing font families** within a single component—use either display or sans-serif, not both
+- **Never use font sizes** outside the defined typography hierarchy (no random 18px or 42px text)
+- **Don't apply shadows** heavier than Elevation Level 3—Kiln favors flatness and subtle visual separation
+- **Avoid low-contrast combinations** like dark gray text on charcoal backgrounds (always test with WCAG tools)
+- **Don't use the primary orange** for secondary or passive elements—reserve it for highest-priority CTAs
+- **Never cramped spacing**—padding below 12px or section gaps below 24px feel cheap and claustrophobic
+- **Avoid inconsistent border radius**—stick to the defined scale (0px, 8px, 12px, 14px, 16px, 48px, 104px)
+- **Don't introduce colors outside the palette** without careful documentation and cross-team approval
+- **Avoid opacity values** outside the defined range (don't invent 75% or 85% opacity)
+- **Don't layer elements** with z-index values between the defined ranges—stick to the stacking strategy (1–3, 4–5, 6–7, 10, 20+, 30+)
+
+## 8. Responsive Behavior
+
+### Breakpoints
+
+| Name | Width | Key Changes |
+|------|-------|------------|
+| Mobile | 320px–479px | Single column, 16px padding, 32px section gap, 40px button height |
+| Tablet | 480px–767px | 2 columns, 20px padding, 40px section gap, 48px button height |
+| Small Desktop | 768px–1023px | 3 columns, 24px padding, 48px section gap, 56px button height |
+| Desktop | 1024px–1199px | 4 columns, 40px padding, 56px section gap, 65px button height |
+| Large Desktop | 1200px+ | 1200px max-width centered, full spacing scale applied |
+
+### Touch Targets
+
+- **Minimum Height:** 48px (button, link, clickable area)
+- **Minimum Width:** 48px (square interactive elements)
+- **Minimum Padding:** 12px around touch target content
+- **Spacing Between Targets:** 16px minimum gap to prevent accidental clicks
+- **Icon Buttons:** 40px–56px (square), centered icon within
+- **Form Inputs:** 44px–63px height for comfortable touch interaction
+- **Navigation Items:** 48px min-height with 12px–16px horizontal padding
+
+### Collapsing Strategy
+
+**Typography:**
+- Display heading (72px) → 56px (tablet) → 48px (mobile)
+- Heading 1 (56px) → 48px (tablet) → 36px (mobile)
+- Heading 2 (48px) → 40px (tablet) → 32px (mobile)
+- Body (20px) → 18px (tablet) → 16px (mobile)
+
+**Spacing:**
+- Hero padding: 120px (desktop) → 80px (tablet) → 40px (mobile)
+- Section gap: 56px (desktop) → 40px (tablet) → 24px (mobile)
+- Card padding: 56px (desktop) → 40px (tablet) → 24px (mobile)
+
+**Layout:**
+- Cards: 4-column (desktop) → 2-column (tablet) → 1-column (mobile)
+- Navigation: Horizontal menu (desktop) → Hamburger menu (tablet/mobile)
+- Buttons: Full-width primary buttons below 768px, side-by-side above
+- Max-width: 1200px (desktop) → 100% (tablet/mobile with 20px margin)
+
+**Images & Media:**
+- Scale proportionally down from desktop size
+- Maintain aspect ratios across all breakpoints
+- Lazy-load below-the-fold images on mobile
+
+## 9. Agent Prompt Guide
+
+### Quick Color Reference
+
+- **Primary CTA Button:** Ember gradient (`#EE9148` → `#D8742C`) with `#231306` label
+- **Secondary CTA Button:** Amber gradient (`#E8B85A` → `#D6A241`), black label
+- **Background (Light):** Pure White (`#FFFFFF`)
+- **Background (Dark):** Surface gradient (`#1C1C1C` → `#161616`); Ink gradient for headers and footers
+- **Body Text (Dark Background):** Soft White (`#EEECE9`)
+- **Body Text (Light Background):** Ink Black (`#111111`)
+- **Heading Text:** Ink Black (`#111111`) or Soft White (`#EEECE9`)
+- **Secondary Text:** Medium Gray (`#A3A3A3`)
+- **Border:** Very Light Gray (`#E0E0E0`)
+- **Hover/Focus:** Orange Text on Dark (`#EA9557`)
+- **Success/Accent:** Safety Amber (`#DFAE4E`)
+- **Secondary Accent:** Copper Accent (`#C98A5E`)
+- **Transparent Overlay (Light):** `rgba(255, 255, 255, 0.1)`
+- **Transparent Overlay (Dark):** `rgba(0, 0, 0, 0.1)`
+
+### Iteration Guide
+
+1. **Color Application:** Every primary CTA uses the Ember gradient with dark-brown text (`#231306`); orange text uses `#EA9557` on dark grounds and `#9E5019` on light grounds. Secondary CTAs use the Amber gradient with black text. Use gradients instead of flat fills wherever the surface is large enough. All interactive elements need hover state color shifts (10% darker or +10% opacity change).
+
+2. **Typography Foundation:** All display/hero text uses Manrope or Unbounded at 56px–72px, weight 700. Body copy defaults to Inter at 16px–20px, weight 400. Navigation and UI labels use DM Sans at 16px, weight 400–500.
+
+3. **Spacing Discipline:** Never add padding below 12px or section gaps below 24px. Use the defined scale: 4px (micro) → 8px → 12px → 16px → 20px → 24px → 32px → 40px → 48px → 56px → 80px → 120px. This creates visual harmony and prevents the design from feeling inconsistent.
+
+4. **Border Radius Consistency:** Apply `0px` (none) for minimal UI, `12px` for buttons and small cards, `16px` for ghost buttons, `48px` for feature cards, `104px` for hero containers. Never introduce arbitrary radius values.
+
+5. **Interactive Feedback:** Every button, link, and interactive element must have a distinct hover state (color shift, opacity change, or subtle shadow). Focus states require a 3px outline or inset box-shadow at `0 0 0 3px rgba(230, 132, 53, 0.4)` for accessibility.
+
+6. **Elevation & Depth:** Avoid heavy shadows—use subtle borders (1px), opacity shifts (+10%), or color shifts instead. Maximum shadow is Level 3: `0px 1px 2px 0px rgba(0, 0, 0, 0.05)`. Most interactive elements need only a 2px border focus ring.
+
+7. **Responsive Breakpoints:** Build mobile-first: start at 320px with single column, 16px padding, 32px gaps. Scale up progressively: 480px (2-col), 768px (3-col), 1024px (4-col), 1200px (fixed max-width). Font sizes and spacing contract on mobile, expand on desktop.
+
+8. **Contrast & Accessibility:** All text must pass WCAG AA (4.5:1 contrast) minimum. Test dark text on light backgrounds and light text on dark backgrounds. Use the defined neutral scale to ensure sufficient separation. Never use low-contrast combos like `#999999` on `#A3A3A3`, white or soft-white text on the Ember gradient (2.7:1 — use `#231306`), or any orange fill color used as text.
+
+9. **Component Consistency:** Buttons are always 40px–65px height with clear padding. Cards use 40px–56px padding, always with rounded corners. Inputs are always 38px–63px height with left-aligned text and 12px padding. Follow these minimums—don't shrink components below legibility.
+
+10. **Animation & Microinteraction:** All hover and focus states complete in 200ms–300ms. Use ease-in-out timing functions. Transitions apply to color, background, and opacity—never animate position or layout (no jank). Disabled states get 50% opacity + `cursor: not-allowed`.
+
+## As shipped in Tournament Tracker
+
+Recorded from the built code (`frontend/src/index.css` and the components listed in the sidecar), not from the plan. The sections above are the Kiln reference. Where this build differs from them, this section describes what actually shipped. Scope: the app shell on every page, the main page (`/`) with the create-tournament form, the tournament page (`/tournaments/:id`), the pool page (`/pools/:id`), the bracket page (`/brackets/:id`), the courts list (`/tournaments/:id/courts`) and the court view (`/tournaments/:id/courts/:court`). Machine-readable copy: `frontend/.impeccable/design.json` (Impeccable sidecar, schemaVersion 2; the full record of this section is under `extensions.asShipped`).
+
+### Tokens (`:root` in `frontend/src/index.css`)
+
+Dark is the default. When the device is in light mode (`prefers-color-scheme: light`), the Kiln light grounds replace the dark ones, because they read better in direct sun.
+
+| Token | Dark (default) | Light override | Role |
+|---|---|---|---|
+| `--ground` | `linear-gradient(180deg, #1c1c1c, #161616)` | `linear-gradient(180deg, #ffffff, #f6f4f1)` | Page body (fixed) |
+| `--ink` | `linear-gradient(180deg, #151515, #0e0e0e)` | none, stays dark | App bar, board-head band, court strip, flip cards, score chips (the schedule's and the round grid's) and court tags |
+| `--panel` | `linear-gradient(180deg, #262626, #1f1f1f)` | `linear-gradient(180deg, #ffffff, #f6f4f1)` | Cards: pool, bracket, result, setup note, scoreboard columns, court tiles, the results-grid panel and schedule rounds; on the bracket page the match cards, the tree's panel, the placings list and the score card in the match panel; on the main page the create panel, the Today panels and the dated-row list |
+| `--surface` | `#1a1a1a` | `#ffffff` | Drawer, modal, match panel, root background; also the label of the current round tab |
+| `--surface-2` | `#232323` | `#f6f4f1` | Code, loading bars, series game rows, Up next rows, the round grid's playing cells |
+| `--panel-flat` | `#232323` | `#fbfaf8` | `--panel` as one flat colour, for the round grid's pinned team names that the rounds scroll under (a gradient would restart in every cell) |
+| `--surface-3` | `#2b2b2b` | `#e0e0e0` | Match boxes in the read-only bracket tree, loading shimmer, the +1 button |
+| `--text` | `#eeece9` | `#111111` | Body and headings; the fill of the current round tab and the outline of the match open in the panel |
+| `--muted` | `#a3a3a3` | `#333333` | Labels, table heads, notes, the round grid's heads, Rest and a ref cell's teams, the score separator, a match card's meta line and losing row, the tree's round heads, placing numbers |
+| `--subtle` | `#999999` | `#333333` | Placeholders |
+| `--accent-text` | `#ea9557` | `#9e5019` | Links, disclosure summaries, focused field edge, save errors, court tile hover ring, the Now chip and current-round rings, the selected pairing, the live ring on a bracket match card and on the main page's row for a tournament being played, the Today panel hover ring, the lit dot of a main-page stage chip, the Next round link |
+| `--border` | `#4d4d4d` | `#e0e0e0` | Bracket connectors (the read-only tree and the card tree's elbows), scrollbar |
+| `--hairline` | `rgba(255,255,255,.1)` | `rgba(0,0,0,.1)` | Table rules, drawer edges, box strokes, outlines on −1, disabled Finish match and free courts, rules between schedule rows, placings rows and the match panel's tool sections, rules between the main page's dated rows |
+| `--field-border` | `#4d4d4d` | `#4d4d4d` | Input and select edges. Kept heavy in light mode so they survive glare |
+| `--ghost`, `--ghost-hover`, `--ghost-active` | white at .10, .15, .20 | black at .10, .15, .20 | Default (secondary) button fills; `--ghost` also fills the selected schedule row, a hovered bracket match card and a main-page stage chip, `--ghost-hover` a hovered round-grid cell and a hovered dated row on the main page |
+| `--amber` | `#dfae4e` | same | Amber as a mark, and amber on ink: the winner's score in a score chip (schedule, round grid) or a bracket match card |
+| `--amber-tint` | `rgba(223,174,78,.1)` | `rgba(223,174,78,.2)` | Background of advancing rows, of the champion banner and of the main page's champion line |
+| `--amber-text` | `#dfae4e` | `#9e5019` | Amber as text on light grounds: advancing places, winning scores, the champion label, the champion's row in placings, the champion's name in a main-page dated row. In light mode it becomes the copper-brown `#9e5019`, because `#dfae4e` is not legible on white |
+| `--ember`, `--ember-hover`, `--ember-active` | 135deg `#ee9148`→`#d8742c`, `#f29a52`→`#e0803a`, `#d57a33`→`#c66a25` | same | The primary action only |
+| `--on-ember` | `#231306` | same | Label on ember |
+| `--ember-solid` | `#e68435` | same | Caret and `accent-color`; the caret in a flip card being typed into |
+| `--ember-glow` | radial at 80% 20%, `rgba(230,132,53,.14)` fading out by 60% | same | Board-head band only |
+| `--selection` | `rgba(230,132,53,.4)` | same | `::selection` background |
+| `--focus` | `0 0 0 3px rgba(230,132,53,.4)` | same | Every focus-visible ring |
+| `--elevation-3` | 1px white ring at .1 plus `0 1px 2px rgba(0,0,0,.05)` | ring in black at .1 | Cards, scoreboard columns, court tiles, modal, the grid panel, schedule rounds, bracket match cards, the placings list, the match panel |
+| `--shadow-float` | `0 8px 24px rgba(0,0,0,.3)` | same | Toasts, under their ring, and the match panel sheet, under `--elevation-3` |
+| `--scrim` | `rgba(0,0,0,.5)` | same | Behind the open Manage drawer, the modal and the match panel |
+| `--band-text`, `--band-muted` | `#eeece9`, `#a3a3a3` | same | Text on ink, whatever the device theme: bands, strips, flip-card numerals, score chips, court tags; `--band-muted` is also a running (unfinished) score in a schedule chip or a bracket match card |
+| `--band-accent` | `#ea9557` | same | Accent on ink: stage-chip dot, Courts and All courts links, health error dot, pressed Swap sides edge, typing ring on a flip card, toast error edge |
+| `--band-ghost`, `--band-ghost-hover` | white at .10, .15 | same | Ghost fills on ink (nav, Manage toggle, stage chip, Swap sides, toast ring); `--band-ghost` is also the top-half lift on a score chip |
+| `--band-divider` | `rgba(255,255,255,.08)` | same | The app bar's bottom rule |
+| `--toast` | `#232323` | same | Toast fill. Toasts stay dark in both themes, like the band |
+| `--status-idle` | `#999999` | same | The health dot before the first check |
+| `--error-ring` | `rgba(234,149,87,.3)` | same | The 3px halo on the health error dot |
+| `--flip-seam` | `rgba(0,0,0,.7)` | same | The dark hinge seam across a flip card and a score chip |
+| `--gutter` | 16px | 24px from 768px, 40px from 1024px | Horizontal page padding |
+| `--section-gap` | 32px | 48px from 768px, 56px from 1024px | Space between page sections |
+| `--ease` | `cubic-bezier(0.22, 1, 0.36, 1)` | same | Drawer, toast, disclosure, new-match, target-row, match-panel and create-panel motion |
+
+Content max-width is 1200px. The court view's scoreboard, Finish match and Up next share a 640px centered column. No literal colors remain in the stylesheet outside `:root`.
+
+### Type roles as used
+
+Served from the app's own origin (the `@fontsource` packages, imported in `src/fonts.js`, Latin subset): Unbounded 400/700, Inter 400 to 700, Manrope 500/700, DM Sans 500 as a variable font (the family is named `DM Sans Variable`). A font is never fetched from another site, and `fonts.test.js` checks that every font token has its files.
+
+- **Unbounded 700 (`--display`)** is used for names, section heads and scoreboard numerals:
+  - Tournament name (`h2.board-title`): 32/36, and 48/48 from 768px, tracking -0.02em. The pool name on the pool page's strip (`.pool-page .court-strip h2`) and the tier on the bracket page's strip (`.bracket-page .court-strip h2`, "Bracket A") take the same 32/36 and 48/48, so they outrank the page's section heads, and so does "Tournaments" on the main page's band (`.home-band h2`).
+  - Section heads (`h3`: Standings, Playoffs, Results, Schedule, Up next, Placings; on the main page Today, This week, Earlier): 24/28, and 28/32 from 768px, tracking -0.01em.
+  - Card heads (`.pool-card-head h4`): pool and bracket names at 22/26.4.
+  - Also at 22/26.4: the champion's name on a result card, the champion banner's sentence, the Manage drawer title, modal titles, the match panel title (`.match-panel-head h3`), the create panel's title (`.home-create h3`) and a secondary Today panel's name (`.today-name`, 18/24 below 640px, tracking -0.01em).
+  - Main page: the name of a tournament being played (`.today-card[data-live] .today-name`) 28/32, 24/28 below 640px, tracking -0.02em; the champion line (`.today-champion`) 16/24.
+  - Court names: 28/32 on the court strip (`.court-strip h2`, also "Courts"), 24/28 on a courts-list tile.
+  - Schedule round heads (`.pool-round h4`, "Round N"): 18/24. Placing numbers (`.placing-place`, "1st"): 18/22 in `--muted`.
+  - Round heads over the card tree (`.card-tree-head`): 16/24 in `--muted`.
+  - **Scoreboard numerals** (`.flip-half`): sized by digit count with container query units, so they fill the card at any width. One digit is `min(84cqi, 168px)`, two digits `min(56cqi, 128px)`; line height 1.3, `tabular-nums`, tracking -0.02em (-0.04em for two digits). The card itself is at least `min(112cqi, 220px)` tall, measured against its column (`.flip-column` is the inline-size container). While a score is being typed, the overlaid input shows its digits at `min(54cqi, 128px)`.
+  - Score chips on a courts-list tile: 28/40, `tabular-nums`, tracking -0.02em. Score chips in the pool schedule and on bracket match cards (`.score-chip`): 20/34, with a 16px `--muted` dash between them in the schedule.
+  - Round grid: round heads 700 at 14/20 in `--muted` (the current round's in `--accent-text`); cells Inter 500 at 13/18, a playing cell's first line at 600; its score chips 16/26.
+  - Up next order numbers: 16px, `tabular-nums`, in `--muted`.
+  - The brand word: 16px.
+- **Inter (`--ui`)** is the working face:
+  - Root body: 16.8/25.2.
+  - Tables: 16/24, headers 600 at 14/20.
+  - Labels: 600 at 14.7/21. Court labels, the bracket format line on the strip and the save status line use 500 at 14.7/21.
+  - Fields: 16/24.
+  - Notes and captions: 14/20 (including the Finish match notes, the schedule's ref and resting lines and the match panel's teams and hold explanation).
+  - Plain `h4` (drawer sections, result-card tier): 600 at 16.8/25.2. The match panel's tool heads ("Court and time"): 600 at 14.7/21 in `--muted`.
+  - Series tally: 600 at 16/24 in `--muted`. Series game lines and Up next rows: 500 at 16/24.
+  - Pool page: round-grid team names 600 at 15/20 (14px on phones); court tags 600 at 13/18; the Now chip 600 at 13/20; schedule team pairings (`.round-teams`) 600 at 16/22.
+  - Bracket page: team rows on a match card (`.card-team`) 600 at 17/22, the losing row 500 in `--muted`; the card's meta line (`.round-card-meta`) 500 at 14/20 in `--muted`; placings rows 500 at 16/22, the champion's row 700.
+  - Main page: dated rows (`.dated-row`) 500 at 14/20 in `--muted`, their name (`.dated-name`) 600 at 16/24 in `--text`; the Today meta line (`.home-meta`) 500 at 16/24 in `--muted`; the stage chip on a panel (`.home-stage`) 600 at 14.7/21.
+  - Numbers use `tabular-nums` in tables, number inputs, the bracket, the series tally and game lines, the round grid and schedule scores, and the main page's dated rows.
+- **DM Sans 500 (`--nav`)**: buttons, nav links, the board meta line, disclosure summaries, the Manage toggle, the court strip's links, the Score on Court / Watch Court links, the Next round link and the Courts link on a live Today row, all at 16/24. Round tabs (`.round-tabs button`) are 15/20.
+- **Manrope 700 (`--emphasis`)** sets the court's hands-on text:
+  - The primary action (`.btn-primary`, `button[type=submit]`), at 16/24.
+  - Team names over each scoreboard column (`.flip-team`): 18/24, centered.
+  - +1 at 24px and −1 at 18px, each an SVG glyph plus the digit, with `tabular-nums`.
+
+### Components
+
+- **App bar** (`.app-bar`):
+  - Sticky, z-index 6, `--ink` fill, 1px `--band-divider` bottom rule.
+  - The inner row is at least 64px tall and at most 1200px wide.
+  - The brand is a 28px ember tile (8px radius) holding a 16px SVG mark in `--on-ember`, next to the Unbounded word.
+  - Nav links and buttons are at least 48px tall with 12px radius and `--band-ghost` fills.
+  - The bar has two rows at every width: the brand, the account links and the health dot on top; the page trail on its own full-width row below (padding 8px `--gutter` 4px, 4px between the rows).
+  - **Page trail** (`nav.page-trail`, "Breadcrumb", `PageTrail.jsx`): an up arrow, the trail, a down arrow (48px `--band-ghost` icon buttons named "Up to Pool A" / "Down to Court 2", disabled with nothing that way). The trail (`ol.trail-list`) is DM Sans 500 16/24: earlier crumbs are links in `--band-muted` (hover `--band-ghost` fill and `--band-text`), the current page `--band-text` at 600 with `aria-current="page"`, split by 14px SVG chevrons in `--band-muted`. Crumbs are 48px tall, padding 12px 8px, 12px radius, at most 18ch with an ellipsis (full name as a tooltip); crumbs between Home and the current page shrink first when space runs out. Pages the reader came up from follow the current page at 0.6 opacity.
+  - Icon buttons are 48px square (44px on phones) with 14px radius.
+  - Health is an 8px dot with a visually hidden label: `--status-idle` before the first check; the error state is `--band-accent` with a 3px `--error-ring` halo.
+  - Below 640px the brand word is visually hidden, and the crumbs keep their size and the trail scrolls sideways, the current page scrolled into view and the start fading out (`mask-image`, 24px) while earlier crumbs are out of view.
+- **Board-head band** (`.board-head`):
+  - A full-bleed ink band pulled up under the app bar, filled with `--ember-glow` over `--ink`.
+  - At 1200px and wider, the bottom corners round to 16px.
+  - It holds the tournament name, a meta line in `--band-muted`, and the Manage toggle on the right. The meta line has the stage chip and a Courts link in `--band-accent` that is at least 48px tall.
+- **Stage chip** (`.stage-chip`):
+  - 12px radius, `--band-ghost` fill, `--band-text`, Inter 600 at 14.7/21, padding 4px 12px.
+  - Leads with an 8px `--band-accent` dot.
+  - On the main page's panels it takes theme tokens instead (`.home-stage`, below).
+- **Pool and bracket cards** (`.pool-grid` and `.pool-card`):
+  - The grid is `repeat(auto-fit, minmax(min(100%, 340px), 1fr))` with a 16px gap: side by side on a laptop, stacked on a phone.
+  - Each card has a `--panel` fill, 16px radius, `--elevation-3`, 20px padding and a 12px internal gap.
+  - The head row pairs the Unbounded name with a DM Sans link that is at least 48px tall.
+  - The playoffs panel uses the same card for each bracket tier, with an "Open Bracket X" link to the bracket page. Inside it the bracket is drawn as on the bracket page (see "Read-only bracket" below); on a laptop the tree is a window onto the bracket, capped at 420px tall and scrolling in place, sideways too if it must (`.pool-card .bracket-scroll`).
+  - The tournament page's Standings section uses the same card for each pool, with its table on `--panel-flat`. The Teams section is one panel (`.team-panel`: `--panel`, 16px radius, `--elevation-3`) with a toolbar row on top, divided from the cards by a hairline, and under it a strip of cards that scrolls sideways when there are more teams than fit (`.team-list`, `overflow-x: auto`, 288px cards on `--surface-3` with a 14px radius, 12px apart, snap stops at each card's start, the ends faded by a 24px mask). A card holds the team name (Inter 600 17/24, a 48px target), the player count (Inter 500 15/21 in `--muted`, the number in 700 `--text`) and, signed in, the "+ Player" button. The add box opens inside the card with its input on a line of its own, and with Show players on the roster is a short list under the count. The strip is keyboard-focusable (`tabindex="0"`, labelled "Teams, scrolls sideways") and shows an inset 2px `--accent-text` outline when focused. Both section headings stay outside their panels, as Playoffs' does. Signed in, adding a team is in that toolbar (`.team-add-bar`, at most 560px wide): the name box with its placeholder "Team name" (the label stays for screen readers) and the Add team button fused to its right edge, both 48px tall. **Show players** is a switch at the toolbar's other end (`.team-switch`: a 46×28px track that turns `--ember` when on, with a 20px thumb), still a checkbox underneath. It is not in the Manage drawer. Once any pool match has a score (`pool_play_started`) both are disabled, and a `.field-note` line under them says "Pool play has started, so teams can't be added."
+- **Standings** (`table[aria-label='Standings']`):
+  - Full width with `--hairline` row rules. Numbers are right-aligned, the team name is left-aligned at weight 600, and the rank is in `--muted`.
+  - Advancing rows (`tr.advancing`) get a full-row `--amber-tint` background, and their rank switches to `--amber-text` at 700. They have no side stripe or border accent.
+  - Past eight teams the table scrolls in its box (`.standings-scroll`) under a pinned header whose fill matches the ground it sits on (`--surface` on the pool page, `--panel-flat` in a pool card); the box is keyboard-focusable ("Standings, scroll for more") and shows the focus ring.
+  - The footer (`.standings-foot`) holds a key and a transparent refresh button in `--accent-text`. The key (`.advance-note`) is a 14px tinted swatch with an `--amber-text` edge plus "Top N advance to the playoffs".
+- **Results cards** (`.results-list`):
+  - The same grid and card treatment as the pool cards, with a 6px internal gap.
+  - Each card has the tier head in Inter 600, a "Champion:" label in `--amber-text` (Inter 600 at 14/20), the champion's name in Unbounded 22, the runner-up as a muted note, and a "Full placings" link.
+- **Manage drawer** (`details.manage`):
+  - The summary is a DM Sans toggle on the band, with a 20px SVG and a `--band-ghost` fill.
+  - When open, `--scrim` covers the page and a fixed right-hand panel opens, `min(480px, 100%)` wide, in `--surface` with a hairline left edge.
+  - The panel slides in over 300ms (`drawer-in`, a 24px translate on `--ease`), with a 32px gap between sections.
+  - The panel head is sticky, with an Unbounded 22 title and an icon close button.
+  - The danger zone sits last, above a hairline, with its button text in `--accent-text`.
+  - **Settings form** (`.settings-form`, `SettingsForm.jsx`): a fieldset per thing it runs (Tournament, Pool play, Playoffs, Courts), each legend Unbounded 700 18/24, 16px between settings and 24px between groups. A setting is its label over its box with a line under it (`.field-note`, Inter 14/20 `--muted`) saying what it does, or "Locked: <why>." when its box is disabled. Save sits at the left and stays disabled until something changes. Only what changed is sent.
+  - **Review changes dialog**: the standard modal (`ConfirmModal`, in the page's body) with "Saving these settings will:" and a bulleted list of effects (`.effects-list`, Inter 16/24), then Keep editing and Save changes. It only opens when the change would do something to what exists.
+- **Tournament date and venue** (`.board-when`): in the board head's meta row, after the stage chip, "Sat, Oct 3, 2026 · Washington Park", DM Sans 500 16/24 in `--band-text`. Either alone shows alone, and neither shows nothing.
+- **Toasts**: `--toast` fill in both themes, a `--band-ghost` ring plus `--shadow-float`; an error toast swaps the ring for a `--band-accent` edge. They enter over 300ms (`toast-in`) on `--ease`.
+- **Seeding dialog** (`.seeding-modal`, `SeedingDialog.jsx`), opened by Advance to playoffs and Generate bracket:
+  - The standard modal (`--surface`, 16px radius, 24px padding, 12px gap) widened to 560px and capped at the viewport height. The head and the actions stay fixed; the brackets between them (`.seeding-tiers`) scroll with a thin `--border` scrollbar.
+  - The title, a `--muted` note, then the format select.
+  - Each bracket is an Unbounded 700 18/24 heading over a list of rows (`.seed-list`): `--surface-2`, 12px radius, 6px apart. A row holds the seed number (Unbounded 700 16/24, `--muted`, tabular), the team name (Inter 600 16/24) over its pool finish (`.seed-finish`, Inter 14/20 `--muted`), and two 48px chevron buttons (`.seed-move`, 20px SVG, transparent, 35% when disabled) to move it up or down.
+  - Actions on the right: Cancel and the primary confirm. **Reset to standings order** (`.seeding-reset`, transparent, `--accent-text`) sits at the left and is always there, at 40% until the order has changed, so the row never changes size. Below 520px it takes the first row to itself, in both states.
+  - After a move, focus stays on the same team's button, falling to the opposite one when it reaches an end.
+- **Champion banner** (`.champion`, `ChampionBanner` in `BracketDiagram.jsx`), on the tournament page's bracket cards and on the bracket page once a champion is decided:
+  - One sentence, no label above it: "Aces win the bracket", in Unbounded 700 22/26.4 `--text`, wrapping anywhere.
+  - An `--amber-tint` block, 16px radius, padding 16px 20px, 16px below it.
+- **Read-only bracket** (`BracketDiagram.jsx`), on the tournament page: the bracket page's own drawing, with nothing new to style.
+  - From 900px it is `CardTree` (the same match cards, elbow connectors and round heads) inside the pool card's panel; below that it is `RoundPages` (round tabs over swiping pages of cards).
+  - A card opens nothing here: tapping it goes to the bracket page, where the match panel and its tools live. The court link and the queue and ref lines are the same as on the bracket page.
+- **Court strip** (`.court-strip`, court view, courts list, pool page and bracket page):
+  - An ink band like the board head but without the glow: `--ink` fill, `--band-text`, pulled up under the app bar (margin-top -24px), padding 12px `--gutter`. At 1200px and wider its bottom corners round to 16px.
+  - Holds the court name (Unbounded 28/32), the court label in `--band-muted` (Inter 500 at 14.7/21), on the court view the current match's ref beneath it in the same style ("Ref: Aces" or "Ref: N/A"), and on the right a DM Sans link in `--band-accent`, at least 48px tall ("All courts" on the court view, "Back to tournament" on the list, the pool page and the bracket page).
+  - On the court view (`.court-strip-narrow`) the strip's content is inset to the 640px scoreboard column: `padding-inline: max(var(--gutter), calc((100% - 640px) / 2))`. Below 768px it stays one row.
+  - **Swap sides** (`.swap-sides`, only while a match is on): a `--band-ghost` toggle (hover `--band-ghost-hover`) with a 20px SVG and the label. `aria-pressed="true"` adds a 1px inset `--band-accent` edge. Below 768px it is a 48px icon-only square with the label visually hidden. It reverses the columns on screen only; scores stay with their teams, and the choice is remembered per court on the device (`localStorage`, `court-sides:<tournament>:<court>`).
+- **Flip scoreboard** (`.flip-board`, `FlipBoard.jsx`):
+  - Two equal columns, 12px apart, in the 640px centered column. Each column (`.flip-column`) is a `--panel` card, 16px radius, `--elevation-3`, 12px padding and a 10px internal gap (12px 4px 4px on phones, so the card takes the full width). The team name sits on top in Manrope 700 18/24, at least 48px tall.
+  - **Flip card** (`.flip-card`): `--ink` in both themes, 12px radius, the numeral in `--band-text`. The top half is lighter (`--band-ghost` over `--ink`, the same lift as the score chips); a 3px `--flip-seam` seam crosses the middle, and a 1px `--hairline` ring outlines the card against its panel. Each half is the whole numeral clipped to its half, stacked in one grid cell so they line up exactly.
+  - **The flip**: when a score changes (a tap, a typed value or another device), the old top half folds down over the hinge (`flip-fold`, 90ms ease-in, `rotateX` 0 to -90deg) and then the new bottom half drops into place (`flip-drop`, 90ms ease-out after a 90ms delay, from `rotateX(90deg)`): 180ms in all, with `perspective: 600px`. Reduced motion skips both, and the new number simply shows.
+  - **Typing**: a number input lies over the card with transparent text. On focus it shows its digits in `--band-text` on `--ink`, with an `--ember-solid` caret and a 2px inset `--band-accent` ring.
+  - A new match comes onto the board with `match-in`: 320ms on `--ease`, from opacity .4 and 24px lower.
+  - Spectators (signed out) get the same board read-only, with no buttons, under a sign-in line and, for a series, the tally.
+- **+1 / −1** (`.flip-plus`, `.flip-minus`), full column width under each card:
+  - +1: `--surface-3` fill, 72px tall (88px on phones), hover `--ghost-hover`, active `--ghost-active`, 22px SVG plus.
+  - −1: 48px tall, transparent with a 1px inset `--hairline` outline, `--muted` text, 18px SVG minus. Disabled at 0.
+  - On phones a scorekeeper's board fills the first view (`min-height: calc(100svh - 231px)`, everything above the board: the two-row app bar, the court strip and the gap) and the cards stretch, so +1 sits in the thumb zone and Finish match at the bottom.
+- **Save status line** (`.save-status`, `SaveStatus.jsx`, `role="status"`): centered Inter 500 at 14.7/21 in `--muted`, at least 24px tall so the board does not jump. It reads "Saving…" (points are sent 600ms after the last tap, as one running score), then "Saved"; nothing before the first change. A failed save ("Couldn’t save the score…") and a version conflict ("Someone else updated this match.") switch to `--accent-text` with a Try again or Refetch latest ghost button.
+- **Finish match** (`.btn-primary.finish-match`, also "Record game N" on a series board): full width of the 640px column, at least 56px tall. It is ember only when it can be pressed. Disabled (tied, saving, finishing or in conflict) it is a ghost outline: `--ghost` fill, `--muted` text, a 1px inset `--hairline` edge, full opacity. A tie shows "A match can’t finish tied." as a `.finish-note` (Inter 14/20, `--muted`) above it. Finishing asks for confirmation in the modal first.
+- **Series on the board** (`.series-board`, `SeriesForm`):
+  - The tally (`.series-tally`) on top: "A vs B · best of N · x–y", Inter 600 16/24 in `--muted`, centered, tabular.
+  - Then the game in play on the flip scoreboard, its save status and Record game N.
+  - Then the games so far (`.series-games`), each a `--surface-2` row with 12px radius, padding 8px 8px 8px 16px: "Game N: a–b" in Inter 500 16/24, with the winning side's score (`.game-won`) in `--amber-text` at 700, and a Fix game N button. Empty lists are hidden.
+- **Up next** (`.up-next`): below the fold on phones, in the 640px column. An Unbounded section head, a playoff note when the matches go to the next free court of that kind, then an ordered list: each row a `--surface-2` block, 12px radius, at least 56px tall, padding 8px 16px, Inter 500 16/24, led by its number in Unbounded 700 16 `--muted`. The row's ref sits at its end (`.up-next-ref`, Inter 14/20 `--muted`, right-aligned); a playoff match still in the queue has no ref yet (it's chosen when the match gets a court), so it shows none.
+- **Empty court**: the setup-note card ("Nothing left to play on this court right now.").
+- **Courts list** (`.court-list`, `CourtsPage.jsx`):
+  - A grid of `repeat(auto-fill, minmax(min(100%, 300px), 1fr))` with a 12px gap; each whole tile is the link to that court.
+  - A busy court's tile (`.court-link`): `--panel`, 16px radius, `--elevation-3`, 16px padding, 8px gap. Hover swaps the elevation for a 1px inset `--accent-text` ring (200ms). The head is the court name in Unbounded 24/28 and its label in Inter 500 14.7/21; a series adds "Best of N · Games x–y" in the same label style.
+  - One line per team: the name at weight 600 in `--text`, and a **score chip** (`.court-link-chip`), a small flip card: `--ink` with a `--band-ghost` top half, as on the large card, a 1px `--flip-seam` seam at .7, a `--hairline` ring, 8px radius, at least 64px wide, padding 4px 10px, the score in Unbounded 700 28/40 `--band-text`.
+  - Under the teams, the current match's ref (`.court-link-ref`, Inter 500 14.7/21 in `--muted`): "Ref: Aces" or "Ref: N/A". A free court shows none.
+  - A free court (`[data-free]`) has no board: one outlined line, transparent with a 1px inset `--hairline` edge (hover `--accent-text`), and "Free" pushed to the right in Inter 500 14.7/21.
+- **Sign in and account** (`.form-page`, `LoginPage.jsx`, `AccountPage.jsx`):
+  - One narrow column: the court strip (`.court-strip-narrow`; the title Unbounded 28/32, and on the account page "Signed in as …" as its label) with everything under it 640px wide and centred. The strip's inset is nudged by one gutter so its title lines up with the panel's edge below.
+  - The form is a panel (`.form-panel`, the pool card's fill, 16px radius, `--elevation-3`, 20px padding, 16px gap) of full-width fields (label over a 48px input), then the primary submit, 56px tall and full width. A refused sign-in or password change shows as a line above the button in `--accent-text` (Inter 500 14.7/21, `role="alert"`).
+  - The account page puts "Change password" as a heading over the panel and the note about signing out elsewhere beneath it (`.section-note`). Signed out, it shows the strip and the standard `.setup-note` with the sign-in link.
+- **Correction dialog** (`.correction-modal`, `CorrectionForm.jsx`), opened by Correct on a finished match, on the pool page and in the bracket's match panel:
+  - It renders in the page's `<body>` (a portal), not beside the Correct button: the pool schedule fades and scrolls its list, and a fixed overlay inside it was clipped to that list.
+  - The standard modal at 520px, capped at the viewport height. The title "Correct A vs B" (the dialog's name), a `--muted` note ("Correcting A vs B", plus "(best of 3)"), then the scores: one game is two fields side by side (`.game-scores`, two equal columns 12px apart, each label over its box); a series has that row per game (`.correction-games`) with Add game and Remove last game beneath. A refusal shows in `--accent-text`. Close and the primary Review correction sit at the right; Review opens the confirmation with what would be reset.
+  - `.game-scores` is shared with the court board's fix-game form, and the series' conflict and save-error lines (`.series-alert`, Inter 500 14.7/21, `--accent-text`, centred, with a 48px Refetch button) match the save status.
+- **Team page** (`.team-page`, `TeamPage.jsx`, `PlayerForm.jsx`):
+  - **Structure**: the court strip, holding the team's name at board-title scale (32/36, 48/48 from 768px), its seed and player count as the label ("Seed 3 · 4 players", or "No seed"), and Back to tournament. Then the sheet (`.team-sheet`, one column, `--section-gap` apart) and, signed in, Delete team last in a danger zone above a hairline.
+  - **Sheet**: Details (signed in only) and Roster, each a heading outside a panel (`.team-panel`, the pool card's fill, 16px radius, `--elevation-3`, 20px padding, 12px gap). From 1024px they sit side by side in two equal columns 32px apart, top-aligned; a spectator's roster alone stays 640px wide.
+  - **Details**: name (grows, at least 240px) and seed (120px) with Save on one row, wrapping as the width shrinks.
+  - **Roster**: one row per player (`.roster-list`: `--surface-2`, 12px radius, at least 48px tall, the name Inter 600 16/24 wrapping anywhere) with a Remove button at the right (transparent, `--accent-text`), then "No players yet." when empty. Signed in, the add-player form (`.player-form`) sits under a hairline at the bottom of the panel: the name field grows beside Add player.
+- **Pool page** (`.pool-page`, `PoolPage.jsx` and `PoolSchedule.jsx`), the pool as its round-robin sheet:
+  - **Structure**: the court strip (reused as is), holding the pool name at board-title scale (32/36, 48/48 from 768px), its courts as the label ("Courts 1, 2") and Back to tournament. Then the sheet (`.pool-sheet`, one column, `--section-gap` apart): Standings (the standings table above, with the advancing places), Results (the grid) and Schedule. From 1024px, standings and the grid sit side by side in two equal columns 32px apart, with the schedule full width below. Signed in, Delete pool sits last in a danger zone above a hairline.
+  - **Row limits**: Tall lists stop at a fixed number of items and scroll inside their box (`useRowLimit`): the box is measured as rendered and capped just under the last whole item, plus a 16px peek of the next, at every width. A capped standings table or schedule fades out over its last 32px (`mask-image`) while more waits below.
+  - **Results grid by round** (`.grid-scroll` holding `table.round-grid`), each team's day: the pool's rounds across ("Round 1", "Round 2"…), its teams down, every cell what that team does in that round. A `--panel` card, 16px radius, `--elevation-3`, 10px padding (6px on phones), scrolling sideways inside itself; the page never does. Beside the standings (from 1024px) the Results section is exactly as tall as the standings block, table and footer: it adds no height to the shared row (`height: 0`), fills it (`min-height: 100%`), and the grid takes what the heading leaves. Stacked on narrower screens it shows four teams instead. Either way the rest scroll down under the round heads, pinned to the top (sticky, `--panel-flat`) with the corner over both, and the panel's top padding moves into the heads so no row shows above them.
+    - Columns are spaced 6px apart (4px on phones) with no gap between rows, and each cell has 3px 4px padding, so the current round's outline runs unbroken down its column.
+    - The team names (`tbody th`, 600 15/20, 96–160px; 84–96px and 14px on phones) and the corner stay pinned while the rounds scroll: `position: sticky`, `--panel-flat`, with the flat colour also spread 16px left over the panel's padding and 6px (4px) right over the gap, so no scrolled cell peeks out beside them.
+    - **Playing** (`.round-cell[data-kind="play"]`, a link): a `--surface-2` cell, 10px radius, at least 120px wide (108px on phones) and 56px tall, padding 6px 10px. "Ct 1 · vs Setters" (Inter 600 13/18), then, once there's a score, the schedule's flip-card score chips at 16/26 from the row team's side: the winner's in `--amber` on ink when finished, both in `--band-muted` while it's played.
+    - **Reffing** (`[data-kind="ref"]`, a link): "Ref · Ct 2" over "Aces v Diggers" in `--muted`, drawn as a 1px inset `--border` outline with no fill, so it reads apart from a match at a glance. An N/A match has no ref cell.
+    - **Resting** (`[data-kind="rest"]`): the word "Rest" in `--muted`, no fill.
+    - **Current round** (`[data-now]` on its head and cells): the column outlined in 1px `--accent-text`, rounded 10px at top and bottom, and its head in `--accent-text`; screen readers hear "(now)".
+    - Playing and ref cells link to their match in the schedule; hover lays `--ghost-hover` over them. Choosing one marks the match (`aria-current`) in every cell that shows it (both teams' and the ref's) with a 2px `--accent-text` outline offset 2px (1px on phones), and its schedule row.
+  - **Schedule** (`.round-list`): one panel per round, 12px apart. It shows about three matches' worth of rounds, then scrolls: one round when rounds play three or more matches, two on two, three on one (`roundsInView`, from the most matches any round plays). A capped schedule opens scrolled to the Now round without moving the page, and keeps 3px of padding so the rounds' outer ring isn't clipped. Each round (`.pool-round`) is `--panel`, 16px radius, `--elevation-3`, padding 14px 14px 16px, with an Unbounded 18/24 "Round N" head.
+    - The current round (the first with an unfinished match, `data-now`) adds a 1px inset `--accent-text` ring and a **Now chip** beside its head: Inter 600 13/20 in `--accent-text`, a 1px inset `--accent-text` edge, 12px radius, padding 2px 10px, no fill.
+    - Match rows (`.round-match`) are flat, split by `--hairline` rules, padding 10px 4px: a **court tag** (`.court-tag`, "Court N", Inter 600 13/18 `--band-text` on `--ink`, 8px radius, padding 5px 9px), then the pairing "A vs B" as a link back to its cell in the grid (`.round-teams`, `--text`, `--accent-text` and underlined on hover) with its ref beneath, then the score.
+    - The ref (`.round-ref`, Inter 14/20 in `--muted`, stacked under the pairing in `.round-pairing`): "Ref: Aces" or "Ref: N/A" signed out. Signed in it is a labelled Ref dropdown, the standard select at 48px, offering "Automatic (Aces)" (the rules' pick, selected while the ref is automatic), the pool's teams free that game, then N/A; a ref set by hand shows as that choice. A refused change shows its reason under the dropdown as a finish note.
+    - The score is one **score chip** per team (`.score-chip`): the same small flip card at 20/34, at least 44px wide, padding 0 8px, 8px radius, a `--hairline` ring; the winner's score in `--amber`. A match still in play shows its running score with both chips in `--band-muted`.
+    - An unfinished match with a court links to that court's scoreboard (`.round-court-link`, DM Sans in `--accent-text`, at least 48px tall): "Score on Court N" signed in, "Watch Court N" signed out. A finished match gets Correct when signed in. Below 768px the court tag and pairing share the first line and the ref, the score and the link or Correct each take a full-width line beneath (`.round-pairing` is `display: contents` there, so the ref joins the row's grid); from 768px the pairing stacks its ref, and the score and the link or Correct sit at the row's end. The Ref dropdown may shrink to its column (the closed select cuts a long name short), so nothing overlaps.
+    - Under the rows, the teams sitting out that aren't reffing: "Resting: …", Inter 14/20 in `--muted`.
+    - The selected row (`aria-current`) or the row reached by link (`:target`) is filled with `--ghost` plus a 2px inset `--accent-text` ring, 12px radius, 10px side padding. It arrives from `--ghost-active` (`target-in`, 600ms on `--ease`), and keeps 145px clear of the sticky two-row app bar when scrolled to.
+    - Tapping a grid cell or a schedule row selects that pairing in both.
+  - **States**: loading placeholders; no schedule (a setup note, plus Generate schedule when signed in); a match without a court shows "Court –" and no court link.
+- **Bracket page** (`.bracket-page`, `BracketPage.jsx`, `BracketBoard.jsx`, `RoundPages.jsx`, `CardTree.jsx`, `MatchCard.jsx`, `MatchPanel.jsx`), one playoff tier read round by round:
+  - **Structure**: one column, 20px apart. The court strip (reused as is) holds the tier at board-title scale ("Bracket A", 32/36, 48/48 from 768px), the format as its label ("Single elimination · best of 3"; the best-of part only when it is more than 1) and Back to tournament. Then, once the tournament is complete, Placings; then connection and overflow notes when they apply; the champion banner once decided; then the rounds.
+  - **Placings** (`.placings`): a Placings section head over one `--panel` list, 16px radius, `--elevation-3`, padding 6px 16px, rows split by `--hairline` rules, padding 10px 0. Each row is a place ("1st", Unbounded 18/22 `--muted`, at least 3ch wide) and its teams (Inter 500 16/22); teams out in the same round share a place, "(out in round 2)". The champion's row takes `--amber-text` for place and name, at 700.
+  - **Phone, under 900px** (`RoundPages`, `.round-view`, 14px gap):
+    - **Round tabs** (`nav.round-tabs`, "Rounds"): a row of ghost buttons, 8px apart, DM Sans 500 15/20, padding 12px 16px, at least 48px tall, bleeding to the screen edges through the gutter and scrolling sideways with no scrollbar. The current round (`aria-pressed="true"`) is filled `--text` with its label in `--surface`, and is kept scrolled into view.
+    - **Round pages** (`.round-pages`): one page per round, each 88% wide, 12px apart, scroll-snapping sideways (`x mandatory`, snap to start) with no scrollbar, so the next round peeks in at the right. A trailing spacer (`::after`, `calc(12% - 12px)`) lets the last page snap flush like the others. Swiping moves the tabs along; tapping a tab scrolls to its page. The view opens on the round being played (else the last one played).
+    - Each page (`.round-page`, labelled by the round's name) is a list of match cards 10px apart, then "Next: {round}" (`.round-next`): a transparent DM Sans link-button in `--accent-text`, at least 48px tall, right-aligned, ending in an 18px SVG chevron.
+  - **Wider, from 900px** (`CardTree`, inside `.bracket-board-tree`, a `--panel` card with 16px radius, `--elevation-3`, 20px padding, scrolling sideways if it must): the same match cards, 248px wide, placed on `layoutBracket` geometry: 56px between rounds, and first-round rows spaced by the tallest card as rendered plus 32px (a card is 132px, or about 180px on a court with its ref line and court link wrapping). The cards are measured before paint whenever the matches change and again when one resizes, and each is centred in its slot so the connectors meet every card at its middle. Elbow connectors (`.bracket-line`, `--border` at 1.5px) run from the middle of a card's right edge across half the round gap and down to the next match. Each round's name heads its column (`.card-tree-head`, Unbounded 16/24 `--muted`); a double-elimination tree labels its sections instead ("Winners bracket", "Losers bracket", "Grand final").
+  - **Match card** (`BracketCard`, `.round-card`): a Kiln panel (`--panel`, 16px radius, `--elevation-3`, padding 4px 4px 10px).
+    - The top is one button (`.round-card-open`, transparent, 12px radius, padding 8px 10px, `--ghost` on hover) holding the two team rows (`MatchTeams`, `.card-team`): the name in Inter 600 17/22 and, at the right, its **score chip** (the pool schedule's `.score-chip`, 20/34). The winner's score is `--amber` on ink; the losing row drops to `--muted` at 500. A single game still being played shows its running score in `--band-muted` (`.score-live`); a series shows games won. An empty slot reads TBD, or BYE once finished. Its accessible name is "{match}: A vs B".
+    - Beneath, the meta line (`.round-card-meta`, Inter 500 14/20 `--muted`, padding 0 10px): the match's status on the left (`MatchStatus`, with " · Ref: Aces" or " · Ref: N/A" once the match has a court; a finished match with no ref recorded shows none) and, while it is on a court with both teams, the court link on the right (`CourtLink`, `.round-court-link`: "Score on Court N" signed in, "Watch Court N" signed out).
+    - **Live** (`data-live`, on a court with both teams and not finished): a 2px inset `--accent-text` ring over `--elevation-3`.
+    - **Open in the panel** (`aria-current`): a 2px solid `--text` outline, offset 3px, so it shows alongside the live ring.
+  - **Match panel** (`.match-panel`, `role="dialog"`, named for its match), over a fixed `--scrim` (z-index 20; the panel 21):
+    - Under 900px, a bottom sheet: full width, at most 85svh and scrolling, 16px top corners, padding 18px `--gutter` 28px, rising in over 280ms (`sheet-up`, 40px and opacity .4, on `--ease`). From 900px, a right-hand sheet `min(440px, 100vw)` wide and full height, 16px left corners, padding 24px, sliding in from 40px (`sheet-in`). Either way `--surface` with `--elevation-3` and `--shadow-float`, 14px gap.
+    - It holds the head (the match name in Unbounded 22/26.4, "A vs B" as a note, an icon close button), the teams again in a score card (`.match-panel-score`, `--panel`, 12px radius, `--elevation-3`, padding 6px 12px) and the meta line with its court link.
+    - Signed in, the tools follow, each section above a `--hairline` rule with 14px above it: Court and time (the schedule form, while the match is playable); Ref (a Ref dropdown, the pool schedule's `RefSelect`, once both teams are known and still after the match: "Automatic (Aces)", the teams not on a court, then N/A; a refused change shows its reason as a finish note); hold or release with a sentence explaining it ("Holding keeps this match off the courts, for example while a team is missing." / "On hold: kept off the courts until it’s released."), for a match nobody has started or one on hold; and Correct (the correction form) for a finished match.
+    - Escape, the close button and a tap on the scrim close it.
+  - **States**: loading placeholders; connection lost (a retrying note); an overflow bracket (a note that its matches take any free court); waiting for teams; in line for a court; on a court (live, running score); on hold; finished; champion decided (the banner); tournament complete (placings); signed out (no tools, Watch Court links).
+- **Main page** (`.home-page`, `MainPage.jsx`, `TournamentForm.jsx`, `homeModel.js`), the fixtures board at `/`:
+  - **Structure**: one column, `--section-gap` apart: the band, the create panel while it is open, then the groups (Today, This week, Earlier), each an Unbounded section head (`h3`) over its list, 16px below.
+  - **Band** (`.court-strip.home-band`): the court strip's plain ink band, no ember glow, padding 28px `--gutter` 24px (20px below 640px), content aligned to its bottom edge. It holds "Tournaments" at board-title scale (32/36, 48/48 from 768px, tracking -0.02em) and, signed in, the ember New tournament button on the right, hidden while the create panel is open. Below 640px the button wraps under the title.
+  - **Create panel** (`.home-create`, `aria-labelledby` its title): under the band, a `--panel` card, 16px radius, `--elevation-3`, padding 20px 24px 24px, 16px gap. Its title is an `h3` "New tournament" in Unbounded 22/26.4, then the app's shared form layout: the "Tournament name" label, the field (focused when the panel opens), an ember Create that stays disabled until the name is non-blank ("Creating…" while it saves) and a ghost Cancel. It enters with `home-create-in` (280ms on `--ease`, from opacity 0 and 8px higher; off under reduced motion). A created tournament lands under Today and the panel closes.
+  - **Grouping** (`groupTournaments`): Today, This week (the six days before today) and Earlier, by the date a tournament was created, never the date it is played. Known risk: a tournament set up the night before shows under This week on the day it is played. A tournament with no date counts as Today, and empty groups are left out. Within a group: in play (pool play and playoffs), then drafts, then complete, newest first.
+  - **Today** (`.today-list`): a grid of `repeat(auto-fill, minmax(min(100%, 300px), 1fr))`, 16px gap, top-aligned so no panel stretches half empty. Each panel (`.today-card`) is `--panel`, 16px radius, `--elevation-3`, and the whole panel links to its tournament through a stretched name link (`.today-name::after`). Hover adds a 1px inset `--accent-text` ring (200ms); keyboard focus puts `--focus` around the panel.
+    - **Live** (`[data-live]`, pool play or playoffs): a full-width row (`grid-column: 1 / -1`), padding 24px (18px below 640px), wearing the bracket page's 2px inset `--accent-text` live ring, kept on hover. The name is Unbounded 28/32 (24/28 below 640px), tracking -0.02em, with the stage chip and team count below it (Inter 500 16/24 `--muted`), and Courts at the row's end: a DM Sans 500 16/24 `--accent-text` link at least 48px tall, raised above the stretched link so it opens the courts list.
+    - **Secondary** (drafts and complete): smaller panels, padding 18px 20px (14px 16px below 640px), 12px gap (10px on phones), the name Unbounded 22/26.4 (18/24 below 640px), tracking -0.01em.
+    - **Champion line** (`.today-champion`, a tournament completed today): "Aces win the tournament", the champion banner's voice set a step down: Unbounded 700 16/24 `--text` on `--amber-tint`, padding 10px 14px, stretched to the panel's width. It is deliberately quieter than a live name, so a finished event never outweighs one being played. Its 12px radius sits concentric inside the panel's 16px.
+  - **Dated rows** (This week, Earlier; `.dated-list`): one `--panel` list, 16px radius, `--elevation-3`, padding 4px 12px (4px 8px on phones).
+    - Each row (`.dated-row`) is at least 56px tall, padding 8px 12px, 12px radius, Inter 500 14/20 `--muted` with tabular numerals. Desktop columns: name (Inter 600 16/24 `--text`) | stage chip | teams | date | champion (`minmax(0, 2fr) 8.5rem 6rem 6.5rem minmax(0, 1.5fr)`, 16px gap).
+    - The whole row is a stretched name link; hover fills it `--ghost-hover` (200ms), keyboard focus puts `--focus` around it.
+    - The rule between rows is a `::before` 1px `--hairline` inset 12px from each side, so the rounded hover fill doesn't bend it.
+    - Below 640px the name and date share line one (the date pushed right) and the chip, teams and champion wrap under them, 6px 12px gaps, padding 10px 8px; the empty placeholder cells are hidden.
+    - Dates are short ("Sep 26"), with the year only when it isn't this year ("Sep 26, 2025").
+    - **Champion** (`.home-champion`, a complete tournament): "Champion" in `--muted`, then the name in `--amber-text` at 700. The server sends it as `champion_name`, the tier-1 bracket's winner once the tournament is complete.
+  - **Stage chip on a panel** (`.home-stage`): the stage chip's metrics (Inter 600 14.7/21, padding 4px 12px, 12px radius, 8px dot) in theme tokens rather than band tokens: `--ghost` fill, `--text`. The dot is lit `--accent-text` while the tournament is in play and otherwise a hollow 1.5px inset `--muted` ring. Labels: Draft, Pool play, Playoffs, Complete.
+  - **Empty state**: the setup-note card, "No tournaments yet." plus, for an organizer (with the panel closed), "Start one with New tournament."
+  - A blank tournament name shows as "Untitled tournament".
+  - **States**: loading placeholders (4 rows); empty; signed out (no New tournament); create panel open; in play (live row); draft; complete (champion line on Today, champion cell in dated rows).
+- **Buttons and fields**:
+  - The default button is a ghost fill with 12px radius, at least 48px tall, padding 12px 20px, in DM Sans 500.
+  - Disabled buttons drop to opacity .5 with a `not-allowed` cursor (Finish match overrides this, above).
+  - Inputs and selects are square (0 radius) with a 1px `--field-border`. On focus the edge turns `--accent-text` and gets the `--focus` ring.
+- **Radii in use**:
+  - 0 for fields
+  - 4 for focus rings and code
+  - 8 for the brand tile, loading bars, score chips and court tags
+  - 10 for round-grid cells and the ends of the Now column
+  - 12 for buttons (including round tabs), chips (including the Now chip), toasts, flip cards, series game rows, Up next rows, the selected schedule row, the read-only tree's match boxes, a match card's open button and the match panel's score card; on the main page the stage chip, the champion line and dated rows
+  - 14 for icon buttons
+  - 16 for cards (including bracket match cards, the card tree's panel and placings), scoreboard columns, court tiles, the grid panel, schedule rounds, the champion banner, the modal, the match panel's leading corners and the band and strip corners; on the main page the create panel, Today panels, the dated list and the setup note
+
+  The reference's 48px and 104px radii do not appear in this build.
+
+### Named rules
+
+1. **Amber means advancing or winning, and nothing else.** It marks advancing standings rows (tint plus amber rank), the advance key, winning bracket scores (in the read-only tree and on match cards), the champion label, the champion banner's tint, the champion's row in placings, the winning side's score in each finished game of a series, the winner's score in pool results (grid chips and schedule chips), and on the main page the champion's name (`--amber-text` in a dated row, the `--amber-tint` champion line on Today). It is never used for decoration, status or emphasis; the live scoreboard itself carries no amber, and neither does a running score on the pool or bracket page.
+2. **The ember gradient is for the one primary action on a view.** Only `.btn-primary` and submit buttons use it; the brand tile carries it as the product mark. On the court view that action is Finish match, or Record game on a series board, and it wears ember only once it can be pressed. On the main page it is New tournament, or Create while the create panel is open (New tournament hides then). Secondary actions stay ghost, and +1 is a plain surface fill, not ember.
+3. **The ember glow is for the board-head band only.** No other surface uses `--ember-glow`; the court strip is plain ink, including the main page's band.
+4. **Ink is for bands and boards.** `--ink` fills the app bar, board head, court strip, flip cards, score chips (the schedule's, the round grid's and the bracket cards') and court tags in both themes. Text and accents on it use the `--band-*` tokens, not the theme tokens.
+5. **Standings are the page.** Organizer tools live in the Manage drawer, behind disclosures or in the bracket's match panel, and never sit at equal weight with the board.
+6. **Targets work at arm's length.** Every interactive element is at least 48px tall, except the standings refresh button (40px). On the court view the targets grow: +1 is 72px (88px on phones) and Finish match 56px. Round-grid playing and ref cells are at least 56px tall. On the bracket page the round tabs, Next and the court links are at least 48px, and the whole top of a match card is its button. On the main page the Courts link is at least 48px and dated rows 56px, and each whole Today panel and dated row is its link.
+7. **The score comes first on a court.** The two columns and their numerals own the first view on a phone; the save status, Finish match and Up next follow in that order, and nothing sits above the board but the court strip.
+8. **Scoring happens on the court scoreboard.** Neither the pool page nor the bracket page takes points: an unfinished match on a court links to it ("Score on Court N", or "Watch Court N" signed out), and only a finished match can be corrected in place (Correct in the schedule row, or in the match panel).
+9. **Amber on ink uses `--amber`; on light grounds, `--amber-text`.** `--amber` holds on ink in both themes; `--amber-text` follows the theme so it stays legible on panels and tints.
+10. **A result and a match to come must read apart.** In the round grid, a match with a score carries ink flip-card score chips; one still to come is only its court and opponent on the quiet `--surface-2` cell, with no chips. A ref cell is an outline with no fill, and resting is a muted word. None borrows another's fill.
+11. **A match on a court is marked live.** A bracket match card with both teams, on a court and not finished carries the 2px inset `--accent-text` ring and a court link; nothing else gets that ring on the bracket page. The main page reuses the same ring for a tournament being played (Today's full-width row, with its Courts link), and for nothing else.
+12. **Tabs and page names say rounds the same way.** One name per round, from `roundsOf`: Quarters, Semis, Final (earlier rounds "Round N"); in double elimination Winners Quarters… Winners final, Losers N, Losers final, Grand final and Reset. The same name labels the tab, the page, the tree's column head and the "Next:" link, and a match is named from it: "Semis · match 2", or just the round's name when the round has one match. Status reads in words: Finished, Waiting for both teams, Court N · time, Waiting for a court · #N (Waiting (any court) · #N in an overflow bracket), On hold, Not on a court yet.
+13. **The tournament page draws brackets as the bracket page does, read-only.** Its bracket cards show the same match cards (the card tree from 900px, round pages below) and the champion banner, capped at 420px tall; a card leads to the bracket page, where running a bracket happens.
+
+## As shipped in RelationTree
+
+Recorded from the built code (`frontend/src/index.css`, `frontend/src/components/kiln/Page.tsx`, the restyled shadcn primitives in `frontend/src/components/ui/` and the person, connection and graph components), not from the plan. The sections above are the Kiln reference and the Tournament Tracker record; where this build differs from them, this section describes what shipped here. Scope: every screen of the web app: the app bar, People (`/`) with Ask, Add person (`/people/new`), a person (`/people/:id`) with Catch up, Details, Connections and Graph, tree settings (`/trees/:id`), sign in (`/login`), the invite page (`/invite/:token`), dialogs and toasts. Machine-readable copy: `.impeccable/design.json` (Impeccable sidecar, schemaVersion 2, under `extensions.asShipped`).
+
+### Tokens (`:root` in `frontend/src/index.css`)
+
+Dark is the default (`@custom-variant dark` is `not (prefers-color-scheme: light)`). Under `prefers-color-scheme: light` the Kiln light grounds replace the dark ones. The shadcn names (`--background`, `--card`, `--primary`, `--destructive`…) are aliases of these roles, not separate colours.
+
+| Token | Dark (default) | Light override | Role |
+|---|---|---|---|
+| `--ground` | `linear-gradient(180deg, #1c1c1c, #161616)` | `linear-gradient(180deg, #ffffff, #f6f4f1)` | Page body (fixed) |
+| `--ink` | `linear-gradient(180deg, #151515, #0e0e0e)` | none, stays dark | App bar, page bands, the signed-out brand bar and title strip, the server-offline banner |
+| `--panel` | `linear-gradient(180deg, #262626, #1f1f1f)` | `linear-gradient(180deg, #ffffff, #f6f4f1)` | Cards: the roster, the Ask bar and its answer panel, Catch up, Details, Connections, the graph, empty notes, settings panels |
+| `--surface` | `#1a1a1a` | `#ffffff` | Root background, dialogs, the label of a selected category chip |
+| `--surface-2` | `#232323` | `#f6f4f1` | Popovers and menus (`--popover`, `--card`), the Ask answer block, the invite-link box, graph nodes, skeleton lines |
+| `--surface-3` | `#2b2b2b` | `#e0e0e0` | Initials tile behind a missing photo, skeleton avatars, a hovered graph node |
+| `--text` | `#eeece9` | `#111111` | Body and headings; the fill of a selected category chip |
+| `--muted` | `#a3a3a3` | `#333333` | Secondary text: context lines, column heads, counts, last talked, descriptions |
+| `--subtle` | `#999999` | `#6b6b6b` | Placeholders only |
+| `--accent-text` | `#ea9557` | `#9e5019` | Focused field edge, links, errors and refusals, the destructive label, the centre ring on the graph, the select check, the stale-contact dot |
+| `--hairline` | `rgba(255,255,255,.1)` | `rgba(0,0,0,.1)` | Default border, rules between roster, connection and invite rows, outline badges, the graph's dot grid |
+| `--field-border` | `#4d4d4d` | `#4d4d4d` | Input, textarea and select edges; kept heavy in light mode |
+| `--line` | `#4d4d4d` | `#e0e0e0` | Graph edges, scrollbar thumb |
+| `--ghost`, `--ghost-hover`, `--ghost-active` | white at .10, .15, .20 | black at .06, .10, .15 | Secondary and outline button fills, unselected category chips, category badges, row and menu-item hover |
+| `--amber` | `#dfae4e` | same | Declared; no surface in this build fills with it |
+| `--amber-tint` | `rgba(223,174,78,.1)` | `rgba(223,174,78,.2)` | Fill of the "You" badge |
+| `--amber-text` | `#dfae4e` | `#9e5019` | Label of the "You" badge |
+| `--ember`, `--ember-hover`, `--ember-active` | 135deg `#ee9148`→`#d8742c`, `#f29a52`→`#e0803a`, `#d57a33`→`#c66a25` | same | The primary action, and the brand tile |
+| `--on-ember` | `#231306` | same | Label and mark on ember |
+| `--ember-solid` | `#e68435` | same | Caret, `accent-color`, `--primary` |
+| `--ember-glow` | radial at 80% 20%, `rgba(230,132,53,.14)` fading out by 60% | same | The People page's band only |
+| `--selection` | `rgba(230,132,53,.4)` | same | `::selection` |
+| `--focus` | `0 0 0 3px rgba(230,132,53,.4)` | same | Every focus-visible ring |
+| `--elevation-3` | 1px white ring at .1 plus `0 1px 2px rgba(0,0,0,.05)` | ring in black at .1 | Panels, dialogs, popovers, graph nodes and controls |
+| `--shadow-float` | `0 8px 24px rgba(0,0,0,.3)` | same | Dialogs, popovers and toasts, under the ring |
+| `--scrim` | `rgba(0,0,0,.5)` | same | Behind dialogs |
+| `--band-text`, `--band-muted`, `--band-accent` | `#eeece9`, `#a3a3a3`, `#ea9557` | same | Text and accent on ink, whatever the device theme |
+| `--band-ghost`, `--band-ghost-hover` | white at .10, .15 | same | Button fills on ink (the `band` variant); the toast border |
+| `--band-divider` | `rgba(255,255,255,.08)` | same | The app bar's bottom rule; the 2px ring round the photo on a person's band |
+| `--toast` | `#232323` | same | Toast fill. Toasts stay dark in both themes |
+| `--gutter` | 16px | 24px from 768px, 40px from 1024px | Horizontal page padding |
+| `--section-gap` | 32px | 40px from 768px, 48px from 1024px | Space between sections on a person's page |
+| `--ease` | `cubic-bezier(0.22, 1, 0.36, 1)` | same | Catch up's entrance |
+
+Content max-width is 1200px; signed-out pages use a 480px column. Radii are mapped into Tailwind as `--radius-sm` 8px, `--radius-md` and `--radius-lg` 12px, `--radius-xl` and `--radius-2xl` 16px.
+
+### Type roles as used
+
+Served from the app's own origin through `@fontsource` (Unbounded 400/700, Inter variable, Manrope 500/700, DM Sans variable); no font is fetched from another site.
+
+- **Unbounded 700** (`display-face`): page titles 28/32, 32/36 from 768px, tracking -0.02em (`PageBand`; the signed-out strip stays 28/32); section heads 20/26, tracking -0.01em (`SectionHead`: Catch up, Details, Connections, Graph; "Create your account" on the invite page); dialog and alert titles 22/26.4; card titles 22/26; the sub-heads in Add from a note 18/24; the brand word 16/24. Initials on an avatar tile are Unbounded 700 at 14px (20px on a person's band).
+- **Inter** (`--font-sans`) is the working face: body 16/24; Catch up's text 16.8/26 at most 70ch; notes and status lines 15/22; context lines, last talked and form errors 14/20; field labels 600 at 14.7/21; column heads and the "Closest matches" head 600 at 13/20; badges 600 at 13/20; graph node names 600 at 13/18; band meta 500 at 14.7/21. Counts and dates use `tabular-nums`.
+- **DM Sans 500** (`font-nav`): every button at 16/24; category chips, the Ask answer's person links and the back link on a band at 15px.
+- **Manrope 700** (`font-emphasis`): the label of the ember primary button, and nothing else.
+
+### Components
+
+- **App bar** (`AppHeader` in `App.tsx`): sticky, z-index 6, `--ink` with a 1px `--band-divider` rule; the row is at least 64px tall and 1200px wide. Left: the brand link (a 28px ember tile with an 8px radius holding the 16px three-node mark in `--on-ember`, then "RelationTree" in Unbounded 16, hidden below 640px) and the tree switcher (a `band` button, at most `min(14rem, 45vw)`, with a `--band-muted` chevron). Right: Add person (off the People page, whose band already carries it) and Sign out, both `band` buttons that shrink to 44px icon squares below 640px.
+- **Server banner** (`ServerStatusBanner`): an ink strip above everything while the server is offline: an 8px `--band-accent` dot with a 3px halo, a 14.7/21 sentence and a Retry `band` button.
+- **Page band** (`PageBand`): the ink band that names every signed-in page, directly under the app bar, padding 16px `--gutter` 24px; at 1200px and wider it is 1200px wide with 16px bottom corners. It holds an optional back link (`--band-muted`, 48px, `--band-ghost` on hover), an optional leading photo, the Unbounded title, a meta line in `--band-muted`, and actions at the right that wrap under the title on a phone. Only the People band takes `--ember-glow` over `--ink`.
+- **Signed-out frame** (`NarrowFrame`, sign in and invite): an ink brand bar, an ink title strip 528px wide with 16px bottom corners from 640px, and one 480px column; the submit is the 56px ember button, full width.
+- **Roster** (`PersonRoster`), the signature: one panel (16px radius, `--elevation-3`, 6px padding, 8px sideways from 640px). From 768px a header row (Name, Category, Last contacted) in Inter 600 13/20 `--muted`, columns `minmax(0,1fr) 8.5rem 9.5rem`. Each row is a whole link, at least 56px tall, 12px radius, padding 6px 12px: a 40px avatar, the name (Inter 600) with the "You" badge, the context line under it (14/20 `--muted`), the category badge (from 768px), and last talked at the right (500 14/20 `--muted`, tabular) in words ("4 months ago", "Never"). A contact 90 days old or more, or never contacted, carries a 6px `--accent-text` dot before it. Rows are split by a 1px `--hairline` rule inset 12px each side (`::before`), so the rounded hover fill (`--ghost-hover`, 200ms) never bends it; focus puts `--focus` round the row. The same panel serves Ask's closest matches (without heads). Loading shows five skeleton rows.
+- **Ask** (`AskPeople`): a full-width panel bar, padding 6px 6px 6px 16px, a 20px sparkle in `--muted`, a borderless 48px input and a secondary Ask button; the bar adds `--focus` to its ring while the field is focused. A question opens a panel (16px padding, 20px from 640px) holding the question in Inter 600, a 40px clear button, the streamed answer on a `--surface-2` block (12px radius, 16px padding, at most 70ch) with its people as 40px ghost links, then the closest matches.
+- **Category chips** (People page): 48px DM Sans 15px buttons, 12px radius, padding 0 16px, `aria-pressed`. Unselected `--ghost`; selected inverts to a `--text` fill with a `--surface` label. Each carries a tabular count. On a phone the row scrolls sideways through the gutter with no scrollbar. Beside them, the name filter: a 48px field with a search icon.
+- **Person page**: the band holds a 64px photo ringed in `--band-divider`, the name, the meta line (the "You" badge, category, "Last contacted: {words}" with the words in `--band-text`), and This is me and Delete as `band` buttons. Below, one column on a phone (Catch up, Details, Connections, Graph); from 1024px a `7fr 5fr` grid with Details in the right column spanning all rows, 32px apart.
+- **Catch up** (`CatchUpCard`): a section head with a secondary button ("Catch me up on {name}", "Writing...", "Regenerate"); the summary enters as a panel (20px padding) over 300ms on `--ease`.
+- **Details** (`PersonForm`, `PhotoUploader`): one panel, 20px padding, 24px between the photo row and the form; fields 20px apart, paired two up from 640px; Save changes is the ember primary.
+- **Connections** (`ConnectionList`): the roster's panel and row treatment with a 32px avatar, the name and a category badge, and a 40px remove icon button per row. Add connection is a secondary button in the section head, opening a dialog.
+- **Graph** (`EgoGraph`, `PersonNode`): a 384px panel holding React Flow on a transparent ground with a `--hairline` dot grid and `--line` edges; edge labels Inter 600 12px on `--surface-2`. Nodes are `--surface-2` tiles (12px radius, `--elevation-3`) with a 36px avatar and the name in Inter 600 13/18; the centre person has a 48px avatar and a 2px inset `--accent-text` ring.
+- **Badges** (`ui/badge`): 12px radius, padding 2px 10px, Inter 600 13/20. Default is the amber "You" chip (`--amber-tint`, `--amber-text`); secondary (`--ghost`, `--text`) for categories and "Already here"; outline (1px inset `--hairline`, `--muted`) for "New".
+- **Buttons** (`ui/button`): 12px radius, DM Sans 500 16/24, 20px SVG icons, colour transitions over 200ms, disabled at .5 with `not-allowed`. Variants: default is ember with Manrope 700; secondary and outline are `--ghost` fills; ghost is transparent with a `--ghost` hover; destructive is a ghost with an `--accent-text` label; band is `--band-ghost` with `--band-text`; link is `--accent-text`, underlined on hover. Sizes: default 48px (padding 0 20px), lg 56px, sm 40px, xs 32px (8px radius), icon 48px and icon-sm 40px (14px radius).
+- **Fields** (`ui/input`, `ui/textarea`, `ui/select`): square (0 radius), 1px `--field-border`, transparent, 48px tall (textarea at least 96px), padding 0 14px, 16px text. Focus turns the edge `--accent-text` and adds `--focus`; an invalid field keeps the `--accent-text` edge. Labels sit above in Inter 600 14.7/21; the error line under a field is Inter 500 14/20 in `--accent-text`.
+- **Menus and popovers** (`dropdown-menu`, `select`, `popover`, `command`): `--surface-2`, 8px radius, `--elevation-3` plus `--shadow-float`; items 44px tall, 8px radius, 15px, `--ghost-hover` when highlighted, the select's check in `--accent-text`.
+- **Dialogs** (`dialog`, `alert-dialog`): `--surface`, 16px radius, 24px padding, 20px gap, `--elevation-3` plus `--shadow-float`, over `--scrim`; a 40px close button with a 14px radius. Cancel is the outline (ghost) button; the confirming action is the ember default.
+- **Toasts** (`ui/sonner`): forced dark in both themes: `--toast` fill, `--band-text`, a `--band-ghost` border, 12px radius, `--shadow-float`; an error swaps the border for `--band-accent`. Action buttons are `band` fills with an 8px radius.
+- **Favicon** (`public/favicon.svg`): the brand tile at 32px: the ember gradient, an 8px radius and the three-node mark in `#231306`.
+- **Radii in use**: 0 for fields; 4 for skeleton lines; 8 for the brand tile, menus, popovers, menu items, xs buttons and toast actions; 12 for buttons, chips, badges, roster and connection rows, graph nodes, the Ask answer block, the invite-link box, toasts and the graph controls; 14 for icon buttons; 16 for panels, dialogs and the band's bottom corners. Avatars are round. The reference's 48px and 104px radii do not appear.
+
+### Named rules
+
+1. **The ember gradient is for the one primary action on a view.** Add person on the People band, Save changes (or the create submit) in Details, Sign in, the invite page's join or create-account submit, Copy once an invite link is made, and the confirming action inside a dialog. The brand tile and favicon carry it as the product mark. Everything else is secondary, ghost or band.
+2. **Amber marks "you", and nothing else.** The "You" badge (`--amber-tint` fill, `--amber-text` label) beside the person marked as me: in the roster, on their band and in the members list. On the ink band it uses the on-ink pair instead (`rgba(223,174,78,.1)` fill, `--amber` label) in both themes, so the label never turns copper on ink. It is never used for status, categories or emphasis.
+3. **Ink is for the app bar and page bands.** `--ink` fills the app bar, every page band, the signed-out bar and strip and the offline banner, in both themes. Text, accents and fills on it use the `--band-*` tokens, never the theme tokens.
+4. **The ember glow is for the People band only.** No other band or surface uses `--ember-glow`.
+5. **Orange text is for focus, links, errors and the stale-contact dot.** `--accent-text` (`--band-accent` on ink) marks a focused field edge, links, refusals and errors, the destructive label, the centre person on the graph and the dot beside a contact gone stale. It never decorates.
+6. **Kiln has no red.** `--destructive` is `--accent-text`: errors read in accent text (Inter 500, `role="alert"`), destructive controls are ghosts with an accent label, and the offline dot is `--band-accent`.
+7. **Targets are 48px.** Buttons, chips, fields, the back link and the brand link are 48px tall; roster and connection rows 56px; sign-in and invite submits 56px. Known smaller targets, listed so they are not copied: 44px menu items and phone app-bar buttons, 40px icon-sm and sm buttons (clear, remove, revoke, photo), 40px Ask answer links, and the 32px Retry in the offline banner.
+8. **The roster stays dense.** People read as one panel of 56px rows, never as a grid of cards; a row's hover fill and focus ring move together, and last talked reads in words.
+
+### Deviations from the Kiln reference
+
+- Light `--subtle` is `#6b6b6b` (5.3:1 on white), not `#333333`, so placeholders don't read as filled-in values. Light `--muted` stays `#333333`.
+- Light ghost fills are black at .06/.10/.15 rather than .10/.15/.20.
+- Toasts stay dark in both themes, like the bands.
+- Page titles are Unbounded 28/32, 32/36 from 768px, and section heads Unbounded 20/26: working scale, not the reference's 56–72px display sizes.
+- Body copy is Inter 16/24 rather than 16.8/25.2; buttons are DM Sans 500, not 400.
+- `--section-gap` is 32/40/48px (the Tournament Tracker build used 32/48/56).
+- Menus and popovers use the 8px radius, panels 16px; no 48px or 104px radii.
+- The reference's amber gradient and amber action links are not used; amber appears only as the "You" tint.

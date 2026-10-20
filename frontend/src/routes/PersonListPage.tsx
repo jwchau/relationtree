@@ -1,21 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Search, UserPlus } from 'lucide-react';
 import { useCurrentTree } from '@/hooks/useCurrentTree';
 import { usePersonList } from '@/hooks/usePersonList';
 import { AddFromNoteDialog } from '@/components/person/AddFromNoteDialog';
 import { AskPeople } from '@/components/person/AskPeople';
-import { PersonCard } from '@/components/person/PersonCard';
+import { PersonRoster, PersonRosterSkeleton } from '@/components/person/PersonRoster';
+import { Note, PageBand, PageBody } from '@/components/kiln/Page';
 import { filterAndSortPeople, type CategoryFilter } from '@/lib/personListFilters';
 import { RELATIONSHIP_CATEGORIES, categoryLabel } from '@/lib/relationshipTypes';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 export default function PersonListPage() {
   const { tree, canEdit, loading: treesLoading, error: treesError } = useCurrentTree();
@@ -30,71 +26,129 @@ export default function PersonListPage() {
     [people, search, category],
   );
 
+  const counts = useMemo(() => {
+    const byCategory = new Map<CategoryFilter, number>([['ALL', people.length]]);
+    for (const p of people) {
+      if (p.relationship_category) {
+        byCategory.set(p.relationship_category, (byCategory.get(p.relationship_category) ?? 0) + 1);
+      }
+    }
+    return byCategory;
+  }, [people]);
+
+  const meta =
+    tree &&
+    (loading ? (
+      tree.name
+    ) : (
+      <>
+        <span>{tree.name}</span>
+        <span aria-hidden>·</span>
+        <span className="tabular">
+          {people.length} {people.length === 1 ? 'person' : 'people'}
+        </span>
+      </>
+    ));
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">People</h1>
-        {canEdit && tree && (
-          <div className="flex gap-2">
-            <AddFromNoteDialog treeId={tree.id} />
-            <Button asChild>
-              <Link to="/people/new">Add person</Link>
-            </Button>
+    <>
+      <PageBand
+        glow
+        title="People"
+        meta={meta}
+        actions={
+          canEdit &&
+          tree && (
+            <>
+              <AddFromNoteDialog treeId={tree.id} />
+              <Button asChild>
+                <Link to="/people/new">
+                  <UserPlus />
+                  Add person
+                </Link>
+              </Button>
+            </>
+          )
+        }
+      />
+
+      <PageBody className="space-y-6">
+        {!loading && !error && !tree && (
+          <div className="panel p-5">
+            <Note>You aren&apos;t in any tree. Create one from the tree menu at the top.</Note>
           </div>
         )}
-      </div>
 
-      {!loading && !error && !tree && (
-        <p className="text-muted-foreground">
-          You aren&apos;t in any tree. Create one from the tree menu at the top.
-        </p>
-      )}
+        {/* Keyed by tree: switching trees starts a fresh question. */}
+        {tree && <AskPeople key={tree.id} treeId={tree.id} />}
 
-      {/* Keyed by tree: switching trees starts a fresh question. */}
-      {tree && <AskPeople key={tree.id} treeId={tree.id} />}
+        {tree && (
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative lg:w-72 lg:shrink-0">
+              <Search
+                aria-hidden
+                className="text-muted-foreground pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2"
+              />
+              <Input
+                placeholder="Filter by name..."
+                aria-label="Filter by name"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div
+              role="group"
+              aria-label="Category"
+              className="-mx-[var(--gutter)] flex gap-2 overflow-x-auto px-[var(--gutter)] [scrollbar-width:none] lg:mx-0 lg:px-0"
+            >
+              {(['ALL', ...RELATIONSHIP_CATEGORIES] as CategoryFilter[]).map((cat) => {
+                const selected = category === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setCategory(cat)}
+                    className={cn(
+                      'focus-ring inline-flex h-12 shrink-0 items-center gap-2 rounded-[12px] px-4 font-nav text-[15px] font-medium transition-colors duration-200',
+                      selected ? 'bg-text text-surface' : 'bg-ghost text-text hover:bg-ghost-hover',
+                    )}
+                  >
+                    {cat === 'ALL' ? 'All categories' : categoryLabel(cat)}
+                    <span className={cn('tabular text-[13px]', selected ? 'opacity-70' : 'text-muted-foreground')}>
+                      {counts.get(cat) ?? 0}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Input
-          placeholder="Filter by name..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="sm:max-w-xs"
-        />
-        <Select value={category} onValueChange={(v) => setCategory(v as CategoryFilter)}>
-          <SelectTrigger className="sm:w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All categories</SelectItem>
-            {RELATIONSHIP_CATEGORIES.map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {categoryLabel(cat)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+        {loading && <PersonRosterSkeleton />}
+        {error && <Note tone="error">{error}</Note>}
 
-      {loading && <p className="text-muted-foreground">Loading...</p>}
-      {error && <p className="text-destructive">{error}</p>}
+        {!loading && !error && tree && people.length === 0 && (
+          <div className="panel flex flex-wrap items-center justify-between gap-4 p-5">
+            <Note>
+              {canEdit
+                ? 'No one here yet. Add your first person to get started.'
+                : 'No one in this tree yet.'}
+            </Note>
+          </div>
+        )}
 
-      {!loading && !error && tree && people.length === 0 && (
-        <p className="text-muted-foreground">
-          {canEdit
-            ? 'No one here yet. Add your first person to get started.'
-            : 'No one in this tree yet.'}
-        </p>
-      )}
+        {!loading && !error && people.length > 0 && visiblePeople.length === 0 && (
+          <div className="panel p-5">
+            <Note>No one matches your search/filter.</Note>
+          </div>
+        )}
 
-      {!loading && !error && people.length > 0 && visiblePeople.length === 0 && (
-        <p className="text-muted-foreground">No one matches your search/filter.</p>
-      )}
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {visiblePeople.map((person) => (
-          <PersonCard key={person.id} person={person} />
-        ))}
-      </div>
-    </div>
+        {!loading && visiblePeople.length > 0 && (
+          <PersonRoster people={visiblePeople} label="People" />
+        )}
+      </PageBody>
+    </>
   );
 }

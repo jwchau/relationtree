@@ -1,6 +1,5 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { User } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PersonAvatar } from '@/components/person/PersonAvatar';
 import { cn } from '@/lib/utils';
 
 export interface PersonNodeData extends Record<string, unknown> {
@@ -15,18 +14,15 @@ export function PersonNode({ data }: NodeProps) {
   return (
     <div
       className={cn(
-        'bg-background flex flex-col items-center gap-1 rounded-lg border px-3 py-2 shadow-sm',
-        isCenter && 'ring-primary ring-2',
+        'bg-surface-2 flex flex-col items-center gap-1.5 rounded-[12px] px-3 py-2.5 shadow-[var(--elevation-3)] transition-colors duration-200',
+        isCenter
+          ? 'shadow-[inset_0_0_0_2px_var(--accent-text),var(--elevation-3)]'
+          : 'hover:bg-surface-3 cursor-pointer',
       )}
     >
       <Handle type="target" position={Position.Top} className="opacity-0" />
-      <Avatar className={isCenter ? 'size-12' : 'size-9'}>
-        <AvatarImage src={photoUrl ?? undefined} alt={name} />
-        <AvatarFallback>
-          <User className="size-4" />
-        </AvatarFallback>
-      </Avatar>
-      <span className="max-w-24 truncate text-xs font-medium">{name}</span>
+      <PersonAvatar name={name} photoUrl={photoUrl} className={isCenter ? 'size-12' : 'size-9'} />
+      <span className="max-w-28 truncate text-[13px] leading-[18px] font-semibold">{name}</span>
       <Handle type="source" position={Position.Bottom} className="opacity-0" />
     </div>
   );

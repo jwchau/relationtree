@@ -58,7 +58,7 @@ export function PersonForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)}>
-        <fieldset disabled={readOnly} className="space-y-4">
+        <fieldset disabled={readOnly} className="space-y-5">
           <FormField
             control={form.control}
             name="name"
@@ -112,7 +112,7 @@ export function PersonForm({
             )}
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4">
             <FormField
               control={form.control}
               name="phone"
@@ -155,7 +155,7 @@ export function PersonForm({
             )}
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4">
             <FormField
               control={form.control}
               name="birthday"
@@ -199,7 +199,7 @@ export function PersonForm({
           />
 
           {!readOnly && (
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="max-sm:w-full">
               {isSubmitting ? 'Saving...' : submitLabel}
             </Button>
           )}

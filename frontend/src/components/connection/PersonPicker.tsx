@@ -42,16 +42,20 @@ export function PersonPicker({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between font-normal"
+          className={cn(
+            'border-field w-full justify-between rounded-none border px-3.5 font-sans font-normal',
+            'aria-expanded:border-accent-text',
+            !value && 'text-subtle',
+          )}
         >
-          {value ? value.name : 'Search or add a person...'}
-          <ChevronsUpDown className="opacity-50" />
+          <span className="truncate">{value ? value.name : 'Search or add a person...'}</span>
+          <ChevronsUpDown className="text-muted-foreground" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+      <PopoverContent className="w-(--radix-popover-trigger-width) p-0">
         <Command shouldFilter={false}>
           <CommandInput placeholder="Search people..." value={search} onValueChange={setSearch} />
           <CommandList>
@@ -67,7 +71,10 @@ export function PersonPicker({
                   }}
                 >
                   <Check
-                    className={cn(value?.id === person.id ? 'opacity-100' : 'opacity-0')}
+                    className={cn(
+                      'text-accent-text!',
+                      value?.id === person.id ? 'opacity-100' : 'opacity-0',
+                    )}
                   />
                   {person.name}
                 </CommandItem>

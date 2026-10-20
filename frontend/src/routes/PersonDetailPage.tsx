@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, UserCheck } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Trash2, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDeletePerson, usePerson, useSetMe, useUpdatePerson } from '@/hooks/usePerson';
 import { useConnections } from '@/hooks/useConnections';
@@ -12,6 +12,10 @@ import { ConnectionList } from '@/components/connection/ConnectionList';
 import { AddConnectionDialog } from '@/components/connection/AddConnectionDialog';
 import { EgoGraph } from '@/components/graph/EgoGraph';
 import { toFormValues, toPersonInput } from '@/lib/personInput';
+import { lastTalked } from '@/lib/people';
+import { categoryLabel } from '@/lib/relationshipTypes';
+import { Note, PageBand, PageBody, SectionHead } from '@/components/kiln/Page';
+import { PersonAvatar } from '@/components/person/PersonAvatar';
 import type { PersonFormValues } from '@/lib/validation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,38 +70,61 @@ export default function PersonDetailPage() {
     }
   }
 
-  if (loading) return <p className="text-muted-foreground">Loading...</p>;
-  if (error) return <p className="text-destructive">{error}</p>;
-  if (!person) return <p className="text-muted-foreground">Person not found.</p>;
+  const back = { to: '/', label: 'Back to people' };
+  if (loading || error || !person) {
+    return (
+      <>
+        <PageBand back={back} title={loading ? 'Loading...' : 'Person not found'} />
+        <PageBody>
+          {error ? <Note tone="error">{error}</Note> : !loading && <Note>Person not found.</Note>}
+        </PageBody>
+      </>
+    );
+  }
+
+  const talked = lastTalked(person.last_contacted_date);
 
   return (
-    <div className="space-y-6">
-      <Link
-        to="/"
-        className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="size-4" />
-        Back to people
-      </Link>
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold">
-          {person.name}
-          {person.is_me && <Badge>You</Badge>}
-        </h1>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setMe.mutate(!person.is_me)}
-            disabled={setMe.isPending}
-            title="Lets Ask understand questions like “how am I connected to…?”"
-          >
-            <UserCheck />
-            {person.is_me ? 'Not me' : 'This is me'}
-          </Button>
-          {canEdit && (
+    <>
+      <PageBand
+        back={back}
+        leading={
+          <PersonAvatar
+            name={person.name}
+            photoUrl={person.photo_url}
+            className="size-16 text-xl shadow-[0_0_0_2px_var(--band-divider)]"
+          />
+        }
+        title={person.name}
+        meta={
+          <>
+            {/* On ink, amber stays the on-ink amber in both themes. */}
+            {person.is_me && <Badge className="bg-[rgba(223,174,78,0.1)] text-amber">You</Badge>}
+            {person.relationship_category && (
+              <span>{categoryLabel(person.relationship_category)}</span>
+            )}
+            {person.relationship_category && <span aria-hidden>·</span>}
+            <span>
+              Last contacted: <span className="text-band-text">{talked.label}</span>
+            </span>
+          </>
+        }
+        actions={
+          <>
+            <Button
+              variant="band"
+              onClick={() => setMe.mutate(!person.is_me)}
+              disabled={setMe.isPending}
+              title="Lets Ask understand questions like “how am I connected to…?”"
+            >
+              <UserCheck />
+              {person.is_me ? 'Not me' : 'This is me'}
+            </Button>
+            {canEdit && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" disabled={deletePerson.isPending}>
+                <Button variant="band" disabled={deletePerson.isPending}>
+                  <Trash2 />
                   Delete
                 </Button>
               </AlertDialogTrigger>
@@ -116,55 +143,60 @@ export default function PersonDetailPage() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          )}
-        </div>
-      </div>
+            )}
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <div className="max-w-xl space-y-6">
-          <PhotoUploader person={person} readOnly={!canEdit} />
-          <PersonForm
-            defaultValues={toFormValues(person)}
-            onSubmit={handleSubmit}
-            submitLabel="Save changes"
-            isSubmitting={updatePerson.isPending}
-            readOnly={!canEdit}
-          />
-        </div>
-
-        <div className="space-y-6">
+      {/* Phone order: catch up, details, connections, graph. From 1024px details take the
+          right-hand column and the rest stack on the left. */}
+      <PageBody className="grid grid-cols-1 gap-[var(--section-gap)] lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:grid-rows-[auto_auto_1fr] lg:items-start lg:gap-x-8">
+        <div className="lg:col-start-1">
           <CatchUpCard personId={person.id} personName={person.name} />
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Connections</h2>
-              {canEdit && (
-                <AddConnectionDialog
-                  personId={person.id}
-                  personName={person.name}
-                  treeId={person.tree_id}
-                />
-              )}
-            </div>
-            <ConnectionList
-              connections={connections}
-              loading={connectionsLoading}
-              error={connectionsError}
-              canEdit={canEdit}
-            />
-          </div>
-
-          <div className="space-y-3">
-            <h2 className="text-lg font-semibold">Graph</h2>
-            <EgoGraph
-              centerId={person.id}
-              centerName={person.name}
-              centerPhotoUrl={person.photo_url}
-              connections={connections}
-            />
-          </div>
         </div>
-      </div>
-    </div>
+
+        <section className="lg:col-start-2 lg:row-span-3 lg:row-start-1" aria-labelledby="details-head">
+          <SectionHead id="details-head" title="Details" />
+          <div className="panel space-y-6 p-5">
+            <PhotoUploader person={person} readOnly={!canEdit} />
+            <PersonForm
+              defaultValues={toFormValues(person)}
+              onSubmit={handleSubmit}
+              submitLabel="Save changes"
+              isSubmitting={updatePerson.isPending}
+              readOnly={!canEdit}
+            />
+          </div>
+        </section>
+
+        <section className="lg:col-start-1" aria-labelledby="connections-head">
+          <SectionHead id="connections-head" title="Connections">
+            {canEdit && (
+              <AddConnectionDialog
+                personId={person.id}
+                personName={person.name}
+                treeId={person.tree_id}
+              />
+            )}
+          </SectionHead>
+          <ConnectionList
+            connections={connections}
+            loading={connectionsLoading}
+            error={connectionsError}
+            canEdit={canEdit}
+          />
+        </section>
+
+        <section className="lg:col-start-1" aria-labelledby="graph-head">
+          <SectionHead id="graph-head" title="Graph" />
+          <EgoGraph
+            centerId={person.id}
+            centerName={person.name}
+            centerPhotoUrl={person.photo_url}
+            connections={connections}
+          />
+        </section>
+      </PageBody>
+    </>
   );
 }
