@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
@@ -11,7 +12,9 @@ from ninja.security import django_auth
 from pydantic import StringConstraints
 
 from relationtree.access import membership_in, require_owner
-from relationtree.models import Tree, TreeMembership
+from relationtree.connections_api import ConnectionOut
+from relationtree.models import Connection, Person, Tree, TreeMembership
+from relationtree.photos import get_photo_storage
 from relationtree.schemas import ErrorOut
 from relationtree.types import AuthedRequest
 
@@ -46,6 +49,22 @@ class MemberOut(Schema):
     username: str
     role: TreeMembership.Role
     is_me: bool
+
+
+class GraphPersonOut(Schema):
+    """A person as the map draws them. No contact details, context or notes."""
+
+    id: UUID
+    name: str
+    photo_url: str | None
+    birthday: date | None
+    relationship_category: Person.RelationshipCategory | None
+    is_me: bool
+
+
+class TreeGraphOut(Schema):
+    people: list[GraphPersonOut]
+    connections: list[ConnectionOut]
 
 
 def tree_out(membership: TreeMembership, member_count: int | None = None) -> TreeOut:
@@ -107,6 +126,38 @@ def rename_tree(request: AuthedRequest, tree_id: UUID, payload: TreeIn) -> TreeO
     membership.tree.name = payload.name
     membership.tree.save(update_fields=["name"])
     return tree_out(membership)
+
+
+@router.get("/trees/{tree_id}/graph", response=TreeGraphOut)
+def tree_graph(request: AuthedRequest, tree_id: UUID) -> TreeGraphOut:
+    """The whole tree for the map, in one query per table."""
+    membership = membership_in(request.user, tree_id)
+    people = [
+        GraphPersonOut(
+            id=p.id,
+            name=p.name,
+            # Signing is local, but only touch storage when there's a photo, like PersonOut.
+            photo_url=get_photo_storage().presign_download(p.photo_key) if p.photo_key else None,
+            birthday=p.birthday,
+            relationship_category=(
+                Person.RelationshipCategory(p.relationship_category)
+                if p.relationship_category
+                else None
+            ),
+            is_me=p.id == membership.me_id,
+        )
+        for p in Person.objects.filter(tree=tree_id).order_by("name")
+    ]
+    connections = [
+        ConnectionOut(
+            id=c.id,
+            person_a_id=c.person_a_id,
+            person_b_id=c.person_b_id,
+            type=Connection.RelationshipType(c.type),
+        )
+        for c in Connection.objects.filter(tree=tree_id).order_by("id")
+    ]
+    return TreeGraphOut(people=people, connections=connections)
 
 
 @router.get("/trees/{tree_id}/members", response=list[MemberOut])

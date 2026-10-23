@@ -996,6 +996,45 @@
         ]
       }
     },
+    "/api/trees/{tree_id}/graph": {
+      "get": {
+        "operationId": "relationtree_trees_api_tree_graph",
+        "summary": "Tree Graph",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tree_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Tree Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreeGraphOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The whole tree for the map, in one query per table.",
+        "tags": [
+          "trees"
+        ],
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
     "/api/trees/{tree_id}/members": {
       "get": {
         "operationId": "relationtree_trees_api_list_members",
@@ -2320,6 +2359,91 @@
           "name"
         ],
         "title": "TreeIn",
+        "type": "object"
+      },
+      "GraphPersonOut": {
+        "description": "A person as the map draws them. No contact details, context or notes.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "birthday": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Birthday"
+          },
+          "relationship_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelationshipCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_me": {
+            "title": "Is Me",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "photo_url",
+          "birthday",
+          "relationship_category",
+          "is_me"
+        ],
+        "title": "GraphPersonOut",
+        "type": "object"
+      },
+      "TreeGraphOut": {
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/GraphPersonOut"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectionOut"
+            },
+            "title": "Connections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "people",
+          "connections"
+        ],
+        "title": "TreeGraphOut",
         "type": "object"
       },
       "MemberOut": {
