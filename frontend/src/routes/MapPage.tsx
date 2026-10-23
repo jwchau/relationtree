@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { GraphPerson } from '@/api/client';
-import { FamilyFrame } from '@/components/map/FamilyFrame';
+import { MapCanvas } from '@/components/map/MapCanvas';
 import { Note, PageBand, PageBody } from '@/components/kiln/Page';
 import { PersonAvatar } from '@/components/person/PersonAvatar';
 import { Button } from '@/components/ui/button';
@@ -67,12 +67,8 @@ export default function MapPage() {
         )}
 
         {graph && core && (
-          <div className="panel overflow-hidden p-2 sm:p-4">
-            <FamilyFrame
-              core={core}
-              people={people}
-              className="mx-auto block h-[calc(100svh-15rem)] min-h-[360px] w-full"
-            />
+          <div className="panel overflow-hidden">
+            <MapCanvas core={core} people={people} className="h-[calc(100svh-15rem)] min-h-[360px] w-full" />
           </div>
         )}
 

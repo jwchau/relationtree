@@ -74,7 +74,7 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 - Connections come back as `ConnectionOut` (`person_a_id`, `person_b_id`), the same shape as `POST /api/connections`. The endpoint only touches photo storage for people who have a photo, so it works locally without R2, as the People list does.
 - The graph query lives under the `['people']` key and refetches on every visit to `/map`, so edits made on a person page show when you come back.
 - A child's group is the set of their recorded parents. A child with only the root recorded goes in a root-only group. The app doesn't guess the other parent.
-- **Slots are plain SVG** (circle, clipped `<image>` over the initials, `<text>`, SVG `<a>`), not HTML in `<foreignObject>`. With `foreignObject` the page stopped being capturable in Chrome. It's also slow and misplaced under transforms in Safari, which matters for FG-2's camera. `PersonAvatar` is therefore not reused on the canvas. A photo that fails to load leaves the initials showing.
+- **Slots are plain SVG** (circle, clipped `<image>` over the initials, `<text>`, SVG `<a>`), not HTML in `<foreignObject>`, because `foreignObject` is slow and misplaced under transforms in Safari, which matters for FG-2's camera. (A screenshot hang first blamed on `foreignObject` turned out to be Chrome throttling a covered window.) `PersonAvatar` is therefore not reused on the canvas. A photo that fails to load leaves the initials showing.
 - On a phone the whole frame fits, but names are about 9 px. FG-2's zoom and level of detail fix that.
 - A sibling recorded only by an explicit `SIBLING` link hangs from the parents' line like the others. FG-9 separates full, half and plain siblings.
 
@@ -99,6 +99,23 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 - The camera clamp keeps the root frame partly visible.
 
 **Done when:** on a phone and on desktop you can pinch, scroll and drag, and each bubble shows the right detail as it grows.
+
+**Status: done.** Notes from building it:
+- Dependencies: `d3-zoom`, `d3-selection` and `d3-transition`. The last is already a dependency of d3-zoom, and is declared because the animated Fit imports it.
+- **The card leaves out "last contacted"** (owner's decision). It shows the avatar, name, "Born 1982 · 44" and **Open**. The graph endpoint stays as FG-1 left it.
+- Zoom range: half to 16 times the scale that fits the frame (`clampTransform`). FG-4 extends it. At least 64 px of the frame always stays on screen.
+- The camera writes the transform onto the frame's `<g>` directly. React re-renders only when the level of detail changes, because every slot in a frame is the same size and so shares one level.
+- Past 240 px on screen the card's contents stop growing (CSS variable `--map-card-scale`). The box keeps the slot's size, so lines still meet it.
+- Dots use one colour until FG-6. A single 9-person frame fits too large to reach the dot and avatar levels, because zoom-out stops at half the fit size. Those levels are for FG-3's nested frames.
+- Measured in Chrome on desktop (240 Hz monitor), zooming with one wheel event per frame for 3 s:
+  - Desktop frame: 240 fps, slowest frame 4.3 ms.
+  - Phone-sized canvas (360×640), switching between card and name 5 times: 240 fps, slowest frame 4.3 ms, no frame over 17 ms.
+- Input checked:
+  - Mouse: double-click (2× zoom), drag to pan.
+  - Trackpad pinch (ctrl+wheel).
+  - Touch, with touch support emulated: two-finger pinch (4× spread gives 4× zoom) and double-tap (2× zoom).
+  - Fit, and a drag that ends on a card doesn't open it.
+- Not checked: reduced motion (needs media emulation) and a real phone.
 
 ---
 
