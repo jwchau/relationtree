@@ -35,8 +35,26 @@ function row(ids: string[], role: Role, centreX: number, y: number): Slot[] {
   return ids.map((id, i) => ({ id, role, x: left + i * (SLOT_W + GAP), y }));
 }
 
+export interface FrameLayout {
+  slots: Slot[];
+  lines: Line[];
+  bounds: Bounds;
+}
+
+/** A frame laid out at its natural size inside a slot's box: scale it to fit (design doc
+ * D5), then centre it. Returns the transform from the frame's units to the slot's. */
+export function fitInSlot(slot: Slot, bounds: Bounds): { x: number; y: number; scale: number } {
+  const scale = Math.min(SLOT_W / bounds.width, SLOT_H / bounds.height);
+  const boxTop = slot.y - 4;
+  return {
+    scale,
+    x: slot.x - (bounds.x + bounds.width / 2) * scale,
+    y: boxTop + SLOT_H / 2 - (bounds.y + bounds.height / 2) * scale,
+  };
+}
+
 /** Where everything in one frame goes, and the frame's extent. */
-export function frameLayout(core: FamilyCore): { slots: Slot[]; lines: Line[]; bounds: Bounds } {
+export function frameLayout(core: FamilyCore): FrameLayout {
   const step = SLOT_W + GAP;
   const topY = 0;
   const midY = SLOT_H + ROW_GAP;
@@ -99,6 +117,14 @@ export function frameLayout(core: FamilyCore): { slots: Slot[]; lines: Line[]; b
   return { slots, lines, bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY } };
 }
 
-/** The card stops growing once its slot is this wide on screen; MapCanvas sets the scale. */
+/** The card stops growing once its slot is this wide on screen. */
 export const CARD_MAX_PX = 240;
-export const CARD_SCALE_VAR = '--map-card-scale';
+/** The camera's scale, set on the canvas by MapCanvas, so cards at any depth can cap their
+ * size in CSS without React re-rendering as you zoom. */
+export const ZOOM_VAR = '--map-k';
+
+/** The CSS transform that keeps a card's contents at most CARD_MAX_PX wide on screen, for a
+ * frame whose units are `scale` root-frame units. */
+export function cardScaleCss(scale: number): string {
+  return `scale(min(1, calc(${CARD_MAX_PX} / (var(${ZOOM_VAR}, 1) * ${SLOT_W * scale}))))`;
+}

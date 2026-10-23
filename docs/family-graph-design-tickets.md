@@ -136,6 +136,21 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 
 **Done when:** zooming into a parent's slot shows their family, and a search of the rendered tree finds each person once.
 
+**Status: done.** Notes from building it:
+- `assignOwnership` walks out one ring of frames at a time.
+  - Within a ring, owners claim people eldest first, then by id, and only a family claim can replace an earlier claim. That gives D7's order: nearest frame, then family over social, then birth date and id.
+  - Family neighbours are the `familyCore` relatives. Social neighbours are friend, coworker, acquaintance and manager links in either direction.
+- **A slot opens into its frame at 360 px** on screen, a fifth level `'frame'` in `detailFor`. A slot whose person owns no one stays a card. A frame's own centre slot never opens, because it's the same person.
+- When a slot opens, its box stays drawn as the nested frame's border, so the outer frame's lines still visibly meet the person they lead to.
+- `planRender(rootId, k, layoutOf)` says which frames are open at scale `k`, and the range of `k` that holds for. The canvas re-renders only when zoom leaves that range. Card size caps use a `--map-k` CSS variable, so they don't need a re-render either.
+- `frameLayouts(graph, rootId)` lays each frame out on first use and reuses it. A frame's layout depends only on whom it owns, never on what's inside its slots.
+- Social links count for ownership, but social people aren't drawn until FG-6. In the synthetic tree, 19 of 20 people are drawn; the friend is the exception.
+- Measured in Chrome on desktop (240 Hz monitor), synthetic tree of 20 people, centred on Robin:
+  - No one is drawn twice at fit (1 frame), partly zoomed (5 frames) or fully zoomed (6 frames).
+  - Zooming in and out through the nested levels for 3 s: 231 fps, median frame 4.2 ms, slowest 12.5 ms (when frames open), none over 17 ms.
+- Two levels deep works on desktop: Robin's frame, then Alan's, then Ida's frame with her husband and child.
+- **On a phone, the 16× zoom limit reaches only one nested level.** At fit the root's slots are 62 px, so at full zoom a grandparent-level slot stays a card. FG-4's re-anchoring is what lifts the limit.
+
 ---
 
 ## FG-4 Deep zoom and the shareable focus URL

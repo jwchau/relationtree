@@ -3,13 +3,13 @@ import { select } from 'd3-selection';
 import 'd3-transition';
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomBehavior } from 'd3-zoom';
 import { Maximize } from 'lucide-react';
-import type { GraphPerson } from '@/api/client';
+import type { GraphPerson, TreeGraph } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { clampTransform, fitTransform, zoomRange, type Transform, type Viewport } from '@/lib/map/camera';
-import { detailFor, type Detail } from '@/lib/map/detail';
-import type { FamilyCore } from '@/lib/map/familyCore';
+import { ZOOM_VAR } from '@/lib/map/frameLayout';
+import { frameLayouts } from '@/lib/map/frames';
+import { planRender, type PlanNode } from '@/lib/map/renderPlan';
 import { cn } from '@/lib/utils';
-import { CARD_MAX_PX, CARD_SCALE_VAR, frameLayout, SLOT_W } from '@/lib/map/frameLayout';
 import { FamilyFrame } from './FamilyFrame';
 
 const FIT_MS = 300;
@@ -17,24 +17,30 @@ const FIT_MS = 300;
 const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** The zoomable map. d3-zoom handles wheel, pinch, drag and double-click/tap, and the camera
- * is written straight onto the frame's transform, so React only re-renders when the level of
- * detail changes. */
+ * is written straight onto the root frame's transform. React re-renders only when zooming
+ * crosses a level of detail somewhere on screen (the render plan's band), at which point
+ * nested frames open or close. */
 export function MapCanvas({
-  core,
+  graph,
+  rootId,
   people,
   className,
 }: {
-  core: FamilyCore;
+  graph: TreeGraph;
+  rootId: string;
   people: Map<string, GraphPerson>;
   className?: string;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<SVGGElement>(null);
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const bandRef = useRef<[number, number]>([0, 0]);
   const [viewport, setViewport] = useState<Viewport | null>(null);
-  const [detail, setDetail] = useState<Detail>('name');
-  const layout = useMemo(() => frameLayout(core), [core]);
-  const { bounds } = layout;
+  const [plan, setPlan] = useState<PlanNode | null>(null);
+  // Each frame is laid out once per root and reused while you zoom.
+  const layoutOf = useMemo(() => frameLayouts(graph, rootId), [graph, rootId]);
+  const rootLayout = layoutOf(rootId)!;
+  const { bounds } = rootLayout;
 
   // Track the canvas size: it changes with the window and on phone rotation.
   useEffect(() => {
@@ -48,17 +54,21 @@ export function MapCanvas({
     return () => observer.disconnect();
   }, []);
 
-  // Attach d3-zoom once per frame and viewport, and open fitted.
+  // Attach d3-zoom once per root and viewport, and open fitted.
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg || !viewport || viewport.width === 0 || viewport.height === 0) return;
+    bandRef.current = [0, 0]; // forces a fresh plan on the first transform
 
     const apply = (t: Transform) => {
       frameRef.current?.setAttribute('transform', `translate(${t.x},${t.y}) scale(${t.k})`);
-      const slotPx = SLOT_W * t.k;
-      svg.style.setProperty(CARD_SCALE_VAR, String(Math.min(1, CARD_MAX_PX / slotPx)));
-      const next = detailFor(slotPx);
-      setDetail((prev) => (prev === next ? prev : next));
+      svg.style.setProperty(ZOOM_VAR, String(t.k));
+      const [lo, hi] = bandRef.current;
+      if (t.k < lo || t.k >= hi) {
+        const next = planRender(rootId, t.k, layoutOf);
+        bandRef.current = next.band;
+        setPlan(next.root);
+      }
     };
 
     const behaviour = zoom<SVGSVGElement, unknown>()
@@ -77,7 +87,7 @@ export function MapCanvas({
     return () => {
       select(svg).on('.zoom', null);
     };
-  }, [viewport, bounds]);
+  }, [viewport, bounds, rootId, layoutOf]);
 
   const fitView = () => {
     const svg = svgRef.current;
@@ -90,17 +100,17 @@ export function MapCanvas({
     else selection.transition().duration(FIT_MS).call(behaviour.transform, target);
   };
 
-  const centre = people.get(core.self);
   return (
     <div className={cn('relative', className)}>
       <svg
         ref={svgRef}
-        role="group"
-        aria-label={centre ? `Family of ${centre.name}` : 'Family'}
+        aria-label="Family map"
         className="block size-full cursor-grab touch-none select-none active:cursor-grabbing"
       >
         <g ref={frameRef}>
-          {viewport && <FamilyFrame layout={layout} people={people} detail={detail} />}
+          {plan && plan.personId === rootId && (
+            <FamilyFrame layout={rootLayout} node={plan} people={people} layoutOf={layoutOf} />
+          )}
         </g>
       </svg>
       <Button variant="secondary" className="absolute top-3 right-3" onClick={fitView}>

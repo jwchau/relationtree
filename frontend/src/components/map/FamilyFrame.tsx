@@ -5,13 +5,15 @@ import type { Detail } from '@/lib/map/detail';
 import { bornLine } from '@/lib/map/card';
 import {
   AVATAR_Y,
-  CARD_SCALE_VAR,
-  frameLayout,
+  cardScaleCss,
+  fitInSlot,
   SLOT_H,
   SLOT_W,
+  type FrameLayout,
   type Role,
   type Slot,
 } from '@/lib/map/frameLayout';
+import type { PlanNode } from '@/lib/map/renderPlan';
 import { initials } from '@/lib/people';
 import { cn } from '@/lib/utils';
 
@@ -23,28 +25,60 @@ const ROLE_LABELS: Record<Role, string> = {
   child: 'child',
 };
 
-/** One person's family core: parents, the person with spouses and siblings, and children
- * under their couple. Read-only. Drawn at one level of detail, since every slot is the same
- * size on screen. */
+/** One person's frame: their parents, them with spouses and siblings, and children under
+ * their couple, keeping only the people this frame owns. Read-only. Every slot is the same
+ * size on screen, so one level of detail covers the frame; slots the plan opens draw that
+ * person's own frame inside them, scaled to fit (design doc D1, D5). */
 export function FamilyFrame({
   layout,
+  node,
   people,
-  detail,
+  layoutOf,
 }: {
-  layout: ReturnType<typeof frameLayout>;
+  layout: FrameLayout;
+  node: PlanNode;
   people: Map<string, GraphPerson>;
-  detail: Detail;
+  layoutOf: (personId: string) => FrameLayout | null;
 }) {
+  const centre = people.get(node.personId);
+  // A slot past the frame threshold whose person owns no one has nothing to open, so it
+  // stays a card.
+  const detail: Detail = node.detail === 'frame' ? 'card' : node.detail;
   return (
-    <g>
+    <g role="group" aria-label={centre ? `Family of ${centre.name}` : 'Family'}>
       <g className="stroke-subtle" strokeWidth={2} fill="none" aria-hidden>
         {layout.lines.map((l, i) => (
           <line key={i} {...l} />
         ))}
       </g>
       {layout.slots.map((slot) => {
+        const inner = node.open.get(slot.id);
+        const innerLayout = inner && layoutOf(slot.id);
+        if (inner && innerLayout) {
+          const fit = fitInSlot(slot, innerLayout.bounds);
+          return (
+            <g key={slot.id}>
+              {/* The slot's box stays as the nested frame's border, so this frame's lines
+                  still visibly meet the person they lead to. */}
+              <rect
+                x={slot.x - SLOT_W / 2}
+                y={slot.y - 4}
+                width={SLOT_W}
+                height={SLOT_H}
+                rx={12}
+                strokeWidth={1}
+                className="fill-surface-2 stroke-hairline"
+              />
+              <g transform={`translate(${fit.x},${fit.y}) scale(${fit.scale})`}>
+                <FamilyFrame layout={innerLayout} node={inner} people={people} layoutOf={layoutOf} />
+              </g>
+            </g>
+          );
+        }
         const person = people.get(slot.id);
-        return person ? <PersonSlot key={slot.id} slot={slot} person={person} detail={detail} /> : null;
+        return person ? (
+          <PersonSlot key={slot.id} slot={slot} person={person} detail={detail} scale={node.scale} />
+        ) : null;
       })}
     </g>
   );
@@ -61,9 +95,19 @@ function shortName(name: string): string {
 /** One person's fixed slot, drawn in plain SVG (no foreignObject) so it stays sharp and fast
  * under the camera's transforms. Below card size the whole slot links to the person's page;
  * the card has its own Open link instead. */
-function PersonSlot({ slot, person, detail }: { slot: Slot; person: GraphPerson; detail: Detail }) {
+function PersonSlot({
+  slot,
+  person,
+  detail,
+  scale,
+}: {
+  slot: Slot;
+  person: GraphPerson;
+  detail: Detail;
+  scale: number;
+}) {
   const label = `${person.name}, ${ROLE_LABELS[slot.role]}`;
-  if (detail === 'card') return <PersonCard slot={slot} person={person} label={label} />;
+  if (detail === 'card') return <PersonCard slot={slot} person={person} label={label} scale={scale} />;
 
   const cx = slot.x;
   const cy = slot.y + AVATAR_Y;
@@ -104,7 +148,17 @@ function PersonSlot({ slot, person, detail }: { slot: Slot; person: GraphPerson;
 
 /** The largest form: avatar, name, birth line and an Open link. Its contents stop growing
  * past CARD_MAX_PX on screen so the text stays a readable size; the box fills the slot. */
-function PersonCard({ slot, person, label }: { slot: Slot; person: GraphPerson; label: string }) {
+function PersonCard({
+  slot,
+  person,
+  label,
+  scale,
+}: {
+  slot: Slot;
+  person: GraphPerson;
+  label: string;
+  scale: number;
+}) {
   const top = slot.y - 4;
   const born = bornLine(person.birthday, new Date());
   return (
@@ -120,7 +174,7 @@ function PersonCard({ slot, person, label }: { slot: Slot; person: GraphPerson; 
       {/* Only the contents stop growing; the box keeps the slot's size so lines still meet it. */}
       <g
         style={{
-          transform: `scale(var(${CARD_SCALE_VAR}, 1))`,
+          transform: cardScaleCss(scale),
           transformBox: 'fill-box',
           transformOrigin: 'center',
         }}

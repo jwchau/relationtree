@@ -16,4 +16,9 @@ describe('detailFor', () => {
     expect(detailFor(119.9)).toBe('name');
     expect(detailFor(120)).toBe('card');
   });
+
+  it("opens into the person's own frame from 360px", () => {
+    expect(detailFor(359.9)).toBe('card');
+    expect(detailFor(360)).toBe('frame');
+  });
 });

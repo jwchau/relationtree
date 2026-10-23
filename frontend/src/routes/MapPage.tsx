@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { useCurrentTree } from '@/hooks/useCurrentTree';
 import { useSetMe } from '@/hooks/usePerson';
 import { useTreeGraph } from '@/hooks/useTreeGraph';
-import { familyCore } from '@/lib/map/familyCore';
 import { resolveRoot } from '@/lib/map/mapRoot';
 
 const PICKER_LIMIT = 30;
@@ -25,8 +24,7 @@ export default function MapPage() {
   const people = useMemo(() => new Map(graph?.people.map((p) => [p.id, p])), [graph]);
   const root = graph ? resolveRoot(graph, rootParam) : null;
   const rootId = root?.kind === 'person' ? root.id : null;
-  const core = useMemo(() => (graph && rootId ? familyCore(graph, rootId) : null), [graph, rootId]);
-  const centre = core ? people.get(core.self) : undefined;
+  const centre = rootId ? people.get(rootId) : undefined;
 
   return (
     <>
@@ -66,9 +64,14 @@ export default function MapPage() {
           </div>
         )}
 
-        {graph && core && (
+        {graph && rootId && (
           <div className="panel overflow-hidden">
-            <MapCanvas core={core} people={people} className="h-[calc(100svh-15rem)] min-h-[360px] w-full" />
+            <MapCanvas
+              graph={graph}
+              rootId={rootId}
+              people={people}
+              className="h-[calc(100svh-15rem)] min-h-[360px] w-full"
+            />
           </div>
         )}
 
