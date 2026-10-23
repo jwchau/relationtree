@@ -160,6 +160,7 @@ export default function PersonDetailPage() {
           <div className="panel space-y-6 p-5">
             <PhotoUploader person={person} readOnly={!canEdit} />
             <PersonForm
+              key={person.id}
               defaultValues={toFormValues(person)}
               onSubmit={handleSubmit}
               submitLabel="Save changes"
