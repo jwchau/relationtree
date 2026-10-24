@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { GraphPerson } from '@/api/client';
 import { MapCanvas } from '@/components/map/MapCanvas';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { useCurrentTree } from '@/hooks/useCurrentTree';
 import { useSetMe } from '@/hooks/usePerson';
 import { useTreeGraph } from '@/hooks/useTreeGraph';
+import { focusParam } from '@/lib/map/focus';
 import { resolveRoot } from '@/lib/map/mapRoot';
 
 const PICKER_LIMIT = 30;
@@ -16,8 +17,26 @@ const PICKER_LIMIT = 30;
 export default function MapPage() {
   const { tree, loading: treesLoading, error: treesError } = useCurrentTree();
   const { graph, loading: graphLoading, error: graphError } = useTreeGraph(tree?.id);
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const rootParam = params.get('root');
+  // Keep the focused frame in the URL so the view can be shared. Replace, not push: zooming
+  // shouldn't fill the history, and Back should leave the map (or, later, the previous root).
+  const onFocusChange = useCallback(
+    (path: string[]) => {
+      setParams(
+        (prev) => {
+          const focus = focusParam(path);
+          if (prev.get('focus') === focus) return prev;
+          const next = new URLSearchParams(prev);
+          if (focus) next.set('focus', focus);
+          else next.delete('focus');
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
+  );
   const loading = treesLoading || (tree !== null && graphLoading);
   const error = treesError ?? graphError;
 
@@ -67,9 +86,12 @@ export default function MapPage() {
         {graph && rootId && (
           <div className="panel overflow-hidden">
             <MapCanvas
+              key={rootId}
               graph={graph}
               rootId={rootId}
               people={people}
+              initialFocus={params.get('focus')}
+              onFocusChange={onFocusChange}
               className="h-[calc(100svh-15rem)] min-h-[360px] w-full"
             />
           </div>

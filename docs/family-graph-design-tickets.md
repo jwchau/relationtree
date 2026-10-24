@@ -168,6 +168,25 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 
 **Done when:** five levels deep is as smooth and sharp as the root, and a copied URL reopens on the same frame at a different window size.
 
+**Status: done.** Notes from building it:
+- **Re-anchoring happens when drawing, not in d3's state.**
+  - d3-zoom keeps the camera relative to the root, in JavaScript's double precision. It remembers the world point under the cursor or fingers for a whole drag or pinch, so swapping its coordinates mid-gesture would make the view jump.
+  - The drawing is anchored two frames above the focus, with that frame's transform composed in JS (`anchoredTransform`). Five levels deep, the browser sees a scale of about 26–60 instead of the root's thousands. Higher ancestors are many screens wide and aren't drawn.
+- **Focus:** the deepest open frame that contains the middle of the screen and covers at least half of it along its tighter axis (`focusedFrame`).
+  - `?focus=` changes only when the focus does (`replaceState`), because browsers throttle frequent history updates.
+  - An unknown `focus` opens the root; someone with no frame of their own opens their owner's frame.
+- **Opening on a focus:** a shared link or breadcrumb fits the frame, then zooms in just past 360 px if fitting alone would leave its slot a card. Without that, a wide frame on a phone held sideways opened as a card. A sweep of screen sizes from 280 to 2,520 px in both orientations is in the tests.
+- **Zoom limit (changed from the plan):** 16× the fit of the deepest frame open anywhere on screen, not only the focused one. With the focus-only limit, zooming toward a frame near the edge hit the limit before that frame reached the middle and became the focus.
+- **The render plan skips off-screen slots** and is re-run on each zoom event. React re-renders only when `planKey` changes. This replaces FG-3's k-range, which couldn't account for panning.
+- **Breadcrumb** at the top-left of the canvas. Each crumb animates out to that frame (instant with reduced motion). Under 640 px wide it shortens to `root › … › last two`.
+- **Synthetic tree:** extended to 32 people, with four more generations above Gus, so Zeb's frame is five levels below Robin.
+- **Measured in Chrome on desktop (240 Hz monitor):**
+  - Zooming from Robin toward Zeb, the focus moved one level at a time: Alan, Gus, Ed, Abe, Zeb.
+  - Zooming in and out at depth for 3 s, with the focus moving between Zeb and Alan: 212 fps, median frame 4.2 ms, 95th percentile 8.4 ms, slowest 16.7 ms.
+  - Text and lines are sharp five levels down.
+  - A reloaded `?focus=` link reopens fitted on Zeb's frame. After resizing the canvas to 360×640, 640×360 and 390×700, Zeb's frame was still open and in focus.
+- **Not checked:** a real phone, and reduced motion.
+
 ---
 
 ## FG-5 Make centre

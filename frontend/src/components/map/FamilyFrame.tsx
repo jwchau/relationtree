@@ -34,11 +34,14 @@ export function FamilyFrame({
   node,
   people,
   layoutOf,
+  anchorScale = 1,
 }: {
   layout: FrameLayout;
   node: PlanNode;
   people: Map<string, GraphPerson>;
   layoutOf: (personId: string) => FrameLayout | null;
+  /** The scale of the frame MapCanvas anchors the drawing to; card sizes are relative to it. */
+  anchorScale?: number;
 }) {
   const centre = people.get(node.personId);
   // A slot past the frame threshold whose person owns no one has nothing to open, so it
@@ -70,14 +73,26 @@ export function FamilyFrame({
                 className="fill-surface-2 stroke-hairline"
               />
               <g transform={`translate(${fit.x},${fit.y}) scale(${fit.scale})`}>
-                <FamilyFrame layout={innerLayout} node={inner} people={people} layoutOf={layoutOf} />
+                <FamilyFrame
+                  layout={innerLayout}
+                  node={inner}
+                  people={people}
+                  layoutOf={layoutOf}
+                  anchorScale={anchorScale}
+                />
               </g>
             </g>
           );
         }
         const person = people.get(slot.id);
         return person ? (
-          <PersonSlot key={slot.id} slot={slot} person={person} detail={detail} scale={node.scale} />
+          <PersonSlot
+            key={slot.id}
+            slot={slot}
+            person={person}
+            detail={detail}
+            scale={node.scale / anchorScale}
+          />
         ) : null;
       })}
     </g>

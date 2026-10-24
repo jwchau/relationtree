@@ -6,8 +6,11 @@ import { assignOwnership, type Ownership } from './ownership';
 /** Every person's frame layout for this root, laid out on first use and then reused. A
  * frame's layout depends only on whom it owns, never on what's inside its slots (D5). Null
  * for someone who owns no one, whose slot has nothing to open into. */
-export function frameLayouts(graph: TreeGraph, rootId: string): (personId: string) => FrameLayout | null {
-  const ownership = assignOwnership(graph, rootId);
+export function frameLayouts(
+  graph: TreeGraph,
+  rootId: string,
+  ownership: Ownership = assignOwnership(graph, rootId),
+): (personId: string) => FrameLayout | null {
   const cache = new Map<string, FrameLayout | null>();
   return (personId) => {
     if (!cache.has(personId)) {

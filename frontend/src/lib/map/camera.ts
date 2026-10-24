@@ -49,9 +49,15 @@ export function zoomRange(viewport: Viewport, bounds: Bounds): [number, number] 
 }
 
 /** Keeps the camera usable: zoom stays in range (around the middle of the screen) and the
- * frame stays partly on screen. */
-export function clampTransform(t: Transform, viewport: Viewport, bounds: Bounds): Transform {
-  const [minK, maxK] = zoomRange(viewport, bounds);
+ * frame stays partly on screen. `range` defaults to the frame's own; deep zoom passes a
+ * wider one (see focusZoomRange). */
+export function clampTransform(
+  t: Transform,
+  viewport: Viewport,
+  bounds: Bounds,
+  range: [number, number] = zoomRange(viewport, bounds),
+): Transform {
+  const [minK, maxK] = range;
   const k = clamp(t.k, minK, maxK);
   if (k !== t.k) {
     const scale = k / t.k;

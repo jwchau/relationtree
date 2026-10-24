@@ -68,4 +68,10 @@ describe('clampTransform', () => {
     expect(wx).toBeCloseTo(fx);
     expect(wy).toBeCloseTo(fy);
   });
+
+  it('uses the zoom range it is given, for deep zoom past the root frame', () => {
+    const range: [number, number] = [fit.k / 2, fit.k * 1000];
+    const deep = { k: fit.k * 500, x: fit.x, y: fit.y };
+    expect(clampTransform(deep, viewport, bounds, range).k).toBe(fit.k * 500);
+  });
 });
