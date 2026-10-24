@@ -60,6 +60,9 @@ class GraphPersonOut(Schema):
     birthday: date | None
     relationship_category: Person.RelationshipCategory | None
     is_me: bool
+    # The map files people by their relationship_category around an owner's "me" (the
+    # category records how an owner knows them), so it needs every owner's, not just yours.
+    is_owner_me: bool
 
 
 class TreeGraphOut(Schema):
@@ -130,8 +133,13 @@ def rename_tree(request: AuthedRequest, tree_id: UUID, payload: TreeIn) -> TreeO
 
 @router.get("/trees/{tree_id}/graph", response=TreeGraphOut)
 def tree_graph(request: AuthedRequest, tree_id: UUID) -> TreeGraphOut:
-    """The whole tree for the map, in one query per table."""
+    """The whole tree for the map, in a fixed number of queries whatever its size."""
     membership = membership_in(request.user, tree_id)
+    owner_mes = set(
+        TreeMembership.objects.filter(
+            tree=tree_id, role=TreeMembership.Role.OWNER, me__isnull=False
+        ).values_list("me_id", flat=True)
+    )
     people = [
         GraphPersonOut(
             id=p.id,
@@ -145,6 +153,7 @@ def tree_graph(request: AuthedRequest, tree_id: UUID) -> TreeGraphOut:
                 else None
             ),
             is_me=p.id == membership.me_id,
+            is_owner_me=p.id in owner_mes,
         )
         for p in Person.objects.filter(tree=tree_id).order_by("name")
     ]

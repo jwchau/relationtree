@@ -58,7 +58,7 @@ export function anchoredTransform(rootT: Transform, m: FrameToRoot): Transform {
  * (a wide frame on a short screen, such as a phone held sideways). */
 export function cameraForFocus(path: string[], layoutOf: LayoutOf, viewport: Viewport): Transform {
   const m = frameToRoot(path, layoutOf);
-  const fit = fitTransform(viewport, layoutOf(path[path.length - 1])!.bounds);
+  const fit = fitFrame(viewport, layoutOf(path[path.length - 1])!);
   let k = fit.k / m.scale;
   let { x, y } = { x: fit.x - m.x * k, y: fit.y - m.y * k };
   if (path.length > 1) {
@@ -141,4 +141,17 @@ export function focusZoomRange(path: string[], layoutOf: LayoutOf, viewport: Vie
   const min = fitTransform(viewport, layoutOf(rootId)!.bounds).k * MIN_ZOOM;
   const focusFit = fitTransform(viewport, layoutOf(path[path.length - 1])!.bounds).k;
   return [min, (focusFit / frameToRoot(path, layoutOf).scale) * MAX_ZOOM];
+}
+
+/** Fitting a frame on screen: the largest of its fit areas (the whole frame, then fewer and
+ * fewer bands) whose names are readable, slots at least the 'name' level; else the family
+ * alone, letting the bands run off screen. Social bands make a frame several times wider than
+ * its family, so on a phone the whole frame would be all initials. */
+export function fitFrame(viewport: Viewport, layout: FrameLayout): Transform {
+  const readablePx = DETAIL_THRESHOLDS[1];
+  for (const area of layout.fitAreas) {
+    const fit = fitTransform(viewport, area);
+    if (SLOT_W * fit.k >= readablePx) return fit;
+  }
+  return fitTransform(viewport, layout.fitAreas[layout.fitAreas.length - 1]);
 }

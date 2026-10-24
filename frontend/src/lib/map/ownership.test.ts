@@ -108,3 +108,20 @@ function shuffle<T>(items: T[], seed: number): T[] {
   }
   return out;
 }
+
+describe('assignOwnership with the category rule', () => {
+  // F is known to the owner as a friend but has no recorded link. X is Me's sibling.
+  const graph = tree(['Me', 'F', 'X'], [['Me', 'SIBLING', 'X']], {}, {
+    categories: { F: 'FRIEND' },
+    ownerMe: ['Me'],
+  });
+
+  it("gives people filed by category to the root when the root is an owner's me", () => {
+    expect(assignOwnership(graph, 'Me').get('F')).toEqual({ owner: 'Me', depth: 1 });
+  });
+
+  it('places no one by category around any other root', () => {
+    // From X, Me is a sibling; Me's frame doesn't apply the rule, so F has no path.
+    expect(assignOwnership(graph, 'X').has('F')).toBe(false);
+  });
+});

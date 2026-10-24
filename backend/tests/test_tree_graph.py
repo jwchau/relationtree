@@ -66,7 +66,15 @@ def test_people_carry_no_contact_details_context_or_notes(
 
     [ann] = graph_of(alice, default_tree_id(alice)).json()["people"]
 
-    assert set(ann) == {"id", "name", "photo_url", "birthday", "relationship_category", "is_me"}
+    assert set(ann) == {
+        "id",
+        "name",
+        "photo_url",
+        "birthday",
+        "relationship_category",
+        "is_me",
+        "is_owner_me",
+    }
     assert ann["birthday"] == "1990-04-02"
     assert ann["relationship_category"] == "FRIEND"
 
@@ -137,3 +145,19 @@ def test_photo_storage_is_only_needed_for_people_with_photos(
     monkeypatch.setattr("relationtree.trees_api.get_photo_storage", unconfigured)
 
     assert graph_of(alice, default_tree_id(alice)).status_code == 200
+
+
+def test_is_owner_me_marks_every_owners_me_but_not_editors_or_viewers(
+    login_as: Callable[[str], Client],
+) -> None:
+    alice, bob, cat, dan = (login_as(n) for n in ("alice", "bob", "cat", "dan"))
+    tree_id = default_tree_id(alice)
+    for name, role in (("bob", "owner"), ("cat", "editor"), ("dan", "viewer")):
+        assert add_member(alice, tree_id, name, role).status_code == 201
+    ann, ben, cal, dee, eve = (add_person(alice, n) for n in ("Ann", "Ben", "Cal", "Dee", "Eve"))
+    for client, person in ((alice, ann), (bob, ben), (cat, cal), (dan, dee)):
+        client.put(f"/api/people/{person}/me")
+
+    flags = {p["name"]: p["is_owner_me"] for p in graph_of(dan, tree_id).json()["people"]}
+
+    assert flags == {"Ann": True, "Ben": True, "Cal": False, "Dee": False, "Eve": False}

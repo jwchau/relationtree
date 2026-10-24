@@ -6,7 +6,7 @@ import { ChevronRight, Maximize } from 'lucide-react';
 import type { GraphPerson, TreeGraph } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { crumbs } from '@/lib/map/breadcrumb';
-import { clampTransform, fitTransform, type Transform, type Viewport } from '@/lib/map/camera';
+import { clampTransform, type Transform, type Viewport } from '@/lib/map/camera';
 import {
   anchoredTransform,
   cameraForFocus,
@@ -168,7 +168,7 @@ export function MapCanvas({
     if (!svg || !behaviour || !viewport) return;
     // Widen the limits first so the move isn't clamped short of a deep frame.
     behaviour.scaleExtent(focusZoomRange(path, layoutOf, viewport));
-    const target = toD3(path.length === 1 ? fitTransform(viewport, rootBounds) : cameraForFocus(path, layoutOf, viewport));
+    const target = toD3(cameraForFocus(path, layoutOf, viewport));
     const selection = select(svg);
     if (prefersReducedMotion()) selection.call(behaviour.transform, target);
     else selection.transition().duration(MOVE_MS).call(behaviour.transform, target);

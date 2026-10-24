@@ -30,8 +30,9 @@ Every slice must meet the floor in PRODUCT.md: WCAG AA contrast in both Kiln the
 | FG-10 | Crowded bands | 60 coworkers wrap into rows, then a "+N more" chip opens an overflow frame |
 | FG-11 | Not connected tray | People with no path to the root are listed in a tray and can be opened |
 | FG-12 | Hardening: scale, keyboard, motion, freshness | 1,000 synthetic people stay smooth; the canvas works fully by keyboard |
+| FG-13 | The map replaces the person page's graph | A person's page shows the map centred on them; the page still scrolls normally |
 
-Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3. FG-9 needs FG-8. FG-10 needs FG-6. FG-12 comes last.
+Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3. FG-9 needs FG-8. FG-10 needs FG-6. FG-13 needs FG-6 (added later at the owner's request). FG-12 comes last.
 
 ---
 
@@ -221,6 +222,51 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 - Ownership with social links: family wins at equal distance (already covered by FG-3, extended with drawn social people).
 
 **Done when:** the root frame shows the three bands, and zooming into a friend shows the friend's own family.
+
+**Status: done.** Notes from building it:
+- **Backend:** the graph endpoint has `is_owner_me` on each person, true when one of the tree's owners marked them "This is me". It's one more query, still fixed whatever the tree's size. The category rule needs it because it applies around *any* owner's "me", and `is_me` only knows the viewer's.
+- **Placement:**
+  - `socialCircles` sorts friend, coworker, manager (both directions) and acquaintance links into bands, and says which coworkers are managers and which are reports.
+  - With the category rule (only the root's frame, only when the root is an owner's "me"), people categorised Friend, Coworker or Acquaintance who have no link to the root at all join that band. Family and Other place nobody.
+  - The ownership walk uses the same circles, so category-placed people are owned by the root.
+- **Layout:**
+  - Each non-empty band is a ring around what's inside it, with a row above, a row below and a column each side. It's filled in reading order: top row, columns, bottom row.
+  - When a ring is full, it grows on its shorter side, which keeps the frame between 0.6 and 1.67 wide to high for 0–30 people per band.
+  - The cap of 24 with "+N more" is FG-10.
+- **Drawing:**
+  - Rounded band outlines, with no lines to social people.
+  - Band labels in muted text from card size up. At name size a label would be 5–15 px, too small to read.
+  - Cards in the coworker band say "Manager" or "Report".
+- **Dots stay one neutral colour (changed from FG-2).** Kiln has no group colours and orange is reserved for primary actions, so groups are told apart by band position and labels.
+- **Measured in Chrome on desktop (240 Hz monitor),** synthetic tree of 41 people, centred on Robin, with 3 friends (one with a husband and child), 4 coworkers including a manager, a report and one placed by category, and an acquaintance:
+  - Everyone drawn once.
+  - Zooming into Gia opens her frame with her husband and child.
+  - Zooming in and out for 3 s: 211 fps, slowest frame 16.7 ms once frames were laid out. The first pass, laying each frame out for the first time, had 3 frames over 17 ms (slowest 24.9 ms). Slots are memoised so opening a frame doesn't redraw the others.
+- **Fitting on small screens (added at the owner's request).**
+  - Bands make a frame several times wider than its family. A whole-frame fit on a 360 px phone gave 23 px slots, all initials; a desktop gets 75 px.
+  - Each layout now lists `fitAreas`, largest first: the whole frame, the family with fewer and fewer bands, then the family alone. `fitFrame` uses the largest one whose slots reach the name level (40 px), and the family alone otherwise. Even family plus friends came to 39 px on that phone, which is why it falls back further.
+  - Opening the map, Fit, shared `?focus=` links and breadcrumbs all use it.
+  - Measured: the phone now opens on Robin's family at 62 px slots with names, with the bands running off the edges. The desktop is unchanged at 75 px.
+
+---
+
+## FG-13 The map replaces the person page's graph
+
+**Why:** the owner wants one picture of a person's relationships, not two (added after FG-6, by the owner's request).
+
+- In the person page's "Graph" section, replace the React Flow ego graph with an embedded map centred on that person (`root` = the person), loaded from the person's tree. Add an **Open full map** link to `/map?root=<id>`.
+- **Embedded input, like an embedded Google Map:**
+  - Plain scrolling and one-finger swipes scroll the page.
+  - Ctrl/⌘ + scroll, trackpad pinch (which arrives as ctrl + wheel) and two-finger touch zoom and pan the map.
+  - A short hint appears when you scroll over the map without Ctrl/⌘.
+- The embedded map doesn't write `?focus=` to the person page's URL.
+- Remove `EgoGraph`, `graphLayout` and its tests, `PersonNode`, `GroupLabelNode` and `LabeledEdge`, and the `@xyflow/react` dependency. Update the design doc, whose Q3 findings say React Flow stays on the person page.
+
+**Tests**
+- The embedded input filter: plain wheel is ignored, ctrl/⌘ + wheel zooms, one touch is ignored, two touches zoom, and mouse drag and double-click work.
+- The person page shows the map centred on that person, and its link opens `/map?root=<id>`.
+
+**Done when:** the person page shows the map instead of the old graph, the page still scrolls normally on desktop and phone, and React Flow is gone from the bundle.
 
 ---
 

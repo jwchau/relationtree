@@ -325,7 +325,7 @@ export interface paths {
         };
         /**
          * Tree Graph
-         * @description The whole tree for the map, in one query per table.
+         * @description The whole tree for the map, in a fixed number of queries whatever its size.
          */
         get: operations["relationtree_trees_api_tree_graph"];
         put?: never;
@@ -781,6 +781,8 @@ export interface components {
             relationship_category: components["schemas"]["RelationshipCategory"] | null;
             /** Is Me */
             is_me: boolean;
+            /** Is Owner Me */
+            is_owner_me: boolean;
         };
         /** TreeGraphOut */
         TreeGraphOut: {

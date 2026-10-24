@@ -33,7 +33,14 @@ const family = tree(
 );
 const ownership = assignOwnership(family, 'A');
 
-const NO_ONE = { parents: { ids: [], couple: false }, spouses: [], siblings: [], children: [] };
+const NO_SOCIAL = { friends: [], coworkers: [], acquaintances: [], managers: [], reports: [] };
+const NO_ONE = {
+  parents: { ids: [], couple: false },
+  spouses: [],
+  siblings: [],
+  children: [],
+  social: NO_SOCIAL,
+};
 
 describe('frameFor', () => {
   it("shows a child's partner and children, but not the root or the child's siblings", () => {
@@ -63,11 +70,32 @@ describe('frameFor', () => {
     });
   });
 
-  it('leaves out social people for now (the social bands come in FG-6)', () => {
-    const graph = tree(['A', 'F', 'FS'], [['A', 'FRIEND', 'F'], ['F', 'SPOUSE', 'FS']]);
+  it("draws a person's friends, coworkers and acquaintances in their bands", () => {
+    const graph = tree(
+      ['A', 'F', 'FS', 'W', 'Q'],
+      [['A', 'FRIEND', 'F'], ['F', 'SPOUSE', 'FS'], ['W', 'MANAGER', 'A'], ['A', 'ACQUAINTANCE', 'Q']],
+    );
     const o = assignOwnership(graph, 'A');
-    expect(frameFor(graph, o, 'A')).toEqual({ ...NO_ONE, self: 'A' });
+    expect(frameFor(graph, o, 'A')).toEqual({
+      ...NO_ONE,
+      self: 'A',
+      social: { friends: ['F'], coworkers: ['W'], acquaintances: ['Q'], managers: ['W'], reports: [] },
+    });
+    // A friend is a full person: their frame has their own family (D4).
     expect(frameFor(graph, o, 'F')).toEqual({ ...NO_ONE, self: 'F', spouses: ['FS'] });
+  });
+
+  it("doesn't repeat a friend who is drawn in a nearer frame", () => {
+    // F is a friend of both A and A's sibling B; A's frame is nearer, so only A's shows F.
+    const graph = tree(['A', 'B', 'F'], [['A', 'SIBLING', 'B'], ['A', 'FRIEND', 'F'], ['B', 'FRIEND', 'F']]);
+    const o = assignOwnership(graph, 'A');
+    expect(frameFor(graph, o, 'A').social.friends).toEqual(['F']);
+    expect(frameFor(graph, o, 'B').social.friends).toEqual([]);
+  });
+
+  it("files people by category only in the frame of an owner's me", () => {
+    const graph = tree(['Me', 'K'], [], {}, { categories: { K: 'COWORKER' }, ownerMe: ['Me'] });
+    expect(frameFor(graph, assignOwnership(graph, 'Me'), 'Me').social.coworkers).toEqual(['K']);
   });
 });
 

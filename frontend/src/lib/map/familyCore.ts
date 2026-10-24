@@ -74,7 +74,7 @@ function linked(graph: TreeGraph, personId: string, type: GraphConnection['type'
 
 /** Eldest first, then by name, then id, so the order is the same on every render. Unknown
  * birthdays go last. */
-function sortPeople(ids: string[], byId: Map<string, GraphPerson>): string[] {
+export function sortPeople(ids: string[], byId: Map<string, GraphPerson>): string[] {
   const compare = (a: string, b: string) => (a === b ? 0 : a < b ? -1 : 1);
   return ids.sort((x, y) => {
     const [a, b] = [byId.get(x), byId.get(y)];

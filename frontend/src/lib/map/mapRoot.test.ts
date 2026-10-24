@@ -3,7 +3,7 @@ import type { GraphPerson, TreeGraph } from '@/api/client';
 import { resolveRoot } from './mapRoot';
 
 function person(id: string, is_me = false): GraphPerson {
-  return { id, name: id, photo_url: null, birthday: null, relationship_category: null, is_me };
+  return { id, name: id, photo_url: null, birthday: null, relationship_category: null, is_me, is_owner_me: false };
 }
 
 const graph = (people: GraphPerson[]): TreeGraph => ({ people, connections: [] });

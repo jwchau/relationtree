@@ -1024,7 +1024,7 @@
             }
           }
         },
-        "description": "The whole tree for the map, in one query per table.",
+        "description": "The whole tree for the map, in a fixed number of queries whatever its size.",
         "tags": [
           "trees"
         ],
@@ -2409,6 +2409,10 @@
           "is_me": {
             "title": "Is Me",
             "type": "boolean"
+          },
+          "is_owner_me": {
+            "title": "Is Owner Me",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2417,7 +2421,8 @@
           "photo_url",
           "birthday",
           "relationship_category",
-          "is_me"
+          "is_me",
+          "is_owner_me"
         ],
         "title": "GraphPersonOut",
         "type": "object"

@@ -1,5 +1,6 @@
 import type { TreeGraph } from '@/api/client';
 import { familyCore } from './familyCore';
+import { categoryRuleApplies, socialCircles } from './social';
 
 /** Which frame draws each person: `owner` is the person whose frame they sit in (null for
  * the root) and `depth` is how many frames out from the root that is (design doc D7). */
@@ -22,7 +23,7 @@ export function assignOwnership(graph: TreeGraph, rootId: string): Ownership {
     // earlier one, so a remaining tie goes to the eldest.
     for (const owner of byBirthThenId(frontier, birthdays)) {
       for (const id of familyOf(graph, owner)) claim(id, owner, true);
-      for (const id of socialOf(graph, owner)) claim(id, owner, false);
+      for (const id of socialOf(graph, owner, rootId)) claim(id, owner, false);
     }
     for (const [id, { owner }] of claims) ownership.set(id, { owner, depth });
     frontier = [...claims.keys()];
@@ -53,14 +54,10 @@ function byBirthThenId(ids: string[], birthdays: Map<string, string | null>): st
   });
 }
 
-const SOCIAL_TYPES =new Set(['FRIEND', 'COWORKER', 'ACQUAINTANCE', 'MANAGER']);
-
-/** Everyone linked to this person socially or at work, from either end of the link. */
-function socialOf(graph: TreeGraph, personId: string): string[] {
-  return graph.connections.flatMap((c) => {
-    if (!SOCIAL_TYPES.has(c.type)) return [];
-    if (c.person_a_id === personId) return [c.person_b_id];
-    if (c.person_b_id === personId) return [c.person_a_id];
-    return [];
+/** Everyone in this person's social circles, as their frame would draw them. */
+function socialOf(graph: TreeGraph, personId: string, rootId: string): string[] {
+  const circles = socialCircles(graph, personId, {
+    categoryRule: categoryRuleApplies(graph, personId, rootId),
   });
+  return [...circles.friends, ...circles.coworkers, ...circles.acquaintances];
 }

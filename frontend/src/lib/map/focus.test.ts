@@ -7,10 +7,11 @@ import {
   focusFromParam,
   focusParam,
   focusZoomRange,
+  fitFrame,
   framePath,
   frameToRoot,
 } from './focus';
-import { SLOT_H } from './frameLayout';
+import { SLOT_H, SLOT_W } from './frameLayout';
 import { frameLayouts } from './frames';
 import { assignOwnership } from './ownership';
 import { tree, type Link } from './testTree';
@@ -236,5 +237,45 @@ describe('focusZoomRange', () => {
 
   it('is the root frame\'s range at the root', () => {
     expect(focusZoomRange(['R'], layoutOf, viewport)).toEqual(zoomRange(viewport, layoutOf('R')!.bounds));
+  });
+});
+
+describe('fitFrame', () => {
+  // R with parents and a spouse, and five people in each social band.
+  const names = ['R', 'M', 'D', 'S'];
+  const links: Link[] = [['M', 'PARENT', 'R'], ['D', 'PARENT', 'R'], ['R', 'SPOUSE', 'S']];
+  for (const [prefix, type] of [['F', 'FRIEND'], ['W', 'COWORKER'], ['Q', 'ACQUAINTANCE']] as const) {
+    for (let i = 0; i < 5; i++) {
+      names.push(`${prefix}${i}`);
+      links.push(['R', type, `${prefix}${i}`]);
+    }
+  }
+  const banded = frameLayouts(tree(names, links), 'R');
+  const layout = banded('R')!;
+  const slotPx = (t: Transform) => SLOT_W * t.k;
+
+  it('fits the whole frame when its names are readable', () => {
+    const desktop = { width: 1400, height: 1200 };
+    expect(slotPx(fitTransform(desktop, layout.bounds))).toBeGreaterThanOrEqual(40);
+    expect(fitFrame(desktop, layout)).toEqual(fitTransform(desktop, layout.bounds));
+  });
+
+  it('fits the largest area whose names are readable, out of the whole frame and inner bands', () => {
+    const tablet = { width: 500, height: 700 };
+    const i = layout.fitAreas.findIndex((a) => slotPx(fitTransform(tablet, a)) >= 40);
+    expect(i).toBeGreaterThan(0); // the whole frame is too small to read here
+    expect(i).toBeLessThan(layout.fitAreas.length - 1); // but more than the family fits
+    expect(fitFrame(tablet, layout)).toEqual(fitTransform(tablet, layout.fitAreas[i]));
+  });
+
+  it('falls back to the family alone when even that is too small to read', () => {
+    const tiny = { width: 150, height: 220 };
+    for (const area of layout.fitAreas) expect(slotPx(fitTransform(tiny, area))).toBeLessThan(40);
+    expect(fitFrame(tiny, layout)).toEqual(fitTransform(tiny, layout.fitAreas.at(-1)!));
+  });
+
+  it('is how the map opens and how Fit works', () => {
+    const phone = { width: 360, height: 640 };
+    expect(cameraForFocus(['R'], banded, phone)).toEqual(fitFrame(phone, layout));
   });
 });

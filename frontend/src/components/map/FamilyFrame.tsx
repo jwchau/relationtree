@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GraphPerson } from '@/api/client';
 import type { Detail } from '@/lib/map/detail';
@@ -9,6 +9,7 @@ import {
   fitInSlot,
   SLOT_H,
   SLOT_W,
+  type BandKind,
   type FrameLayout,
   type Role,
   type Slot,
@@ -23,6 +24,17 @@ const ROLE_LABELS: Record<Role, string> = {
   spouse: 'spouse',
   sibling: 'sibling',
   child: 'child',
+  friend: 'friend',
+  coworker: 'coworker',
+  manager: 'manager',
+  report: 'report',
+  acquaintance: 'acquaintance',
+};
+
+const BAND_LABELS: Record<BandKind, string> = {
+  friends: 'Friends',
+  coworkers: 'Coworkers',
+  acquaintances: 'Acquaintances',
 };
 
 /** One person's frame: their parents, them with spouses and siblings, and children under
@@ -49,6 +61,32 @@ export function FamilyFrame({
   const detail: Detail = node.detail === 'frame' ? 'card' : node.detail;
   return (
     <g role="group" aria-label={centre ? `Family of ${centre.name}` : 'Family'}>
+      {/* Social circles: one outline per band, outermost first so inner ones draw on top.
+          Labels only from card size, where they're big enough to read. */}
+      <g aria-hidden>
+        {[...layout.bands].reverse().map((band) => (
+          <g key={band.kind}>
+            <rect
+              x={band.outer.x}
+              y={band.outer.y}
+              width={band.outer.width}
+              height={band.outer.height}
+              rx={20}
+              strokeWidth={1.5}
+              className="fill-none stroke-hairline"
+            />
+            {(node.detail === 'card' || node.detail === 'frame') && (
+              <text
+                x={band.outer.x + 20}
+                y={band.outer.y + 19}
+                className="fill-muted-foreground text-[14px] font-medium"
+              >
+                {BAND_LABELS[band.kind]}
+              </text>
+            )}
+          </g>
+        ))}
+      </g>
       <g className="stroke-subtle" strokeWidth={2} fill="none" aria-hidden>
         {layout.lines.map((l, i) => (
           <line key={i} {...l} />
@@ -109,8 +147,11 @@ function shortName(name: string): string {
 
 /** One person's fixed slot, drawn in plain SVG (no foreignObject) so it stays sharp and fast
  * under the camera's transforms. Below card size the whole slot links to the person's page;
- * the card has its own Open link instead. */
-function PersonSlot({
+ * the card has its own Open link instead. Memoised: when a plan opens one frame, the
+ * other slots' props (layout slot, person, level, scale) are unchanged, so they don't redraw. */
+const PersonSlot = memo(PersonSlotView);
+
+function PersonSlotView({
   slot,
   person,
   detail,
@@ -176,6 +217,9 @@ function PersonCard({
 }) {
   const top = slot.y - 4;
   const born = bornLine(person.birthday, new Date());
+  // In the coworker band, say who manages whom; everyone else's band already says it.
+  const work = slot.role === 'manager' ? 'Manager' : slot.role === 'report' ? 'Report' : null;
+  const detailLine = [work, born].filter(Boolean).join(' · ');
   return (
     <g role="group" aria-label={label}>
       <rect
@@ -204,9 +248,9 @@ function PersonCard({
         >
           {shortName(person.name)}
         </text>
-        {born && (
+        {detailLine && (
           <text x={slot.x} y={top + 80} textAnchor="middle" className="fill-muted-foreground text-[10px]">
-            {born}
+            {detailLine}
           </text>
         )}
         <SlotLink href={`/people/${person.id}`} label={`Open ${person.name}`} className="group outline-none">
