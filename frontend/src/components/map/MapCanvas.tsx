@@ -11,17 +11,19 @@ import { embeddedHint, embeddedZoomFilter, type EmbeddedHint } from '@/lib/map/e
 import {
   anchoredTransform,
   cameraForFocus,
+  chipRoute,
   focusedFrame,
   focusFromParam,
   focusZoomRange,
+  framePath,
   frameToRoot,
 } from '@/lib/map/focus';
 import { ZOOM_VAR } from '@/lib/map/frameLayout';
-import { frameLayouts } from '@/lib/map/frames';
-import { assignOwnership } from '@/lib/map/ownership';
+import { mapModel } from '@/lib/map/model';
 import { planKey, planRender, zoomCeiling, type PlanNode } from '@/lib/map/renderPlan';
 import { cn } from '@/lib/utils';
 import { FamilyFrame } from './FamilyFrame';
+import { MapContext, type MapContextValue } from './MapContext';
 
 const MOVE_MS = 300;
 /** Below this width the breadcrumb shortens to root › … › last two. */
@@ -86,9 +88,8 @@ export function MapCanvas({
   const [focus, setFocus] = useState<string[]>([rootId]);
   const [hint, setHint] = useState<EmbeddedHint | null>(null);
 
-  const ownership = useMemo(() => assignOwnership(graph, rootId), [graph, rootId]);
-  // Each frame is laid out once per root and reused while you zoom.
-  const layoutOf = useMemo(() => frameLayouts(graph, rootId, ownership), [graph, rootId, ownership]);
+  // Each frame is laid out once per root and reused while you zoom, and when you come back.
+  const { ownership, layoutOf } = mapModel(graph, rootId);
   const rootBounds = layoutOf(rootId)!.bounds;
 
   const anchorPath = useMemo(() => focus.slice(0, Math.max(1, focus.length - ANCESTORS_DRAWN)), [focus]);
@@ -201,17 +202,43 @@ export function MapCanvas({
     };
   }, [embedded]);
 
-  const moveTo = (path: string[]) => {
+  /** Animates the camera through each frame in turn, ending on the last. */
+  const moveTo = (...paths: string[][]) => {
     const svg = svgRef.current;
     const behaviour = zoomRef.current;
     if (!svg || !behaviour || !viewport) return;
     // Widen the limits first so the move isn't clamped short of a deep frame.
-    behaviour.scaleExtent(focusZoomRange(path, layoutOf, viewport));
-    const target = toD3(cameraForFocus(path, layoutOf, viewport));
+    behaviour.scaleExtent(focusZoomRange(paths[paths.length - 1], layoutOf, viewport));
+    const targets = paths.map((path) => toD3(cameraForFocus(path, layoutOf, viewport)));
     const selection = select(svg);
-    if (prefersReducedMotion()) selection.call(behaviour.transform, target);
-    else selection.transition().duration(MOVE_MS).call(behaviour.transform, target);
+    if (prefersReducedMotion()) {
+      selection.call(behaviour.transform, targets[targets.length - 1]);
+      return;
+    }
+    let move = selection.transition().duration(MOVE_MS).call(behaviour.transform, targets[0]);
+    for (const target of targets.slice(1)) {
+      move = move.transition().duration(MOVE_MS).call(behaviour.transform, target);
+    }
   };
+
+  // A chip flies out to the nearest frame it shares with where its person is drawn, then in.
+  const goToRef = useRef((personId: string) => {
+    void personId;
+  });
+  goToRef.current = (personId: string) => {
+    moveTo(...chipRoute(focusRef.current ?? [rootId], framePath(ownership, layoutOf, personId)));
+  };
+  const mapContext = useMemo<MapContextValue>(
+    () => ({
+      rootId,
+      goTo: (personId) => goToRef.current(personId),
+      drawnIn: (personId) => {
+        const owner = ownership.get(personId)?.owner ?? null;
+        return owner === null ? null : (people.get(owner)?.name ?? '?');
+      },
+    }),
+    [rootId, ownership, people],
+  );
 
   const anchorNode = plan && nodeAt(plan, anchorPath);
   const anchorLayout = layoutOf(anchorId);
@@ -230,13 +257,15 @@ export function MapCanvas({
       >
         <g ref={anchorRef}>
           {anchorNode && anchorLayout && (
-            <FamilyFrame
-              layout={anchorLayout}
-              node={anchorNode}
-              people={people}
-              layoutOf={layoutOf}
-              anchorScale={anchorM.scale}
-            />
+            <MapContext.Provider value={mapContext}>
+              <FamilyFrame
+                layout={anchorLayout}
+                node={anchorNode}
+                people={people}
+                layoutOf={layoutOf}
+                anchorScale={anchorM.scale}
+              />
+            </MapContext.Provider>
           )}
         </g>
       </svg>

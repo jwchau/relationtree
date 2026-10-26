@@ -155,3 +155,12 @@ export function fitFrame(viewport: Viewport, layout: FrameLayout): Transform {
   }
   return fitTransform(viewport, layout.fitAreas[layout.fitAreas.length - 1]);
 }
+
+/** The frames a chip's camera move passes through: out to the nearest frame the two paths
+ * share, then in to the target (FG-7). One step when one frame is inside the other. */
+export function chipRoute(from: string[], to: string[]): string[][] {
+  let shared = 0;
+  while (shared < from.length && shared < to.length && from[shared] === to[shared]) shared++;
+  if (shared === from.length || shared === to.length) return [to];
+  return [to.slice(0, shared), to];
+}

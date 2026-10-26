@@ -30,8 +30,9 @@ export function planRender(
     const open = new Map<string, PlanNode>();
     if (detail === 'frame') {
       for (const slot of layout.slots) {
-        // A frame's own centre is the person whose frame it is; opening it would recurse.
-        if (slot.id === personId) continue;
+        // A frame's own centre is the person whose frame it is, and a chip only points to
+        // where its person is drawn; opening either would draw someone twice, or recurse.
+        if (slot.id === personId || slot.chip) continue;
         const inner = layoutOf(slot.id);
         if (!inner) continue;
         const left = (slot.x - SLOT_W / 2) * k + x * t.k + t.x;

@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react';
+import { memo, useContext, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GraphPerson } from '@/api/client';
 import type { Detail } from '@/lib/map/detail';
@@ -17,6 +17,7 @@ import {
 import type { PlanNode } from '@/lib/map/renderPlan';
 import { initials } from '@/lib/people';
 import { cn } from '@/lib/utils';
+import { MapContext } from './MapContext';
 
 const ROLE_LABELS: Record<Role, string> = {
   self: 'centre',
@@ -139,6 +140,7 @@ export function FamilyFrame({
 
 const AVATAR_R = 32;
 const NAME_MAX = 16;
+const CARD_ACTION_W = 54;
 
 function shortName(name: string): string {
   const chars = Array.from(name);
@@ -163,6 +165,7 @@ function PersonSlotView({
   scale: number;
 }) {
   const label = `${person.name}, ${ROLE_LABELS[slot.role]}`;
+  if (slot.chip) return <ChipSlot slot={slot} person={person} detail={detail} scale={scale} />;
   if (detail === 'card') return <PersonCard slot={slot} person={person} label={label} scale={scale} />;
 
   const cx = slot.x;
@@ -202,7 +205,8 @@ function PersonSlotView({
   );
 }
 
-/** The largest form: avatar, name, birth line and an Open link. Its contents stop growing
+/** The largest form: avatar, name, birth line, an Open link and, for anyone but the root, a
+ * Make centre link that rebuilds the map around them (FG-5). Its contents stop growing
  * past CARD_MAX_PX on screen so the text stays a readable size; the box fills the slot. */
 function PersonCard({
   slot,
@@ -215,6 +219,7 @@ function PersonCard({
   label: string;
   scale: number;
 }) {
+  const rootId = useContext(MapContext)?.rootId;
   const top = slot.y - 4;
   const born = bornLine(person.birthday, new Date());
   // In the coworker band, say who manages whom; everyone else's band already says it.
@@ -253,29 +258,141 @@ function PersonCard({
             {detailLine}
           </text>
         )}
-        <SlotLink href={`/people/${person.id}`} label={`Open ${person.name}`} className="group outline-none">
-          <rect
-            x={slot.x - 28}
-            y={top + 90}
-            width={56}
-            height={22}
-            rx={6}
-            strokeWidth={2}
-            className="fill-ghost stroke-transparent group-hover:fill-ghost-hover group-focus-visible:stroke-ring"
-          />
-          <text
-            x={slot.x}
-            y={top + 101}
-            textAnchor="middle"
-            dominantBaseline="central"
-            aria-hidden
-            className="fill-text text-[11px] font-medium"
-          >
+        {person.id === rootId ? (
+          <CardAction href={`/people/${person.id}`} label={`Open ${person.name}`} x={slot.x - CARD_ACTION_W / 2} y={top + 90}>
             Open
-          </text>
-        </SlotLink>
+          </CardAction>
+        ) : (
+          <>
+            <CardAction href={`/people/${person.id}`} label={`Open ${person.name}`} x={slot.x - 56} y={top + 90}>
+              Open
+            </CardAction>
+            <CardAction
+              href={`/map?root=${person.id}`}
+              label={`Make ${person.name} the centre`}
+              x={slot.x + 2}
+              y={top + 90}
+            >
+              Centre
+            </CardAction>
+          </>
+        )}
       </g>
     </g>
+  );
+}
+
+/** Someone drawn in another frame, as a chip: a dashed outline (never a solid slot), the
+ * name with "↗", and at card size where they really are. The whole chip is one button that
+ * takes the camera there (D8, FG-7). */
+function ChipSlot({
+  slot,
+  person,
+  detail,
+  scale,
+}: {
+  slot: Slot;
+  person: GraphPerson;
+  detail: Detail;
+  scale: number;
+}) {
+  const map = useContext(MapContext);
+  const owner = map?.drawnIn(person.id) ?? null;
+  const where = owner === null ? 'at the centre of the map' : `drawn in ${owner}'s family`;
+  const go = () => map?.goTo(person.id);
+  const top = slot.y - 4;
+  const cy = slot.y + AVATAR_Y;
+  return (
+    <g
+      role="button"
+      tabIndex={0}
+      aria-label={`${person.name}, ${ROLE_LABELS[slot.role]}, ${where}`}
+      className="group cursor-pointer outline-none"
+      onClick={go}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        go();
+      }}
+    >
+      {detail === 'dot' ? (
+        <circle
+          cx={slot.x}
+          cy={slot.y + SLOT_H / 2 - 4}
+          r={36}
+          strokeWidth={8}
+          strokeDasharray="12 10"
+          className="fill-none stroke-muted-foreground"
+        />
+      ) : (
+        <rect
+          x={slot.x - SLOT_W / 2}
+          y={top}
+          width={SLOT_W}
+          height={SLOT_H}
+          rx={12}
+          strokeWidth={2}
+          strokeDasharray="8 6"
+          className="fill-transparent stroke-subtle transition-colors duration-200 group-hover:fill-ghost-hover group-focus-visible:stroke-ring"
+        />
+      )}
+      {(detail === 'avatar' || detail === 'name') && <Avatar person={person} cx={slot.x} cy={cy} r={AVATAR_R} />}
+      {detail === 'name' && (
+        <text x={slot.x} y={cy + AVATAR_R + 22} textAnchor="middle" aria-hidden className="fill-muted-foreground text-[14px]">
+          {shortName(person.name)} ↗
+        </text>
+      )}
+      {(detail === 'card' || detail === 'frame') && (
+        <g style={{ transform: cardScaleCss(scale), transformBox: 'fill-box', transformOrigin: 'center' }}>
+          <Avatar person={person} cx={slot.x} cy={top + 28} r={20} />
+          <text x={slot.x} y={top + 64} textAnchor="middle" aria-hidden className="fill-text text-[12px]">
+            {shortName(person.name)} ↗
+          </text>
+          <text x={slot.x} y={top + 80} textAnchor="middle" aria-hidden className="fill-muted-foreground text-[10px]">
+            {owner === null ? 'At the centre' : `In ${shortName(owner)}'s family`}
+          </text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+/** A small button-shaped link on a card, 54 wide and 22 tall from (x, y). */
+function CardAction({
+  href,
+  label,
+  x,
+  y,
+  children,
+}: {
+  href: string;
+  label: string;
+  x: number;
+  y: number;
+  children: ReactNode;
+}) {
+  return (
+    <SlotLink href={href} label={label} className="group outline-none">
+      <rect
+        x={x}
+        y={y}
+        width={CARD_ACTION_W}
+        height={22}
+        rx={6}
+        strokeWidth={2}
+        className="fill-ghost stroke-transparent group-hover:fill-ghost-hover group-focus-visible:stroke-ring"
+      />
+      <text
+        x={x + CARD_ACTION_W / 2}
+        y={y + 11}
+        textAnchor="middle"
+        dominantBaseline="central"
+        aria-hidden
+        className="fill-text text-[11px] font-medium"
+      >
+        {children}
+      </text>
+    </SlotLink>
   );
 }
 

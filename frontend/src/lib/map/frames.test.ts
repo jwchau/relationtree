@@ -40,33 +40,43 @@ const NO_ONE = {
   siblings: [],
   children: [],
   social: NO_SOCIAL,
+  chips: new Set<string>(),
 };
 
 describe('frameFor', () => {
-  it("shows a child's partner and children, but not the root or the child's siblings", () => {
+  it("shows a child's partner and children, with their parents and sibling as chips", () => {
     expect(frameFor(family, ownership, 'AA')).toEqual({
       ...NO_ONE,
       self: 'AA',
+      parents: { ids: ['A', 'S'], couple: true },
+      siblings: ['AA2'],
       spouses: ['AAS'],
       children: [{ parents: ['AA', 'AAS'], children: ['AAA'] }],
+      chips: new Set(['A', 'S', 'AA2']),
     });
   });
 
-  it("shows only a sibling's partner and children", () => {
+  it("shows a sibling's partner and children, with their parents and the root as chips", () => {
     expect(frameFor(family, ownership, 'B')).toEqual({
       ...NO_ONE,
       self: 'B',
+      parents: { ids: ['P1', 'P2'], couple: true },
+      siblings: ['A'],
       spouses: ['BS'],
       children: [{ parents: ['B', 'BS'], children: ['BK'] }],
+      chips: new Set(['P1', 'P2', 'A']),
     });
   });
 
-  it("shows a parent's parents and siblings, but not the root, the root's siblings or the other parent", () => {
+  it("shows a parent's parents and siblings, with their partner and children as chips", () => {
     expect(frameFor(family, ownership, 'P1')).toEqual({
       ...NO_ONE,
       self: 'P1',
       parents: { ids: ['G1', 'G2'], couple: true },
       siblings: ['U'],
+      spouses: ['P2'],
+      children: [{ parents: ['P1', 'P2'], children: ['A', 'B'] }],
+      chips: new Set(['P2', 'A', 'B']),
     });
   });
 
@@ -81,16 +91,24 @@ describe('frameFor', () => {
       self: 'A',
       social: { friends: ['F'], coworkers: ['W'], acquaintances: ['Q'], managers: ['W'], reports: [] },
     });
-    // A friend is a full person: their frame has their own family (D4).
-    expect(frameFor(graph, o, 'F')).toEqual({ ...NO_ONE, self: 'F', spouses: ['FS'] });
+    // A friend is a full person: their frame has their own family (D4), and A as a chip.
+    expect(frameFor(graph, o, 'F')).toEqual({
+      ...NO_ONE,
+      self: 'F',
+      spouses: ['FS'],
+      social: { ...NO_SOCIAL, friends: ['A'] },
+      chips: new Set(['A']),
+    });
   });
 
-  it("doesn't repeat a friend who is drawn in a nearer frame", () => {
-    // F is a friend of both A and A's sibling B; A's frame is nearer, so only A's shows F.
+  it('shows a friend who is drawn in a nearer frame as a chip in the friends band', () => {
+    // F is a friend of both A and A's sibling B; A's frame is nearer, so it draws F.
     const graph = tree(['A', 'B', 'F'], [['A', 'SIBLING', 'B'], ['A', 'FRIEND', 'F'], ['B', 'FRIEND', 'F']]);
     const o = assignOwnership(graph, 'A');
-    expect(frameFor(graph, o, 'A').social.friends).toEqual(['F']);
-    expect(frameFor(graph, o, 'B').social.friends).toEqual([]);
+    expect(frameFor(graph, o, 'A').chips).toEqual(new Set());
+    const b = frameFor(graph, o, 'B');
+    expect(b.social.friends).toEqual(['F']);
+    expect(b.chips).toEqual(new Set(['A', 'F']));
   });
 
   it("files people by category only in the frame of an owner's me", () => {
@@ -118,6 +136,17 @@ describe('frameLayouts', () => {
   it('lays each frame out once and reuses it', () => {
     const layoutOf = frameLayouts(family, 'A');
     expect(layoutOf('P1')).toBe(layoutOf('P1'));
+  });
+
+  it('gives a frame to someone linked to a person drawn in yet another frame', () => {
+    // F sits in A's friends band; F's coworker W is B's spouse, so B's frame draws W. A's
+    // frame can't show F–W, so F's slot opens into a frame with W as a chip.
+    const graph = tree(
+      ['A', 'B', 'F', 'W'],
+      [['A', 'SIBLING', 'B'], ['A', 'FRIEND', 'F'], ['B', 'SPOUSE', 'W'], ['F', 'COWORKER', 'W']],
+    );
+    const layout = frameLayouts(graph, 'A')('F');
+    expect(layout?.slots.map((s) => s.id)).toEqual(expect.arrayContaining(['F', 'W', 'A']));
   });
 
   it('has no frame for someone who owns no one, but always one for the root', () => {

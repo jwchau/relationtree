@@ -3,6 +3,7 @@ import { fitTransform, MAX_ZOOM, MIN_ZOOM, zoomRange, type Transform } from './c
 import {
   anchoredTransform,
   cameraForFocus,
+  chipRoute,
   focusedFrame,
   focusFromParam,
   focusParam,
@@ -277,5 +278,26 @@ describe('fitFrame', () => {
   it('is how the map opens and how Fit works', () => {
     const phone = { width: 360, height: 640 };
     expect(cameraForFocus(['R'], banded, phone)).toEqual(fitFrame(phone, layout));
+  });
+});
+
+describe('chipRoute', () => {
+  it('goes out to the nearest shared frame, then in to the target', () => {
+    expect(chipRoute(['R', 'A', 'B'], ['R', 'A', 'C', 'D'])).toEqual([
+      ['R', 'A'],
+      ['R', 'A', 'C', 'D'],
+    ]);
+  });
+
+  it('goes straight in when the target is inside the current frame', () => {
+    expect(chipRoute(['R', 'A'], ['R', 'A', 'C'])).toEqual([['R', 'A', 'C']]);
+  });
+
+  it('goes straight out when the target is a frame around the current one', () => {
+    expect(chipRoute(['R', 'A', 'C'], ['R'])).toEqual([['R']]);
+  });
+
+  it('goes through the root when the paths share nothing else', () => {
+    expect(chipRoute(['R', 'A'], ['R', 'B'])).toEqual([['R'], ['R', 'B']]);
   });
 });

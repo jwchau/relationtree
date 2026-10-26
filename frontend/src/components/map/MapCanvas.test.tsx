@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tree } from '@/lib/map/testTree';
-import { FixedSizeObserver } from '@/test/resizeObserver';
+import { FixedSizeObserver, observedSize } from '@/test/resizeObserver';
 import { MapCanvas } from './MapCanvas';
 
 const graph = tree(['Robin', 'Alan', 'Beth', 'Sam'], [
@@ -18,6 +18,7 @@ beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({ matches: false }));
 });
 afterEach(() => {
+  observedSize();
   vi.unstubAllGlobals();
 });
 
@@ -90,5 +91,82 @@ describe('MapCanvas on its own page', () => {
 
   it('takes every touch', () => {
     expect(renderMap()).toHaveClass('touch-none');
+  });
+});
+
+describe('MapCanvas cards', () => {
+  it('offer to make someone else the centre', () => {
+    renderMap();
+    expect(screen.getByRole('link', { name: 'Make Alan the centre' })).toHaveAttribute('href', '/map?root=Alan');
+  });
+
+  it("don't offer it on the root's own card", () => {
+    renderMap();
+    expect(screen.getByRole('link', { name: 'Open Robin' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Make Robin the centre' })).not.toBeInTheDocument();
+  });
+});
+
+describe('MapCanvas chips', () => {
+  // Alan's frame draws his parent Gus; his wife Beth and son Robin are drawn in Robin's
+  // frame, so here they're chips.
+  const withGus = tree(['Robin', 'Alan', 'Beth', 'Sam', 'Gus'], [
+    ['Alan', 'SPOUSE', 'Beth'],
+    ['Alan', 'PARENT', 'Robin'],
+    ['Beth', 'PARENT', 'Robin'],
+    ['Robin', 'SPOUSE', 'Sam'],
+    ['Gus', 'PARENT', 'Alan'],
+  ]);
+  const everyone = new Map(withGus.people.map((p) => [p.id, p]));
+  const renderAtAlan = (onFocusChange = vi.fn()) => {
+    render(
+      <MemoryRouter>
+        <MapCanvas
+          graph={withGus}
+          rootId="Robin"
+          people={everyone}
+          initialFocus="Alan"
+          onFocusChange={onFocusChange}
+          className="h-96"
+        />
+      </MemoryRouter>,
+    );
+    return onFocusChange;
+  };
+
+  it('shows people drawn in another frame as buttons that say where they are', () => {
+    renderAtAlan();
+    expect(screen.getByRole('button', { name: "Beth, spouse, drawn in Robin's family" })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Robin, child, at the centre of the map' })).toBeInTheDocument();
+  });
+
+  it('says at card size where the person is drawn', () => {
+    observedSize({ width: 1600, height: 1000 }); // big enough for cards in Alan's frame
+    renderAtAlan();
+    const chip = screen.getByRole('button', { name: "Beth, spouse, drawn in Robin's family" });
+    expect(within(chip).getByText("In Robin's family")).toBeInTheDocument();
+    const root = screen.getByRole('button', { name: 'Robin, child, at the centre of the map' });
+    expect(within(root).getByText('At the centre')).toBeInTheDocument();
+  });
+
+  it('has no Open or Centre links of its own', () => {
+    renderAtAlan();
+    const chip = screen.getByRole('button', { name: "Beth, spouse, drawn in Robin's family" });
+    expect(within(chip).queryAllByRole('link')).toEqual([]);
+  });
+
+  it('takes the camera to where the person is drawn when clicked', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const onFocusChange = renderAtAlan();
+    expect(onFocusChange).toHaveBeenLastCalledWith(['Robin', 'Alan']);
+    fireEvent.click(screen.getByRole('button', { name: "Beth, spouse, drawn in Robin's family" }));
+    expect(onFocusChange).toHaveBeenLastCalledWith(['Robin']);
+  });
+
+  it('does the same on Enter', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const onFocusChange = renderAtAlan();
+    fireEvent.keyDown(screen.getByRole('button', { name: "Beth, spouse, drawn in Robin's family" }), { key: 'Enter' });
+    expect(onFocusChange).toHaveBeenLastCalledWith(['Robin']);
   });
 });
