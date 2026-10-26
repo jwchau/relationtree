@@ -316,6 +316,26 @@ export interface paths {
         patch: operations["relationtree_trees_api_rename_tree"];
         trace?: never;
     };
+    "/api/trees/{tree_id}/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tree Graph
+         * @description The whole tree for the map, in a fixed number of queries whatever its size.
+         */
+        get: operations["relationtree_trees_api_tree_graph"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trees/{tree_id}/members": {
         parameters: {
             query?: never;
@@ -741,6 +761,35 @@ export interface components {
         TreeIn: {
             /** Name */
             name: string;
+        };
+        /**
+         * GraphPersonOut
+         * @description A person as the map draws them. No contact details, context or notes.
+         */
+        GraphPersonOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Photo Url */
+            photo_url: string | null;
+            /** Birthday */
+            birthday: string | null;
+            relationship_category: components["schemas"]["RelationshipCategory"] | null;
+            /** Is Me */
+            is_me: boolean;
+            /** Is Owner Me */
+            is_owner_me: boolean;
+        };
+        /** TreeGraphOut */
+        TreeGraphOut: {
+            /** People */
+            people: components["schemas"]["GraphPersonOut"][];
+            /** Connections */
+            connections: components["schemas"]["ConnectionOut"][];
         };
         /** MemberOut */
         MemberOut: {
@@ -1484,6 +1533,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TreeOut"];
+                };
+            };
+        };
+    };
+    relationtree_trees_api_tree_graph: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tree_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreeGraphOut"];
                 };
             };
         };

@@ -271,22 +271,3 @@
     }
   }
 }
-
-/* React Flow in Kiln: the graph sits on the panel, edges in the line colour. */
-.react-flow {
-  --xy-background-color: transparent;
-  --xy-background-pattern-color: var(--hairline);
-  --xy-edge-stroke: var(--line);
-  --xy-edge-label-background-color: var(--surface-2);
-  --xy-edge-label-color: var(--muted);
-  --xy-controls-button-background-color: var(--surface-2);
-  --xy-controls-button-background-color-hover: var(--surface-3);
-  --xy-controls-button-color: var(--text);
-  --xy-controls-button-color-hover: var(--text);
-  --xy-controls-button-border-color: var(--hairline);
-  --xy-controls-box-shadow: var(--elevation-3);
-}
-.react-flow__controls {
-  border-radius: 12px;
-  overflow: hidden;
-}

@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -15,5 +16,10 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+  },
+  test: {
+    // Pure tests run in node; component tests opt into jsdom with a
+    // `// @vitest-environment jsdom` comment.
+    setupFiles: ['./src/test/setup.ts'],
   },
 })
