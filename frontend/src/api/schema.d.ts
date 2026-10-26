@@ -1981,6 +1981,15 @@ export interface operations {
                     "application/json": components["schemas"]["Proposal"];
                 };
             };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
             /** @description Bad Gateway */
             502: {
                 headers: {

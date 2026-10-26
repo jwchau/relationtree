@@ -9,6 +9,10 @@ Measured on an 8-person tree with 10 notes (tests/eval_extract.py, qwen3.8:27b),
 10/10 with the final prompt (median 13.6 s, max 21.1 s); earlier wordings scored 9-10/10 at a
 median of ~8.5 s. One answer in one run came back empty after 73 s (a runaway think), which the
 user sees as "couldn't read that note".
+The prompt, the thinking and the answer share num_ctx (8192). Thinking is the big part: ~2k
+tokens for a one-line note, ~3.5-5k for a full 2000-char one. Each known person costs ~8 tokens
+(it was ~36 with UUIDs), so a full note still read perfectly in a 300-person tree, a short one
+in 600; past that the user gets "too much to read" (413), not a wrong proposal.
 Thinking off scored 8/10 (median 2.4 s) with invented links ("Maya and I went to Priya's dinner"
 made Maya a sibling, from the shared surname), so thinking stays on. The usual miss: a college
 roommate proposed as an acquaintance rather than a friend.
@@ -25,10 +29,15 @@ from django.conf import settings
 from django.db import transaction
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from relationtree.ai import get_chat_model
+from relationtree.ai import OutOfRoom, get_chat_model
 from relationtree.models import Connection, Person, Tree
 from relationtree.prompts import EXTRACT_FORMAT, build_extract_messages
 from relationtree.relationships import SYMMETRIC, canonical_pair
+
+# A low estimate of prompt characters per token, so the size check errs towards refusing. The
+# known-people list is the densest part: ~2.0 chars per token with qwen3.8 ("k523: Xavier
+# Ortega"), against ~4.4 for note text.
+CHARS_PER_TOKEN = 2.0
 
 
 class ExtractionFailed(Exception):
@@ -161,10 +170,21 @@ async def propose(
     tree: Tree, note: str, known: list[tuple[str, str]], me: Person | None
 ) -> dict[str, Any]:
     """Asks the model about the note and cleans its answer. Raises AIUnavailable (or
-    TimeoutError) if the model doesn't answer, ExtractionFailed if the answer isn't usable."""
+    TimeoutError) if the model doesn't answer, OutOfRoom if the note and the tree don't fit
+    in its context, ExtractionFailed if the answer isn't usable."""
+    # The model sees short refs, not ids; they're mapped back before cleaning.
+    ids = {f"k{i}": person_id for i, (person_id, _) in enumerate(known, 1)}
+    refs = {person_id: ref for ref, person_id in ids.items()}
+    named = [(refs[person_id], name) for person_id, name in known]
+    you = (refs[str(me.id)], me.name) if me is not None and str(me.id) in refs else None
+    messages = build_extract_messages(note, named, you)
+    # Ollama silently cuts a prompt longer than num_ctx, instructions first, and the model then
+    # answers confidently from what's left. Refuse before that can happen.
+    if sum(len(m["content"]) for m in messages) / CHARS_PER_TOKEN > settings.OLLAMA_NUM_CTX:
+        raise OutOfRoom("prompt alone is over num_ctx")
     answer = await asyncio.wait_for(
         get_chat_model().complete(
-            build_extract_messages(note, known, me),
+            messages,
             format=EXTRACT_FORMAT,
             model=settings.CHAT_MODEL,
             options={"num_ctx": settings.OLLAMA_NUM_CTX},
@@ -172,7 +192,10 @@ async def propose(
         ),
         settings.AI_FIRST_TOKEN_TIMEOUT,
     )
-    return await sync_to_async(clean)(parse(answer), tree)
+    raw = parse(answer)
+    for person in raw.people:
+        person.existing_id = ids.get(person.existing_id or "")
+    return await sync_to_async(clean)(raw, tree)
 
 
 # --- Applying the reviewed proposal ---------------------------------------------------------------

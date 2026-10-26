@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from relationtree.ai import AIUnavailable, OllamaChatModel, OllamaEmbedder
+from relationtree.ai import AIUnavailable, OllamaChatModel, OllamaEmbedder, OutOfRoom
 
 
 def ndjson(*objs: dict[str, object]) -> bytes:
@@ -139,6 +139,32 @@ async def test_complete_asks_for_structured_output_and_returns_the_text() -> Non
     assert request["stream"] is False
     assert request["think"] is True
     assert request["keep_alive"] == "1h"
+
+
+async def test_complete_that_hits_the_context_limit_is_out_of_room() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        # What Ollama sends when thinking filled num_ctx: no answer, stopped for "length".
+        return httpx.Response(
+            200,
+            json={
+                "model": "m",
+                "message": {"role": "assistant", "content": "", "thinking": "Hmm..."},
+                "done": True,
+                "done_reason": "length",
+                "prompt_eval_count": 5127,
+                "eval_count": 3065,
+            },
+        )
+
+    model = OllamaChatModel(
+        "http://ollama.test",
+        connect_timeout=1,
+        keep_alive="1h",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(OutOfRoom):
+        await model.complete([], format={}, model="m", options={}, think=True)
 
 
 async def test_complete_connection_failures_become_ai_unavailable() -> None:

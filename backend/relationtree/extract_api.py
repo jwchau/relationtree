@@ -9,7 +9,7 @@ from ninja.security import django_auth
 from pydantic import StringConstraints
 
 from relationtree.access import require_write_access, tree_for
-from relationtree.ai import AIUnavailable
+from relationtree.ai import AIUnavailable, OutOfRoom
 from relationtree.extract import ApplyError, ExtractionFailed, apply, propose
 from relationtree.models import Connection, Person, Tree, TreeMembership
 from relationtree.people_api import Name, PersonOut
@@ -19,6 +19,7 @@ from relationtree.types import AuthedRequest
 router = Router(tags=["ai"], auth=django_auth)
 
 UNREADABLE = "Couldn't read that note. Try rephrasing it."
+TOO_MUCH = "That's too much to read in one go. Try splitting it into shorter notes."
 
 
 class ExtractIn(Schema):
@@ -64,7 +65,7 @@ def _prepare(user: User, tree_id: UUID | None) -> tuple[Tree, list[tuple[str, st
     return tree, known, me
 
 
-@router.post("/extract", response={200: Proposal, 502: ErrorOut, 503: ErrorOut})
+@router.post("/extract", response={200: Proposal, 413: ErrorOut, 502: ErrorOut, 503: ErrorOut})
 async def extract(
     request: AuthedRequest, payload: ExtractIn, tree: UUID | None = None
 ) -> Status[Proposal | ErrorOut]:
@@ -74,6 +75,8 @@ async def extract(
         proposal = await propose(scope, payload.text, known, me)
     except AIUnavailable, TimeoutError:
         return Status(503, ErrorOut(detail="AI is unavailable right now"))
+    except OutOfRoom:
+        return Status(413, ErrorOut(detail=TOO_MUCH))
     except ExtractionFailed:
         return Status(502, ErrorOut(detail=UNREADABLE))
     return Status(200, Proposal.model_validate(proposal))

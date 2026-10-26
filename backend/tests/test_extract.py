@@ -11,7 +11,7 @@ from django.db import connections
 from django.test import AsyncClient, Client
 
 from relationtree.access import default_tree_for
-from relationtree.ai import AIUnavailable
+from relationtree.ai import AIUnavailable, OutOfRoom
 from relationtree.models import Connection, Person, Tree, TreeMembership
 from relationtree.relationships import canonical_pair
 from relationtree.search import pending_count
@@ -88,6 +88,28 @@ async def test_unavailable_or_unreadable_model_output(chat_model: FakeChatModel)
 
 
 @pytest.mark.django_db(transaction=True)
+async def test_a_note_too_big_for_the_model_says_so(
+    chat_model: FakeChatModel, settings: Any
+) -> None:
+    alice, _, _ = await make_user("alice", "Alex Rivera")
+    client = await logged_in(alice)
+    too_much = "That's too much to read in one go. Try splitting it into shorter notes."
+
+    # The model ran out of context while thinking or writing its answer.
+    chat_model.error = OutOfRoom("8192 tokens")
+    response = await extract(client, "Met Jordan")
+    assert (response.status_code, response.json()["detail"]) == (413, too_much)
+
+    # A prompt over the context isn't sent at all: Ollama would cut it and answer anyway.
+    chat_model.error = None
+    chat_model.calls.clear()
+    settings.OLLAMA_NUM_CTX = 100
+    response = await extract(client, "Met Jordan")
+    assert (response.status_code, response.json()["detail"]) == (413, too_much)
+    assert chat_model.calls == []
+
+
+@pytest.mark.django_db(transaction=True)
 async def test_the_model_sees_the_note_this_trees_names_and_me_only(
     chat_model: FakeChatModel,
 ) -> None:
@@ -103,10 +125,12 @@ async def test_the_model_sees_the_note_this_trees_names_and_me_only(
     [call] = chat_model.calls
     prompt = json.dumps(call["messages"])
     assert "Met Jordan at the wedding" in prompt
-    assert "Alex Rivera" in prompt and "Sam Lee" in prompt and str(alex.id) in prompt
+    # Short refs, not ids: every person in the tree is in the prompt, and ids cost context.
+    assert "k1: Alex Rivera" in prompt and "k2: Sam Lee" in prompt
+    assert str(alex.id) not in prompt and str(_sam.id) not in prompt
     assert "Zed" not in prompt
     assert "555-0199" not in prompt and "secret@example.com" not in prompt
-    assert "The user is Alex Rivera" in prompt
+    assert "The user is Alex Rivera (id k1)" in prompt
     assert call["format"]["type"] == "object"  # structured output, not free text
 
 
@@ -127,7 +151,7 @@ async def test_proposal_matches_existing_people_and_cleans_up_the_rest(
             },
             {
                 "name": "Alex Rivera",
-                "existing_id": str(alex.id),
+                "existing_id": "k1",
                 "category": "FAMILY",
                 "about": "Got married",
             },
@@ -148,7 +172,8 @@ async def test_proposal_matches_existing_people_and_cleans_up_the_rest(
     assert response.status_code == 200
     body = response.json()
     people = {p["name"]: p for p in body["people"]}
-    # Zed (another user's) becomes new; Sam's wrong id is fixed by the exact name match;
+    # Refs map back to ids. Zed (another user's) becomes new: the model never sees other
+    # trees, and ids aren't refs. Sam's wrong ref is fixed by the exact name match;
     # "jordan park" merges into Jordan Park.
     assert sorted(people) == ["Alex Rivera", "Jordan Park", "Sam Lee", "Zed"]
     assert people["Jordan Park"]["match_id"] is None
