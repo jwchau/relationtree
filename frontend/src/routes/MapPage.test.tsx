@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Tree } from '@/api/client';
 import { CurrentTreeContext } from '@/hooks/useCurrentTree';
 import { tree } from '@/lib/map/testTree';
-import { FixedSizeObserver } from '@/test/resizeObserver';
+import { FixedSizeObserver, observedSize } from '@/test/resizeObserver';
 import MapPage from './MapPage';
 
 const graph = tree(['Robin', 'Alan', 'Beth', 'Sam', 'Gus'], [
@@ -30,6 +30,7 @@ beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({ matches: reducedMotion }));
 });
 afterEach(() => {
+  observedSize();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -61,6 +62,8 @@ describe('MapPage Make centre', () => {
 
   it('goes back to the previous root and its focus', async () => {
     reducedMotion = true;
+    // Alan's frame holds his family as chips too; a big screen shows Gus at card size.
+    observedSize({ width: 1600, height: 1000 });
     const { router, url } = renderMapPage('/map?root=Robin&focus=Alan');
     expect(within(liveMap().parentElement!).getByRole('navigation')).toHaveTextContent('Alan');
     fireEvent.click(screen.getByRole('link', { name: 'Make Gus the centre' }));

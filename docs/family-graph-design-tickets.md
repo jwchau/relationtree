@@ -291,6 +291,18 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 
 **Done when:** every connection a person has is visible from their frame, as a slot or as a chip, and every chip lands on the right person.
 
+**Status: done.** Notes from building it:
+- **Frames keep everyone.** `frameFor` lists all of a person's links, and `chips` marks the people another frame owns. Their slots take their usual place (a spouse chip beside the person, a coworker chip in the coworker band) with `chip: true`, and chips never open into frames.
+- **Chips for the surrounding frame too (decision G):** Alan's frame shows his wife Beth and his children Robin and Cara as chips, so each frame is a complete picture of that person's family.
+- **Who gets a frame (decision H):** anyone who owns someone, or who has a link the frame they sit in can't show, meaning a link to someone drawn in yet another frame who isn't that frame's centre. Known gap: a link between two people in the same frame (say, two of Robin's friends who are friends with each other) still doesn't show.
+- **Where a chip lands (decision I):** the person's own frame if they have one, otherwise the frame that draws them (the same rule as `?focus=`). The camera goes out to the nearest shared frame, then in (`chipRoute`), 300 ms a leg; with reduced motion it jumps.
+- **Look (decision J):** a dashed outline, the name with "↗", and at card size "In <name>'s family" or "At the centre". The whole chip is one button (click, Enter or Space), named "Beth Ash, spouse, drawn in Robin Ash's family".
+- **Checked in Chrome** on the synthetic tree, with one link added for it (Fay COWORKER Hugo):
+  - Fay's frame shows Robin as a chip in Friends and "Hugo Park ↗ In Gia Park's family" in Coworkers, the design doc's D8 example.
+  - Enter on Hugo's chip flew out through Robin's frame and into Hugo's frame (Robin › Gia › Hugo), where Fay, Gia and Ola are chips.
+  - With reduced motion the move was instant.
+  - Smoothness wasn't measured: the Chrome window was covered, so animation frames ran at about 2 per second.
+
 ---
 
 ## FG-8 Parent kinds and former partners (schema)

@@ -51,7 +51,7 @@ The diagram starts from one person, the **root**. Their frame shows their first-
 
 7. **Ownership: which frame draws a person who could appear in more than one.** Walk outward from the root one level at a time, and the **nearest frame wins**. At equal distance, **family links beat social ones**. Any remaining tie goes by a fixed sort (birth date, then ID). The result is the same every time, so it can be cached.
 
-8. **Relationships between people in different frames:** each one appears as a **chip** in the right place (for example `B(S) ↗` in AA's coworker band). Clicking the chip animates the camera to where that person is actually drawn. No lines cross frame boundaries.
+8. **Relationships between people in different frames:** each one appears as a **chip** in the right place (for example `B(S) ↗` in AA's coworker band). Clicking the chip animates the camera to where that person is actually drawn. No lines cross frame boundaries. (Built in FG-7: chips also stand for people drawn in the surrounding frame, so every frame shows its person's whole family.)
 
 9. **Root selection:** the canvas opens on a default root (the user, or the dataset's owner). The root is kept in the URL (`?root=<id>`) so views can be shared. Every person has a **"Make centre"** action that rebuilds the canvas around them with a cross-fade (the old canvas is inert while it fades out, FG-5). Ordinary browsing is still just zooming.
 

@@ -51,14 +51,23 @@ describe('planRender', () => {
   it('draws everyone reachable through family exactly once when fully zoomed in', () => {
     const root = plan(wholeFrameAt(1e6));
     // An opened slot's person is drawn as the centre of their own frame, so count each
-    // frame's slots except its centre, plus the root.
+    // frame's slots except its centre and its chips (which only point elsewhere), plus the root.
     const drawn: string[] = ['A'];
     const walk = (node: PlanNode) => {
-      for (const slot of layoutOf(node.personId)!.slots) if (slot.id !== node.personId) drawn.push(slot.id);
+      for (const slot of layoutOf(node.personId)!.slots) {
+        if (slot.id !== node.personId && !slot.chip) drawn.push(slot.id);
+      }
       node.open.forEach(walk);
     };
     walk(root);
     expect([...drawn].sort()).toEqual(['A', 'B', 'G1', 'G2', 'P1', 'P2', 'U']);
+  });
+
+  it('never opens a chip, even one for someone with a frame', () => {
+    // P1's frame has A (the root, who has a frame) as a chip in its children row.
+    const p1 = plan(wholeFrameAt(1e6)).open.get('P1')!;
+    expect(layoutOf('P1')!.slots.find((s) => s.id === 'A')?.chip).toBe(true);
+    expect(p1.open.has('A')).toBe(false);
   });
 
   it("doesn't open a slot that is entirely off screen", () => {

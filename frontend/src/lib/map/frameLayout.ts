@@ -41,6 +41,8 @@ export interface Band {
 export interface Slot {
   id: string;
   role: Role;
+  /** Drawn in another frame: this slot is a chip that takes you there, and never opens (D8). */
+  chip?: true;
   /** Centre x and top y. */
   x: number;
   y: number;
@@ -86,7 +88,9 @@ export function fitInSlot(slot: Slot, bounds: Bounds): { x: number; y: number; s
 
 /** Where everything in one frame goes, and the frame's extent: the family core in the
  * middle, and each social circle as a band around it, friends innermost (design doc D6). */
-export function frameLayout(core: FamilyCore & { social?: SocialCircles }): FrameLayout {
+export function frameLayout(
+  core: FamilyCore & { social?: SocialCircles; chips?: Set<string> },
+): FrameLayout {
   const step = SLOT_W + GAP;
   const topY = 0;
   const midY = SLOT_H + ROW_GAP;
@@ -182,7 +186,8 @@ export function frameLayout(core: FamilyCore & { social?: SocialCircles }): Fram
   // Inner areas, outside in: inside the outermost band is the next band's outline, and so on
   // down to the family core.
   const inner = [...bands].reverse().map((b) => padded(b.inner));
-  return { slots, lines, bands, bounds: padded(box), fitAreas: [padded(box), ...inner] };
+  const marked = slots.map((s): Slot => (core.chips?.has(s.id) ? { ...s, chip: true } : s));
+  return { slots: marked, lines, bands, bounds: padded(box), fitAreas: [padded(box), ...inner] };
 }
 
 /** One ring of slots around `around`: a row above and below, and a column each side. If

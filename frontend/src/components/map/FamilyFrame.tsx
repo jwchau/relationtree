@@ -17,7 +17,7 @@ import {
 import type { PlanNode } from '@/lib/map/renderPlan';
 import { initials } from '@/lib/people';
 import { cn } from '@/lib/utils';
-import { MapRootContext } from './MapRootContext';
+import { MapContext } from './MapContext';
 
 const ROLE_LABELS: Record<Role, string> = {
   self: 'centre',
@@ -165,6 +165,7 @@ function PersonSlotView({
   scale: number;
 }) {
   const label = `${person.name}, ${ROLE_LABELS[slot.role]}`;
+  if (slot.chip) return <ChipSlot slot={slot} person={person} detail={detail} scale={scale} />;
   if (detail === 'card') return <PersonCard slot={slot} person={person} label={label} scale={scale} />;
 
   const cx = slot.x;
@@ -218,7 +219,7 @@ function PersonCard({
   label: string;
   scale: number;
 }) {
-  const rootId = useContext(MapRootContext);
+  const rootId = useContext(MapContext)?.rootId;
   const top = slot.y - 4;
   const born = bornLine(person.birthday, new Date());
   // In the coworker band, say who manages whom; everyone else's band already says it.
@@ -277,6 +278,81 @@ function PersonCard({
           </>
         )}
       </g>
+    </g>
+  );
+}
+
+/** Someone drawn in another frame, as a chip: a dashed outline (never a solid slot), the
+ * name with "↗", and at card size where they really are. The whole chip is one button that
+ * takes the camera there (D8, FG-7). */
+function ChipSlot({
+  slot,
+  person,
+  detail,
+  scale,
+}: {
+  slot: Slot;
+  person: GraphPerson;
+  detail: Detail;
+  scale: number;
+}) {
+  const map = useContext(MapContext);
+  const owner = map?.drawnIn(person.id) ?? null;
+  const where = owner === null ? 'at the centre of the map' : `drawn in ${owner}'s family`;
+  const go = () => map?.goTo(person.id);
+  const top = slot.y - 4;
+  const cy = slot.y + AVATAR_Y;
+  return (
+    <g
+      role="button"
+      tabIndex={0}
+      aria-label={`${person.name}, ${ROLE_LABELS[slot.role]}, ${where}`}
+      className="group cursor-pointer outline-none"
+      onClick={go}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        go();
+      }}
+    >
+      {detail === 'dot' ? (
+        <circle
+          cx={slot.x}
+          cy={slot.y + SLOT_H / 2 - 4}
+          r={36}
+          strokeWidth={8}
+          strokeDasharray="12 10"
+          className="fill-none stroke-muted-foreground"
+        />
+      ) : (
+        <rect
+          x={slot.x - SLOT_W / 2}
+          y={top}
+          width={SLOT_W}
+          height={SLOT_H}
+          rx={12}
+          strokeWidth={2}
+          strokeDasharray="8 6"
+          className="fill-transparent stroke-subtle transition-colors duration-200 group-hover:fill-ghost-hover group-focus-visible:stroke-ring"
+        />
+      )}
+      {(detail === 'avatar' || detail === 'name') && <Avatar person={person} cx={slot.x} cy={cy} r={AVATAR_R} />}
+      {detail === 'name' && (
+        <text x={slot.x} y={cy + AVATAR_R + 22} textAnchor="middle" aria-hidden className="fill-muted-foreground text-[14px]">
+          {shortName(person.name)} ↗
+        </text>
+      )}
+      {(detail === 'card' || detail === 'frame') && (
+        <g style={{ transform: cardScaleCss(scale), transformBox: 'fill-box', transformOrigin: 'center' }}>
+          <Avatar person={person} cx={slot.x} cy={top + 28} r={20} />
+          <text x={slot.x} y={top + 64} textAnchor="middle" aria-hidden className="fill-text text-[12px]">
+            {shortName(person.name)} ↗
+          </text>
+          <text x={slot.x} y={top + 80} textAnchor="middle" aria-hidden className="fill-muted-foreground text-[10px]">
+            {owner === null ? 'At the centre' : `In ${shortName(owner)}'s family`}
+          </text>
+        </g>
+      )}
     </g>
   );
 }

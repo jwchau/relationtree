@@ -19,6 +19,7 @@ function frameWith(friends: number, coworkers: number, acquaintances: number): F
       managers: [],
       reports: [],
     },
+    chips: new Set(),
   };
 }
 
@@ -128,5 +129,14 @@ describe('frameLayout with social bands', () => {
     // Coworkers alone sit right around the family, where friends would have been.
     const coworkersOnly = frameLayout(frameWith(0, 4, 0));
     expect(coworkersOnly.bounds).toEqual(friendsOnly.bounds);
+  });
+});
+
+describe('frameLayout chips', () => {
+  it('marks the slots of people drawn in another frame as chips, in their usual places', () => {
+    const layout = frameLayout({ ...frameWith(2, 1, 0), chips: new Set(['P2', 'K', 'F1', 'W0']) });
+    const chips = layout.slots.filter((s) => s.chip).map((s) => `${s.id}:${s.role}`);
+    expect(chips.sort()).toEqual(['F1:friend', 'K:child', 'P2:parent', 'W0:coworker']);
+    expect(layout.slots.find((s) => s.id === 'P1')?.chip).toBeFalsy();
   });
 });
