@@ -170,3 +170,27 @@ describe('MapCanvas chips', () => {
     expect(onFocusChange).toHaveBeenLastCalledWith(['Robin']);
   });
 });
+
+describe('MapCanvas cards for blended families', () => {
+  it('say who is a step or adoptive parent or child, or a former partner', () => {
+    observedSize({ width: 1600, height: 1000 }); // cards for the whole frame
+    const blended = tree(['Robin', 'Alan', 'Beth', 'Sam', 'Kit'], [
+      ['Alan', 'PARENT', 'Robin', { parent_kind: 'STEP' }],
+      ['Beth', 'PARENT', 'Robin'],
+      ['Robin', 'SPOUSE', 'Sam', { ended: true }],
+      ['Robin', 'PARENT', 'Kit', { parent_kind: 'ADOPTIVE' }],
+    ]);
+    render(
+      <MemoryRouter>
+        <MapCanvas graph={blended} rootId="Robin" people={new Map(blended.people.map((p) => [p.id, p]))} />
+      </MemoryRouter>,
+    );
+    const card = (name: string) => screen.getByRole('group', { name });
+    expect(within(card('Alan, parent')).getByText('Step-parent')).toBeInTheDocument();
+    expect(within(card('Beth, parent')).queryByText(/parent/)).not.toBeInTheDocument();
+    expect(within(card('Sam, former partner')).getByText('Former partner')).toBeInTheDocument();
+    expect(within(card('Kit, child')).getByText('Adopted child')).toBeInTheDocument();
+    // The former couple's bar is the only dashed line in the frame.
+    expect(document.querySelectorAll('line[stroke-dasharray]')).toHaveLength(1);
+  });
+});

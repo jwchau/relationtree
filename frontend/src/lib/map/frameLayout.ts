@@ -21,6 +21,7 @@ export type Role =
   | 'self'
   | 'parent'
   | 'spouse'
+  | 'former'
   | 'sibling'
   | 'child'
   | 'friend'
@@ -43,6 +44,8 @@ export interface Slot {
   role: Role;
   /** Drawn in another frame: this slot is a chip that takes you there, and never opens (D8). */
   chip?: true;
+  /** A step or adoptive parent or child, labelled at card size (FG-8). */
+  kind?: 'STEP' | 'ADOPTIVE';
   /** Centre x and top y. */
   x: number;
   y: number;
@@ -53,6 +56,8 @@ export interface Line {
   y1: number;
   x2: number;
   y2: number;
+  /** A former partner's couple bar. */
+  dashed?: true;
 }
 
 /** A row of slots side by side, its centre at `centreX`. */
@@ -97,17 +102,29 @@ export function frameLayout(
   const bottomY = midY + SLOT_H + ROW_GAP;
   const lines: Line[] = [];
 
-  // Middle row: siblings to the left of the person, spouses to the right.
+  // Middle row (Q8a): current partners right next to the person, on the right; former
+  // partners further out, the most recent nearest, alternating left then right, so the
+  // earliest is furthest away; siblings beyond them on the left.
   const self: Slot = { id: core.self, role: 'self', x: 0, y: midY };
+  const former = core.former;
+  const current = core.spouses.filter((id) => !former.includes(id));
+  const [leftFormer, rightFormer]: [string[], string[]] = [[], []];
+  [...former].reverse().forEach((id, i) => (i % 2 === 0 ? leftFormer : rightFormer).push(id));
+  const spouses: Slot[] = [
+    ...current.map((id, i): Slot => ({ id, role: 'spouse', x: (i + 1) * step, y: midY })),
+    ...rightFormer.map((id, i): Slot => ({ id, role: 'former', x: (current.length + i + 1) * step, y: midY })),
+    ...leftFormer.map((id, i): Slot => ({ id, role: 'former', x: -(i + 1) * step, y: midY })),
+  ];
   const siblings = core.siblings.map((id, i, all): Slot => ({
     id,
     role: 'sibling',
-    x: -(all.length - i) * step,
+    x: -(leftFormer.length + all.length - i) * step,
     y: midY,
   }));
-  const spouses = core.spouses.map((id, i): Slot => ({ id, role: 'spouse', x: (i + 1) * step, y: midY }));
   for (const s of spouses) {
-    lines.push({ x1: SLOT_W / 2 - 8, y1: midY + AVATAR_Y, x2: s.x - 40, y2: midY + AVATAR_Y });
+    const side = Math.sign(s.x);
+    const bar: Line = { x1: side * (SLOT_W / 2 - 8), y1: midY + AVATAR_Y, x2: s.x - side * 40, y2: midY + AVATAR_Y };
+    lines.push(s.role === 'former' ? { ...bar, dashed: true } : bar);
   }
 
   // Top row: parents centred over the person, joined by a couple bar.
@@ -126,12 +143,19 @@ export function frameLayout(
     lines.push({ x1: 0, y1: sibshipY, x2: 0, y2: midY });
   }
 
-  // Bottom row: each couple's children, hanging from the couple's bar (or the person alone).
-  const groupWidths = core.children.map((g) => g.children.length * step - GAP);
+  // Bottom row: each couple's children, hanging from the couple's bar (or the person alone),
+  // in the order of their partners along the middle row, so no couple's line crosses another.
+  const partnerX = (group: FamilyCore['children'][number]) =>
+    spouses.find((s) => group.parents.includes(s.id))?.x ?? 0;
+  const groups = core.children
+    .map((group, order) => ({ group, order }))
+    .sort((a, b) => partnerX(a.group) - partnerX(b.group) || a.order - b.order)
+    .map(({ group }) => group);
+  const groupWidths = groups.map((g) => g.children.length * step - GAP);
   const totalWidth = groupWidths.reduce((a, b) => a + b, 0) + (groupWidths.length - 1) * GROUP_GAP;
   let left = -totalWidth / 2;
   const children: Slot[] = [];
-  core.children.forEach((group, g) => {
+  groups.forEach((group, g) => {
     const kids = row(group.children, 'child', left + groupWidths[g] / 2, bottomY);
     children.push(...kids);
     const spouse = spouses.find((s) => group.parents.includes(s.id));
@@ -186,7 +210,10 @@ export function frameLayout(
   // Inner areas, outside in: inside the outermost band is the next band's outline, and so on
   // down to the family core.
   const inner = [...bands].reverse().map((b) => padded(b.inner));
-  const marked = slots.map((s): Slot => (core.chips?.has(s.id) ? { ...s, chip: true } : s));
+  const marked = slots.map((s): Slot => {
+    const kind = (s.role === 'parent' || s.role === 'child') && core.kinds[s.id];
+    return { ...s, ...(core.chips?.has(s.id) && { chip: true }), ...(kind && { kind }) };
+  });
   return { slots: marked, lines, bands, bounds: padded(box), fitAreas: [padded(box), ...inner] };
 }
 

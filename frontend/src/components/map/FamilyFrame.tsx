@@ -23,6 +23,7 @@ const ROLE_LABELS: Record<Role, string> = {
   self: 'centre',
   parent: 'parent',
   spouse: 'spouse',
+  former: 'former partner',
   sibling: 'sibling',
   child: 'child',
   friend: 'friend',
@@ -89,8 +90,9 @@ export function FamilyFrame({
         ))}
       </g>
       <g className="stroke-subtle" strokeWidth={2} fill="none" aria-hidden>
-        {layout.lines.map((l, i) => (
-          <line key={i} {...l} />
+        {layout.lines.map(({ dashed, ...l }, i) => (
+          // A former partner's couple bar is dashed (Q8a).
+          <line key={i} {...l} strokeDasharray={dashed ? '10 8' : undefined} />
         ))}
       </g>
       {layout.slots.map((slot) => {
@@ -221,10 +223,14 @@ function PersonCard({
 }) {
   const rootId = useContext(MapContext)?.rootId;
   const top = slot.y - 4;
-  const born = bornLine(person.birthday, new Date());
-  // In the coworker band, say who manages whom; everyone else's band already says it.
+  // In the coworker band, say who manages whom; everyone else's band already says it. In
+  // the family, say who is a step, adoptive or former relation (FG-8): the card is too narrow
+  // for that and the age, so those keep only the birth year.
   const work = slot.role === 'manager' ? 'Manager' : slot.role === 'report' ? 'Report' : null;
-  const detailLine = [work, born].filter(Boolean).join(' · ');
+  const relation = relationLabel(slot);
+  const detailLine = relation
+    ? [relation, person.birthday?.slice(0, 4)].filter(Boolean).join(' · ')
+    : [work, bornLine(person.birthday, new Date())].filter(Boolean).join(' · ');
   return (
     <g role="group" aria-label={label}>
       <rect
@@ -394,6 +400,14 @@ function CardAction({
       </text>
     </SlotLink>
   );
+}
+
+/** How a card names a step, adoptive or former relation; null for anyone else. */
+function relationLabel(slot: Slot): string | null {
+  if (slot.role === 'former') return 'Former partner';
+  if (slot.kind === 'STEP') return slot.role === 'parent' ? 'Step-parent' : 'Step-child';
+  if (slot.kind === 'ADOPTIVE') return slot.role === 'parent' ? 'Adoptive parent' : 'Adopted child';
+  return null;
 }
 
 /** An SVG link that navigates inside the app (and still opens a new tab on ctrl/cmd-click). */

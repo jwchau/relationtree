@@ -141,13 +141,15 @@ EXTRACT_FORMAT: dict[str, object] = {
 
 
 def build_extract_messages(
-    note: str, known: list[tuple[str, str]], me: Person | None
+    note: str, known: list[tuple[str, str]], me: tuple[str, str] | None
 ) -> list[dict[str, str]]:
-    """`known` is the tree's people as (id, name): names only, never contact details."""
-    lines = [f"{person_id}: {name}" for person_id, name in known]
+    """`known` is the tree's people as (ref, name), and `me` the user's (ref, name): names
+    only, never contact details. Refs are short ("k12"), not UUIDs: every person in the tree
+    goes into the prompt, and a UUID costs ~30 tokens of the model's context."""
+    lines = [f"{ref}: {name}" for ref, name in known]
     context = "Known people (id: name):\n" + ("\n".join(lines) if lines else "(none yet)")
     if me is not None:
-        context += f'\n\nThe user is {me.name} (id {me.id}). "I", "me" and "my" mean them.'
+        context += f'\n\nThe user is {me[1]} (id {me[0]}). "I", "me" and "my" mean them.'
     return [
         {"role": "system", "content": EXTRACT_SYSTEM_PROMPT},
         {"role": "system", "content": context},

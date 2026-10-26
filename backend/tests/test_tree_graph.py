@@ -29,7 +29,14 @@ def test_member_gets_the_trees_people_and_connections(
     graph = response.json()
     assert {p["name"] for p in graph["people"]} == {"Ann", "Ben"}
     assert graph["connections"] == [
-        {"id": link["id"], "person_a_id": ann, "person_b_id": ben, "type": "PARENT"}
+        {
+            "id": link["id"],
+            "person_a_id": ann,
+            "person_b_id": ben,
+            "type": "PARENT",
+            "parent_kind": "BIOLOGICAL",
+            "ended": False,
+        }
     ]
 
 

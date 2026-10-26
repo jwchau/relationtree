@@ -261,7 +261,8 @@ export interface paths {
         delete: operations["relationtree_connections_api_delete_connection"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Edit Connection */
+        patch: operations["relationtree_connections_api_edit_connection"];
         trace?: never;
     };
     "/api/ask": {
@@ -699,7 +700,15 @@ export interface components {
              */
             person_b_id: string;
             type: components["schemas"]["RelationshipType"];
+            parent_kind: components["schemas"]["ParentKind"] | null;
+            /** Ended */
+            ended: boolean;
         };
+        /**
+         * ParentKind
+         * @enum {string}
+         */
+        ParentKind: "BIOLOGICAL" | "ADOPTIVE" | "STEP";
         /**
          * RelationshipType
          * @enum {string}
@@ -718,10 +727,17 @@ export interface components {
              */
             person_b_id: string;
             type: components["schemas"]["RelationshipType"];
+            parent_kind?: components["schemas"]["ParentKind"] | null;
+            /**
+             * Ended
+             * @default false
+             */
+            ended?: boolean;
         };
         /**
          * PersonConnectionOut
-         * @description A connection seen from one person's page.
+         * @description A connection seen from one person's page. `label` is the other person's plain role
+         *     ("Parent"); the page adds the kind ("Step-parent") from `parent_kind` and `ended`.
          */
         PersonConnectionOut: {
             /**
@@ -730,9 +746,22 @@ export interface components {
              */
             id: string;
             type: components["schemas"]["RelationshipType"];
+            parent_kind: components["schemas"]["ParentKind"] | null;
+            /** Ended */
+            ended: boolean;
             /** Label */
             label: string;
             other_person: components["schemas"]["PersonOut"];
+        };
+        /**
+         * ConnectionEdit
+         * @description The parts of a link that can change: its parent kind, and whether a partnership has
+         *     ended. Fields left out stay as they are.
+         */
+        ConnectionEdit: {
+            parent_kind?: components["schemas"]["ParentKind"] | null;
+            /** Ended */
+            ended?: boolean | null;
         };
         /** AskIn */
         AskIn: {
@@ -1432,6 +1461,41 @@ export interface operations {
             };
         };
     };
+    relationtree_connections_api_edit_connection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionEdit"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     relationtree_ask_api_ask: {
         parameters: {
             query?: {
@@ -1915,6 +1979,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
                 };
             };
             /** @description Bad Gateway */

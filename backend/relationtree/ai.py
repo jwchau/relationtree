@@ -13,6 +13,10 @@ class AIUnavailable(Exception):
     """Ollama is down, unreachable, or didn't start answering in time."""
 
 
+class OutOfRoom(Exception):
+    """The prompt, the model's thinking and its answer didn't all fit in num_ctx."""
+
+
 @dataclass(frozen=True)
 class ToolCall:
     name: str
@@ -45,7 +49,8 @@ class ChatModel(Protocol):
         options: dict[str, Any],
         think: bool,
     ) -> str:
-        """The whole answer at once, constrained to JSON matching the `format` schema."""
+        """The whole answer at once, constrained to JSON matching the `format` schema. Raises
+        OutOfRoom if the model hit the context limit before finishing."""
         ...
 
 
@@ -135,6 +140,9 @@ class OllamaChatModel:
             )
         except (httpx.HTTPError, ResponseError, ConnectionError) as err:
             raise AIUnavailable(str(err)) from err
+        # Stopped at the context limit: the answer is empty (still thinking) or cut-off JSON.
+        if response.done_reason == "length":
+            raise OutOfRoom(f"{response.prompt_eval_count} + {response.eval_count} tokens")
         return response.message.content or ""
 
 

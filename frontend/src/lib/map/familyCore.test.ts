@@ -29,6 +29,68 @@ describe('familyCore', () => {
     expect(core.spouses).toEqual(['S1', 'S2']);
   });
 
+  it('lists current partners first, then former ones, earliest relationship first', () => {
+    // Earliest is the eldest shared child's birthday: F2's child is older than F1's. F3 has
+    // no children with A, so goes last.
+    const graph = tree(
+      ['A', 'C', 'F1', 'F2', 'F3', 'K1', 'K2'],
+      [
+        ['A', 'SPOUSE', 'F1', { ended: true }],
+        ['A', 'SPOUSE', 'C'],
+        ['F2', 'SPOUSE', 'A', { ended: true }],
+        ['A', 'SPOUSE', 'F3', { ended: true }],
+        ['A', 'PARENT', 'K1'],
+        ['F1', 'PARENT', 'K1'],
+        ['A', 'PARENT', 'K2'],
+        ['F2', 'PARENT', 'K2'],
+      ],
+      { K1: '2000-01-01', K2: '1995-01-01' },
+    );
+    const core = familyCore(graph, 'A');
+    expect(core.spouses).toEqual(['C', 'F2', 'F1', 'F3']);
+    expect(core.former).toEqual(['F2', 'F1', 'F3']);
+  });
+
+  it('notes which parents and children are step or adoptive', () => {
+    const graph = tree(
+      ['A', 'Mum', 'Step', 'Kid', 'Adopted'],
+      [
+        ['Mum', 'PARENT', 'A'],
+        ['Step', 'PARENT', 'A', { parent_kind: 'STEP' }],
+        ['A', 'PARENT', 'Kid'],
+        ['A', 'PARENT', 'Adopted', { parent_kind: 'ADOPTIVE' }],
+      ],
+    );
+    expect(familyCore(graph, 'A').kinds).toEqual({ Step: 'STEP', Adopted: 'ADOPTIVE' });
+  });
+
+  it("doesn't let a step-parent change which couple a child belongs to", () => {
+    const graph = tree(
+      ['A', 'Ex', 'New', 'Kid'],
+      [
+        ['A', 'SPOUSE', 'Ex', { ended: true }],
+        ['A', 'SPOUSE', 'New'],
+        ['A', 'PARENT', 'Kid'],
+        ['Ex', 'PARENT', 'Kid'],
+        ['New', 'PARENT', 'Kid', { parent_kind: 'STEP' }],
+      ],
+    );
+    expect(familyCore(graph, 'A').children).toEqual([{ parents: ['A', 'Ex'], children: ['Kid'] }]);
+  });
+
+  it('puts step-parents after the other parents, whose couple bar stays', () => {
+    const graph = tree(
+      ['Kid', 'Mum', 'Dad', 'Step'],
+      [
+        ['Step', 'PARENT', 'Kid', { parent_kind: 'STEP' }],
+        ['Mum', 'PARENT', 'Kid'],
+        ['Dad', 'PARENT', 'Kid'],
+      ],
+      { Step: '1950-01-01', Mum: '1960-01-01', Dad: '1961-01-01' },
+    );
+    expect(familyCore(graph, 'Kid').parents).toEqual({ ids: ['Mum', 'Dad', 'Step'], couple: true });
+  });
+
   it('counts explicit sibling links as siblings, from either end', () => {
     const graph = tree(['A', 'B', 'C'], [['A', 'SIBLING', 'B'], ['C', 'SIBLING', 'A']]);
     expect(familyCore(graph, 'A').siblings).toEqual(['B', 'C']);
@@ -85,8 +147,10 @@ describe('familyCore', () => {
     parents: { ids: [], couple: false },
     self: 'A',
     spouses: [],
+    former: [],
     siblings: [],
     children: [],
+    kinds: {},
   };
 
   it('gives a person with no family empty rows', () => {

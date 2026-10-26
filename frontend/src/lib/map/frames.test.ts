@@ -37,6 +37,8 @@ const NO_SOCIAL = { friends: [], coworkers: [], acquaintances: [], managers: [],
 const NO_ONE = {
   parents: { ids: [], couple: false },
   spouses: [],
+  former: [],
+  kinds: {},
   siblings: [],
   children: [],
   social: NO_SOCIAL,

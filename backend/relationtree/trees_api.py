@@ -163,6 +163,8 @@ def tree_graph(request: AuthedRequest, tree_id: UUID) -> TreeGraphOut:
             person_a_id=c.person_a_id,
             person_b_id=c.person_b_id,
             type=Connection.RelationshipType(c.type),
+            parent_kind=Connection.ParentKind(c.parent_kind) if c.parent_kind else None,
+            ended=c.ended,
         )
         for c in Connection.objects.filter(tree=tree_id).order_by("id")
     ]

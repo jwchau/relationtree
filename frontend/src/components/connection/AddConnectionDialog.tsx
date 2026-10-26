@@ -6,6 +6,7 @@ import { useCreatePerson } from '@/hooks/usePerson';
 import { useCreateConnection } from '@/hooks/useConnections';
 import {
   RELATIONSHIP_TYPES,
+  connectionLabel,
   relationshipLabel,
   type RelationshipType,
 } from '@/lib/relationshipTypes';
@@ -15,6 +16,7 @@ import {
   type RelationshipCategory,
 } from '@/lib/relationshipTypes';
 import { PersonPicker } from '@/components/connection/PersonPicker';
+import { ConnectionKindFields, type ConnectionKind } from '@/components/connection/ConnectionKindFields';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -41,12 +43,15 @@ export interface AddConnectionDialogProps {
   treeId: string;
 }
 
+const NO_KIND: ConnectionKind = { parentKind: null, ended: false };
+
 export function AddConnectionDialog({ personId, personName, treeId }: AddConnectionDialogProps) {
   const [open, setOpen] = useState(false);
   const [otherPerson, setOtherPerson] = useState<Person | null>(null);
   const [newPersonName, setNewPersonName] = useState<string | null>(null);
   const [newPersonCategory, setNewPersonCategory] = useState<RelationshipCategory>('FRIEND');
   const [relationshipType, setRelationshipType] = useState<RelationshipType>('FRIEND');
+  const [kind, setKind] = useState<ConnectionKind>(NO_KIND);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const createPerson = useCreatePerson(treeId);
   const createConnection = useCreateConnection();
@@ -56,6 +61,7 @@ export function AddConnectionDialog({ personId, personName, treeId }: AddConnect
     setNewPersonName(null);
     setNewPersonCategory('FRIEND');
     setRelationshipType('FRIEND');
+    setKind(NO_KIND);
   }
 
   async function handleSubmit() {
@@ -82,6 +88,8 @@ export function AddConnectionDialog({ personId, personName, treeId }: AddConnect
         personAId: personId,
         personBId: targetPersonId,
         type: relationshipType,
+        parentKind: kind.parentKind,
+        ended: kind.ended,
       });
 
       toast.success(`Connected ${personName} and ${targetPersonName}`);
@@ -164,7 +172,10 @@ export function AddConnectionDialog({ personId, personName, treeId }: AddConnect
             <Label>Relationship</Label>
             <Select
               value={relationshipType}
-              onValueChange={(v) => setRelationshipType(v as RelationshipType)}
+              onValueChange={(v) => {
+                setRelationshipType(v as RelationshipType);
+                setKind(NO_KIND);
+              }}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -179,11 +190,18 @@ export function AddConnectionDialog({ personId, personName, treeId }: AddConnect
             </Select>
             {otherName && (
               <p className="text-muted-foreground text-[15px] leading-[22px]">
-                {personName} is the {relationshipLabel(relationshipType).toLowerCase()} of{' '}
-                {otherName}.
+                {personName} is the{' '}
+                {connectionLabel(
+                  relationshipLabel(relationshipType),
+                  kind.parentKind,
+                  kind.ended,
+                ).toLowerCase()}{' '}
+                of {otherName}.
               </p>
             )}
           </div>
+
+          <ConnectionKindFields type={relationshipType} {...kind} onChange={setKind} />
         </div>
 
         <DialogFooter>
