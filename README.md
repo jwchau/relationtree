@@ -42,7 +42,7 @@ the AI summaries. whitenoise serves the admin's CSS/JS.
 
 ## Stack
 
-- **frontend/** — React + Vite + TypeScript, Tailwind CSS + shadcn/ui, React Flow (`@xyflow/react`), Vitest, oxlint
+- **frontend/** — React + Vite + TypeScript, Tailwind CSS + shadcn/ui, d3-zoom (the family map), Vitest + Testing Library (jsdom), oxlint
 - **backend/** — Django + Django Ninja on ASGI, PostgreSQL (pgvector), pytest-django, ruff, mypy; managed with `uv`
 
 ## Local development
@@ -101,6 +101,9 @@ uv run ruff format --check . && uv run ruff check . && uv run mypy . && uv run p
 # frontend/
 npm run typecheck && npm run lint && npm run test && npm run build
 ```
+
+Frontend tests run in node. Component tests opt into jsdom with a `// @vitest-environment jsdom`
+comment on their first line (see `src/components/map/MapCanvas.test.tsx`).
 
 CI (`.github/workflows/ci.yml`) runs both on every push to `dev`/`main` and on PRs.
 

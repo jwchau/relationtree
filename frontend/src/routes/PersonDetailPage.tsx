@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Trash2, UserCheck } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Map as MapIcon, Trash2, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDeletePerson, usePerson, useSetMe, useUpdatePerson } from '@/hooks/usePerson';
 import { useConnections } from '@/hooks/useConnections';
@@ -10,7 +10,8 @@ import { CatchUpCard } from '@/components/person/CatchUpCard';
 import { PhotoUploader } from '@/components/person/PhotoUploader';
 import { ConnectionList } from '@/components/connection/ConnectionList';
 import { AddConnectionDialog } from '@/components/connection/AddConnectionDialog';
-import { EgoGraph } from '@/components/graph/EgoGraph';
+import { MapCanvas } from '@/components/map/MapCanvas';
+import { useTreeGraph } from '@/hooks/useTreeGraph';
 import { toFormValues, toPersonInput } from '@/lib/personInput';
 import { lastTalked } from '@/lib/people';
 import { categoryLabel } from '@/lib/relationshipTypes';
@@ -148,7 +149,7 @@ export default function PersonDetailPage() {
         }
       />
 
-      {/* Phone order: catch up, details, connections, graph. From 1024px details take the
+      {/* Phone order: catch up, details, connections, map. From 1024px details take the
           right-hand column and the rest stack on the left. */}
       <PageBody className="grid grid-cols-1 gap-[var(--section-gap)] lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:grid-rows-[auto_auto_1fr] lg:items-start lg:gap-x-8">
         <div className="lg:col-start-1">
@@ -189,17 +190,39 @@ export default function PersonDetailPage() {
           />
         </section>
 
-        <section className="lg:col-start-1" aria-labelledby="graph-head">
-          <SectionHead id="graph-head" title="Graph" />
-          <EgoGraph
-            centerId={person.id}
-            centerName={person.name}
-            centerPhotoUrl={person.photo_url}
-            centerBirthday={person.birthday}
-            connections={connections}
-          />
+        <section className="lg:col-start-1" aria-labelledby="map-head">
+          <SectionHead id="map-head" title="Map">
+            <Button asChild variant="ghost">
+              <Link to={`/map?root=${person.id}`}>
+                <MapIcon />
+                Open full map
+              </Link>
+            </Button>
+          </SectionHead>
+          <PersonMap personId={person.id} treeId={person.tree_id} />
         </section>
       </PageBody>
     </>
+  );
+}
+
+const MAP_HEIGHT = 'h-[min(60svh,520px)] min-h-[320px] w-full';
+
+/** The person's tree as a map centred on them, inside the scrolling page. */
+function PersonMap({ personId, treeId }: { personId: string; treeId: string }) {
+  const { graph, loading, error } = useTreeGraph(treeId);
+  const people = useMemo(() => new Map(graph?.people.map((p) => [p.id, p])), [graph]);
+
+  if (loading) {
+    return (
+      <div className={`panel bg-surface-2 animate-pulse ${MAP_HEIGHT}`} aria-busy="true" aria-label="Loading the map" />
+    );
+  }
+  if (error) return <Note tone="error">{error}</Note>;
+  if (!graph || !people.has(personId)) return null;
+  return (
+    <div className="panel overflow-hidden">
+      <MapCanvas key={personId} graph={graph} rootId={personId} people={people} embedded className={MAP_HEIGHT} />
+    </div>
   );
 }
