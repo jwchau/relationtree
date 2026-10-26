@@ -17,11 +17,11 @@ import {
   frameToRoot,
 } from '@/lib/map/focus';
 import { ZOOM_VAR } from '@/lib/map/frameLayout';
-import { frameLayouts } from '@/lib/map/frames';
-import { assignOwnership } from '@/lib/map/ownership';
+import { mapModel } from '@/lib/map/model';
 import { planKey, planRender, zoomCeiling, type PlanNode } from '@/lib/map/renderPlan';
 import { cn } from '@/lib/utils';
 import { FamilyFrame } from './FamilyFrame';
+import { MapRootContext } from './MapRootContext';
 
 const MOVE_MS = 300;
 /** Below this width the breadcrumb shortens to root › … › last two. */
@@ -86,9 +86,8 @@ export function MapCanvas({
   const [focus, setFocus] = useState<string[]>([rootId]);
   const [hint, setHint] = useState<EmbeddedHint | null>(null);
 
-  const ownership = useMemo(() => assignOwnership(graph, rootId), [graph, rootId]);
-  // Each frame is laid out once per root and reused while you zoom.
-  const layoutOf = useMemo(() => frameLayouts(graph, rootId, ownership), [graph, rootId, ownership]);
+  // Each frame is laid out once per root and reused while you zoom, and when you come back.
+  const { ownership, layoutOf } = mapModel(graph, rootId);
   const rootBounds = layoutOf(rootId)!.bounds;
 
   const anchorPath = useMemo(() => focus.slice(0, Math.max(1, focus.length - ANCESTORS_DRAWN)), [focus]);
@@ -230,13 +229,15 @@ export function MapCanvas({
       >
         <g ref={anchorRef}>
           {anchorNode && anchorLayout && (
-            <FamilyFrame
-              layout={anchorLayout}
-              node={anchorNode}
-              people={people}
-              layoutOf={layoutOf}
-              anchorScale={anchorM.scale}
-            />
+            <MapRootContext.Provider value={rootId}>
+              <FamilyFrame
+                layout={anchorLayout}
+                node={anchorNode}
+                people={people}
+                layoutOf={layoutOf}
+                anchorScale={anchorM.scale}
+              />
+            </MapRootContext.Provider>
           )}
         </g>
       </svg>

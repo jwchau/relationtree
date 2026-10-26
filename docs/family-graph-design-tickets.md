@@ -204,6 +204,13 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 
 **Done when:** making a cousin the centre rebuilds the tree around them, and Back returns.
 
+**Status: done.** Notes from building it:
+- **Make centre is a link.** A card's **Centre** button (accessible name "Make <name> the centre") links to `/map?root=<id>`, so it pushes history, drops `focus`, and opens in a new tab on ctrl/⌘-click. The root's own card shows only Open. On the person page's embedded map it opens the full map centred on that person.
+- **Layouts are cached** per graph object and root (`mapModel`). TanStack Query keeps the graph object while the data is unchanged, so Back reuses the previous root's layout; a refetch with new data lays out again.
+- **Cross-fade:** for 300 ms the old canvas stays underneath, fading out, while the new one fades in. The old canvas is `inert` and no longer writes the URL. With reduced motion the swap is instant.
+- **Measured in Chrome:** making cousin Lou Kerr the centre rebuilt the map around Lou (parents Jay and Ida, Ida's frame opening onto Gus, Hilda and Alan). Sampled every 60 ms, the old map's opacity went 0.44, 0.12, 0.03, 0 while the new one went 0.56, 0.88, 0.97, 1, and the old map was gone by 380 ms. Back restored Robin with Ida in focus (breadcrumb Robin › Alan › Ida). With reduced motion one map was present 40 ms after Back.
+- **Open question for FG-12:** at the smallest card size on a phone the Open and Centre buttons are 51 × 21 px, under a 44 px tap target. They grow to about 105 × 44 px as you zoom in.
+
 ---
 
 ## FG-6 Social bands

@@ -53,7 +53,7 @@ The diagram starts from one person, the **root**. Their frame shows their first-
 
 8. **Relationships between people in different frames:** each one appears as a **chip** in the right place (for example `B(S) ↗` in AA's coworker band). Clicking the chip animates the camera to where that person is actually drawn. No lines cross frame boundaries.
 
-9. **Root selection:** the canvas opens on a default root (the user, or the dataset's owner). The root is kept in the URL (`?root=<id>`) so views can be shared. Every person has a **"Make centre"** action that rebuilds the canvas around them with a cross-fade. Ordinary browsing is still just zooming.
+9. **Root selection:** the canvas opens on a default root (the user, or the dataset's owner). The root is kept in the URL (`?root=<id>`) so views can be shared. Every person has a **"Make centre"** action that rebuilds the canvas around them with a cross-fade (the old canvas is inert while it fades out, FG-5). Ordinary browsing is still just zooming.
 
 ## Open questions (resolve against the existing app and repo)
 

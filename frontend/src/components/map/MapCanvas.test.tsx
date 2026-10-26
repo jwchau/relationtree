@@ -92,3 +92,16 @@ describe('MapCanvas on its own page', () => {
     expect(renderMap()).toHaveClass('touch-none');
   });
 });
+
+describe('MapCanvas cards', () => {
+  it('offer to make someone else the centre', () => {
+    renderMap();
+    expect(screen.getByRole('link', { name: 'Make Alan the centre' })).toHaveAttribute('href', '/map?root=Alan');
+  });
+
+  it("don't offer it on the root's own card", () => {
+    renderMap();
+    expect(screen.getByRole('link', { name: 'Open Robin' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Make Robin the centre' })).not.toBeInTheDocument();
+  });
+});

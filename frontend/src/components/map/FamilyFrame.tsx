@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react';
+import { memo, useContext, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GraphPerson } from '@/api/client';
 import type { Detail } from '@/lib/map/detail';
@@ -17,6 +17,7 @@ import {
 import type { PlanNode } from '@/lib/map/renderPlan';
 import { initials } from '@/lib/people';
 import { cn } from '@/lib/utils';
+import { MapRootContext } from './MapRootContext';
 
 const ROLE_LABELS: Record<Role, string> = {
   self: 'centre',
@@ -139,6 +140,7 @@ export function FamilyFrame({
 
 const AVATAR_R = 32;
 const NAME_MAX = 16;
+const CARD_ACTION_W = 54;
 
 function shortName(name: string): string {
   const chars = Array.from(name);
@@ -202,7 +204,8 @@ function PersonSlotView({
   );
 }
 
-/** The largest form: avatar, name, birth line and an Open link. Its contents stop growing
+/** The largest form: avatar, name, birth line, an Open link and, for anyone but the root, a
+ * Make centre link that rebuilds the map around them (FG-5). Its contents stop growing
  * past CARD_MAX_PX on screen so the text stays a readable size; the box fills the slot. */
 function PersonCard({
   slot,
@@ -215,6 +218,7 @@ function PersonCard({
   label: string;
   scale: number;
 }) {
+  const rootId = useContext(MapRootContext);
   const top = slot.y - 4;
   const born = bornLine(person.birthday, new Date());
   // In the coworker band, say who manages whom; everyone else's band already says it.
@@ -253,29 +257,66 @@ function PersonCard({
             {detailLine}
           </text>
         )}
-        <SlotLink href={`/people/${person.id}`} label={`Open ${person.name}`} className="group outline-none">
-          <rect
-            x={slot.x - 28}
-            y={top + 90}
-            width={56}
-            height={22}
-            rx={6}
-            strokeWidth={2}
-            className="fill-ghost stroke-transparent group-hover:fill-ghost-hover group-focus-visible:stroke-ring"
-          />
-          <text
-            x={slot.x}
-            y={top + 101}
-            textAnchor="middle"
-            dominantBaseline="central"
-            aria-hidden
-            className="fill-text text-[11px] font-medium"
-          >
+        {person.id === rootId ? (
+          <CardAction href={`/people/${person.id}`} label={`Open ${person.name}`} x={slot.x - CARD_ACTION_W / 2} y={top + 90}>
             Open
-          </text>
-        </SlotLink>
+          </CardAction>
+        ) : (
+          <>
+            <CardAction href={`/people/${person.id}`} label={`Open ${person.name}`} x={slot.x - 56} y={top + 90}>
+              Open
+            </CardAction>
+            <CardAction
+              href={`/map?root=${person.id}`}
+              label={`Make ${person.name} the centre`}
+              x={slot.x + 2}
+              y={top + 90}
+            >
+              Centre
+            </CardAction>
+          </>
+        )}
       </g>
     </g>
+  );
+}
+
+/** A small button-shaped link on a card, 54 wide and 22 tall from (x, y). */
+function CardAction({
+  href,
+  label,
+  x,
+  y,
+  children,
+}: {
+  href: string;
+  label: string;
+  x: number;
+  y: number;
+  children: ReactNode;
+}) {
+  return (
+    <SlotLink href={href} label={label} className="group outline-none">
+      <rect
+        x={x}
+        y={y}
+        width={CARD_ACTION_W}
+        height={22}
+        rx={6}
+        strokeWidth={2}
+        className="fill-ghost stroke-transparent group-hover:fill-ghost-hover group-focus-visible:stroke-ring"
+      />
+      <text
+        x={x + CARD_ACTION_W / 2}
+        y={y + 11}
+        textAnchor="middle"
+        dominantBaseline="central"
+        aria-hidden
+        className="fill-text text-[11px] font-medium"
+      >
+        {children}
+      </text>
+    </SlotLink>
   );
 }
 

@@ -8,11 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useCurrentTree } from '@/hooks/useCurrentTree';
 import { useSetMe } from '@/hooks/usePerson';
+import { useCrossFade } from '@/hooks/useCrossFade';
 import { useTreeGraph } from '@/hooks/useTreeGraph';
 import { focusParam } from '@/lib/map/focus';
 import { resolveRoot } from '@/lib/map/mapRoot';
+import { cn } from '@/lib/utils';
 
 const PICKER_LIMIT = 30;
+/** Make centre cross-fades the old map into the new one over this long. */
+const FADE_MS = 300;
+const MAP_HEIGHT = 'h-[calc(100svh-15rem)] min-h-[360px]';
 
 export default function MapPage() {
   const { tree, loading: treesLoading, error: treesError } = useCurrentTree();
@@ -44,6 +49,8 @@ export default function MapPage() {
   const root = graph ? resolveRoot(graph, rootParam) : null;
   const rootId = root?.kind === 'person' ? root.id : null;
   const centre = rootId ? people.get(rootId) : undefined;
+  // A new root (Make centre, or Back) fades the old map out under the new one.
+  const canvases = useCrossFade(rootId ?? '', FADE_MS).filter((c) => c.key !== '');
 
   return (
     <>
@@ -70,7 +77,7 @@ export default function MapPage() {
         )}
         {loading && (
           <div
-            className="panel bg-surface-2 h-[calc(100svh-15rem)] min-h-[360px] animate-pulse"
+            className={`panel bg-surface-2 animate-pulse ${MAP_HEIGHT}`}
             aria-busy="true"
             aria-label="Loading the map"
           />
@@ -84,16 +91,27 @@ export default function MapPage() {
         )}
 
         {graph && rootId && (
-          <div className="panel overflow-hidden">
-            <MapCanvas
-              key={rootId}
-              graph={graph}
-              rootId={rootId}
-              people={people}
-              initialFocus={params.get('focus')}
-              onFocusChange={onFocusChange}
-              className="h-[calc(100svh-15rem)] min-h-[360px] w-full"
-            />
+          <div className={`panel relative overflow-hidden ${MAP_HEIGHT}`}>
+            {canvases.map(({ key, leaving }) => (
+              // The leaving map can't be used and no longer writes the URL; it only fades.
+              <div
+                key={key}
+                inert={leaving}
+                className={cn(
+                  'absolute inset-0 duration-300 ease-[var(--ease)]',
+                  leaving ? 'animate-out fade-out-0 fill-mode-forwards' : canvases.length > 1 && 'animate-in fade-in-0',
+                )}
+              >
+                <MapCanvas
+                  graph={graph}
+                  rootId={key}
+                  people={people}
+                  initialFocus={params.get('focus')}
+                  onFocusChange={leaving ? undefined : onFocusChange}
+                  className="size-full"
+                />
+              </div>
+            ))}
           </div>
         )}
 
