@@ -7,6 +7,8 @@ function conn(name: string): ConnectionWithPerson {
     connectionId: `c-${name}`,
     relationshipType: 'FRIEND',
     displayLabel: 'Friend',
+  parentKind: null,
+  ended: false,
     otherPerson: { id: name, name, photo_url: null } as ConnectionWithPerson['otherPerson'],
   };
 }

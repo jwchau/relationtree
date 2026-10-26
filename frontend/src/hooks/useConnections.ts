@@ -1,12 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap, type Person } from '@/api/client';
-import type { RelationshipType } from '@/lib/relationshipTypes';
+import { peopleQueryKey } from './usePersonList';
+import type { ParentKind, RelationshipType } from '@/lib/relationshipTypes';
 
 export interface ConnectionWithPerson {
   connectionId: string;
   relationshipType: RelationshipType;
-  /** The other person's role relative to the person being viewed (computed by the API). */
+  /** The other person's plain role relative to the person being viewed (computed by the
+   * API); `connectionLabel` makes it specific with the kind below. */
   displayLabel: string;
+  parentKind: ParentKind | null;
+  ended: boolean;
   otherPerson: Person;
 }
 
@@ -26,6 +30,8 @@ export function useConnections(personId: string | undefined) {
         connectionId: row.id,
         relationshipType: row.type,
         displayLabel: row.label,
+        parentKind: row.parent_kind,
+        ended: row.ended,
         otherPerson: row.other_person,
       }));
     },
@@ -43,13 +49,48 @@ export function useConnections(personId: string | undefined) {
 export function useCreateConnection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { personAId: string; personBId: string; type: RelationshipType }) =>
+    mutationFn: (input: {
+      personAId: string;
+      personBId: string;
+      type: RelationshipType;
+      parentKind?: ParentKind | null;
+      ended?: boolean;
+    }) =>
       unwrap(
         api.POST('/api/connections', {
-          body: { person_a_id: input.personAId, person_b_id: input.personBId, type: input.type },
+          body: {
+            person_a_id: input.personAId,
+            person_b_id: input.personBId,
+            type: input.type,
+            // Only the fields that fit the type; the API rejects the others.
+            ...(input.type === 'PARENT' && input.parentKind && { parent_kind: input.parentKind }),
+            ...(input.type === 'SPOUSE' && input.ended && { ended: true }),
+          },
         }),
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+  });
+}
+
+/** Changes a link's parent kind or whether a partnership has ended (FG-8). */
+export function useEditConnection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { connectionId: string; parentKind?: ParentKind; ended?: boolean }) =>
+      unwrap(
+        api.PATCH('/api/connections/{connection_id}', {
+          params: { path: { connection_id: input.connectionId } },
+          body: {
+            ...(input.parentKind !== undefined && { parent_kind: input.parentKind }),
+            ...(input.ended !== undefined && { ended: input.ended }),
+          },
+        }),
+      ),
+    // The map draws these too, and its graph sits under ['people'].
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
+    ]),
   });
 }
 

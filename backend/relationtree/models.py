@@ -156,11 +156,23 @@ class Connection(models.Model):
         PARENT = "PARENT"
         MANAGER = "MANAGER"
 
+    class ParentKind(models.TextChoices):
+        BIOLOGICAL = "BIOLOGICAL"
+        ADOPTIVE = "ADOPTIVE"
+        STEP = "STEP"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name="connections")
     person_a = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="+")
     person_b = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="+")
     type = models.CharField(max_length=20, choices=RelationshipType.choices)
+    # Only on PARENT links, where it's always set (biological unless said otherwise). NULL,
+    # not "", marks "not a parent link", which the check constraint below relies on.
+    parent_kind = models.CharField(  # noqa: DJ001
+        max_length=10, choices=ParentKind.choices, null=True, blank=True
+    )
+    # Only on SPOUSE links: a former partner.
+    ended = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -173,7 +185,22 @@ class Connection(models.Model):
             models.UniqueConstraint(
                 fields=["person_a", "person_b", "type"], name="unique_connection"
             ),
+            models.CheckConstraint(
+                condition=models.Q(type="PARENT", parent_kind__isnull=False)
+                | (~models.Q(type="PARENT") & models.Q(parent_kind__isnull=True)),
+                name="parent_kind_only_on_parent",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(ended=False) | models.Q(type="SPOUSE"),
+                name="ended_only_on_spouse",
+            ),
         ]
 
     def __str__(self) -> str:
         return f"{self.person_a} {self.type} {self.person_b}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # A parent link made without a kind is biological, wherever it's made from.
+        if self.type == self.RelationshipType.PARENT and self.parent_kind is None:
+            self.parent_kind = self.ParentKind.BIOLOGICAL
+        super().save(*args, **kwargs)

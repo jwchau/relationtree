@@ -787,6 +787,62 @@
       }
     },
     "/api/connections/{connection_id}": {
+      "patch": {
+        "operationId": "relationtree_connections_api_edit_connection",
+        "summary": "Edit Connection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "connections"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      },
       "delete": {
         "operationId": "relationtree_connections_api_delete_connection",
         "summary": "Delete Connection",
@@ -2218,16 +2274,41 @@
           },
           "type": {
             "$ref": "#/components/schemas/RelationshipType"
+          },
+          "parent_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParentKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended": {
+            "title": "Ended",
+            "type": "boolean"
           }
         },
         "required": [
           "id",
           "person_a_id",
           "person_b_id",
-          "type"
+          "type",
+          "parent_kind",
+          "ended"
         ],
         "title": "ConnectionOut",
         "type": "object"
+      },
+      "ParentKind": {
+        "enum": [
+          "BIOLOGICAL",
+          "ADOPTIVE",
+          "STEP"
+        ],
+        "title": "ParentKind",
+        "type": "string"
       },
       "RelationshipType": {
         "enum": [
@@ -2256,6 +2337,21 @@
           },
           "type": {
             "$ref": "#/components/schemas/RelationshipType"
+          },
+          "parent_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParentKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended": {
+            "default": false,
+            "title": "Ended",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2267,7 +2363,7 @@
         "type": "object"
       },
       "PersonConnectionOut": {
-        "description": "A connection seen from one person's page.",
+        "description": "A connection seen from one person's page. `label` is the other person's plain role\n(\"Parent\"); the page adds the kind (\"Step-parent\") from `parent_kind` and `ended`.",
         "properties": {
           "id": {
             "format": "uuid",
@@ -2276,6 +2372,20 @@
           },
           "type": {
             "$ref": "#/components/schemas/RelationshipType"
+          },
+          "parent_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParentKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended": {
+            "title": "Ended",
+            "type": "boolean"
           },
           "label": {
             "title": "Label",
@@ -2288,10 +2398,40 @@
         "required": [
           "id",
           "type",
+          "parent_kind",
+          "ended",
           "label",
           "other_person"
         ],
         "title": "PersonConnectionOut",
+        "type": "object"
+      },
+      "ConnectionEdit": {
+        "description": "The parts of a link that can change: its parent kind, and whether a partnership has\nended. Fields left out stay as they are.",
+        "properties": {
+          "parent_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParentKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended"
+          }
+        },
+        "title": "ConnectionEdit",
         "type": "object"
       },
       "AskIn": {

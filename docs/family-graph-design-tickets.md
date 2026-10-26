@@ -328,6 +328,23 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 
 **Done when:** you can mark a step-parent and an ended marriage in the dialog, and the canvas lays them out as Q8a describes.
 
+**Status: done.** Notes from building it:
+- **Schema (migration 0007):** `parent_kind` (nullable) and `ended` on `Connection`. Existing PARENT rows became biological in a data step before the check constraints were added. The constraints are: a PARENT link always has a kind, no other link has one, and only a SPOUSE link can be ended. `Connection.save()` fills in biological for any PARENT link made without a kind, so code that creates links through the ORM keeps working.
+- **API:** create accepts both fields and returns 422 for a field on the wrong type. They're returned by create, `/people/{id}/connections` and the graph. `label` is unchanged ("Parent", "Spouse"), so Ask's search text doesn't change and nothing needs re-embedding (decision L).
+- **Editing (decision M, changed by the owner):** `PATCH /connections/{id}` changes only `parent_kind` and `ended`. Fields left out stay as they are, a wrong field gets 422, and editors only. The person page's connection list has an edit button on parent and spouse rows.
+- **Dialog:** a Kind select for Parent and a Former partner checkbox for Spouse. The sentence under the type follows them ("Sam Reed is the step-parent of Kit Moss").
+- **Map:**
+  - Middle row: current partners right next to the person, on the right (decision N). Former partners go further out, the most recent nearest, alternating left then right. Siblings sit beyond the left-hand former partners.
+  - Former couple bars are dashed. Child groups are ordered by their partner's position, so each couple's children hang on that couple's side.
+  - Step-parents don't decide which couple a child belongs to, and they sit after the other parents, so the couple bar still joins the other two.
+  - Cards label "Step-parent", "Step-child", "Adoptive parent", "Adopted child" and "Former partner", with the birth year (the card is too narrow for the age as well).
+  - Step-siblings still show as siblings (decision P, FG-9).
+- **Checked against the real thing:** migration 0007 ran on the local database. In Chrome on the synthetic tree:
+  - Adding Lee Moss as Robin's spouse, then marking them former with the edit button, gave a "Former spouse" badge.
+  - Adding Sam as Kit's step-parent through the Kind select gave Sam's page a "Step-child" badge and the API returned STEP.
+  - Robin's map frame then read Cara, Dev, Lee, Robin, Sam along the middle row, with Kit under Robin and Lee on the left, Ivy and Jon under Robin and Sam on the right, and one dashed bar.
+- **Not shown in that data:** a step label on a card. Kit has no frame of their own (their links all show in Robin's frame), and chips don't carry kind labels. The component test covers card labels.
+
 ---
 
 ## FG-9 Half-siblings and other couples

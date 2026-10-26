@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Note } from '@/components/kiln/Page';
 import { PersonAvatar } from '@/components/person/PersonAvatar';
 import { connectionPage, CONNECTIONS_PAGE_SIZE } from '@/lib/connectionPages';
+import { connectionLabel } from '@/lib/relationshipTypes';
+import { EditConnectionDialog } from './EditConnectionDialog';
 
 export interface ConnectionListProps {
   connections: ConnectionWithPerson[];
@@ -58,9 +60,12 @@ export function ConnectionList({ connections, loading, error, canEdit }: Connect
               <PersonAvatar name={c.otherPerson.name} photoUrl={c.otherPerson.photo_url} className="size-8" />
               <span className="truncate font-semibold">{c.otherPerson.name}</span>
               <Badge variant="secondary" className="ml-auto">
-                {c.displayLabel}
+                {connectionLabel(c.displayLabel, c.parentKind, c.ended)}
               </Badge>
             </Link>
+            {canEdit && (c.relationshipType === 'PARENT' || c.relationshipType === 'SPOUSE') && (
+              <EditConnectionDialog connection={c} />
+            )}
             {canEdit && (
               <Button
                 variant="ghost"

@@ -10,6 +10,8 @@ function frameWith(friends: number, coworkers: number, acquaintances: number): F
     parents: { ids: ['P1', 'P2'], couple: true },
     self: 'A',
     spouses: ['S'],
+    former: [],
+    kinds: {},
     siblings: [],
     children: [{ parents: ['A', 'S'], children: ['K'] }],
     social: {
@@ -138,5 +140,103 @@ describe('frameLayout chips', () => {
     const chips = layout.slots.filter((s) => s.chip).map((s) => `${s.id}:${s.role}`);
     expect(chips.sort()).toEqual(['F1:friend', 'K:child', 'P2:parent', 'W0:coworker']);
     expect(layout.slots.find((s) => s.id === 'P1')?.chip).toBeFalsy();
+  });
+});
+
+describe('frameLayout partners (Q8a)', () => {
+  const core = (spouses: string[], former: string[], siblings: string[] = ['Sib']) =>
+    frameLayout({
+      parents: { ids: [], couple: false },
+      self: 'A',
+      spouses,
+      former,
+      siblings,
+      children: [],
+      kinds: {},
+    });
+  /** The middle row, left to right. */
+  const middle = (layout: FrameLayout) => {
+    const selfY = layout.slots.find((s) => s.id === 'A')!.y;
+    return layout.slots
+      .filter((s) => s.y === selfY)
+      .sort((a, b) => a.x - b.x)
+      .map((s) => s.id);
+  };
+
+  it('puts siblings left and a current partner right, as before', () => {
+    expect(middle(core([], []))).toEqual(['Sib', 'A']);
+    expect(middle(core(['C'], []))).toEqual(['Sib', 'A', 'C']);
+  });
+
+  it('puts a lone former partner on the left, with siblings beyond', () => {
+    expect(middle(core(['F'], ['F']))).toEqual(['Sib', 'F', 'A']);
+  });
+
+  it('keeps current partners next to the person and former ones further out', () => {
+    // F1 is the earlier former partner, so the further out.
+    expect(middle(core(['C', 'F1', 'F2'], ['F1', 'F2']))).toEqual(['Sib', 'F2', 'A', 'C', 'F1']);
+  });
+
+  it('alternates former partners left and right, the earliest furthest away', () => {
+    expect(middle(core(['F1', 'F2', 'F3'], ['F1', 'F2', 'F3']))).toEqual(['Sib', 'F1', 'F3', 'A', 'F2']);
+  });
+
+  it('spaces the middle row evenly', () => {
+    const layout = core(['C', 'F1', 'F2'], ['F1', 'F2']);
+    const xs = layout.slots.filter((s) => s.y === layout.slots.find((t) => t.id === 'A')!.y).map((s) => s.x);
+    const sorted = [...xs].sort((a, b) => a - b);
+    const gaps = sorted.slice(1).map((x, i) => x - sorted[i]);
+    expect(new Set(gaps).size).toBe(1);
+  });
+
+  it('draws a former partner as a former partner, with a dashed couple bar', () => {
+    const layout = core(['C', 'F'], ['F']);
+    expect(layout.slots.find((s) => s.id === 'F')?.role).toBe('former');
+    expect(layout.slots.find((s) => s.id === 'C')?.role).toBe('spouse');
+    // A couple bar runs along the middle row from the person to 40 short of the partner.
+    const barTo = (id: string) => {
+      const partner = layout.slots.find((s) => s.id === id)!;
+      return layout.lines.find((l) => l.y1 === l.y2 && Math.abs(l.x2 - partner.x) === 40);
+    };
+    expect(barTo('F')?.dashed).toBe(true);
+    expect(barTo('C')).toBeDefined();
+    expect(barTo('C')?.dashed).toBeFalsy();
+  });
+
+  it("hangs each couple's children under that couple, on the partner's side", () => {
+    const layout = frameLayout({
+      parents: { ids: [], couple: false },
+      self: 'A',
+      spouses: ['C', 'F'],
+      former: ['F'],
+      siblings: [],
+      children: [
+        // The current couple's child is the eldest, so their group comes first in the data,
+        // yet the former couple's child still belongs on the left, under F.
+        { parents: ['A', 'C'], children: ['KC'] },
+        { parents: ['A', 'F'], children: ['KF'] },
+      ],
+      kinds: {},
+    });
+    const x = (id: string) => layout.slots.find((s) => s.id === id)!.x;
+    expect(x('F')).toBeLessThan(0);
+    expect(x('KF')).toBeLessThan(x('KC'));
+    expect(x('KC')).toBeGreaterThan(0);
+  });
+});
+
+describe('frameLayout parent kinds', () => {
+  it('marks step and adoptive parents and children on their slots', () => {
+    const layout = frameLayout({
+      parents: { ids: ['Mum', 'Step'], couple: true },
+      self: 'A',
+      spouses: [],
+      former: [],
+      siblings: [],
+      children: [{ parents: ['A'], children: ['Kid', 'Adopted'] }],
+      kinds: { Step: 'STEP', Adopted: 'ADOPTIVE' },
+    });
+    const kind = (id: string) => layout.slots.find((s) => s.id === id)?.kind;
+    expect([kind('Mum'), kind('Step'), kind('Kid'), kind('Adopted')]).toEqual([undefined, 'STEP', undefined, 'ADOPTIVE']);
   });
 });
