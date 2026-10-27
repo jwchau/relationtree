@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Map as MapIcon, Trash2, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDeletePerson, usePerson, useSetMe, useUpdatePerson } from '@/hooks/usePerson';
@@ -43,6 +43,22 @@ export default function PersonDetailPage() {
   const setMe = useSetMe(personId);
   const { tree: currentTree, select: selectTree } = useCurrentTree();
   const { canEdit } = useTreePermissions(person?.tree_id);
+  // The map's Link to… arrives with ?connect=1 to open Add connection (FG-11). Read it once,
+  // then drop it, so a reload or Back doesn't open the dialog again.
+  const [params, setParams] = useSearchParams();
+  const [connectOnArrival] = useState(() => params.get('connect') === '1');
+  useEffect(() => {
+    if (params.has('connect')) {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('connect');
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [params, setParams]);
 
   // Opening someone from another tree (e.g. a shared link) switches to that tree, so the
   // header, list and Ask all match the person on screen.
@@ -178,6 +194,7 @@ export default function PersonDetailPage() {
                 personId={person.id}
                 personName={person.name}
                 treeId={person.tree_id}
+                defaultOpen={connectOnArrival}
               />
             )}
           </SectionHead>

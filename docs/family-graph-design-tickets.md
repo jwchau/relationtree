@@ -435,6 +435,18 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 
 **Done when:** a person you've just added with no connections appears in the tray, and linking them moves them onto the canvas.
 
+**Status: done.** Notes from building it:
+- **Who's listed:** `notConnected(graph, ownership)` (`lib/map/notConnected.ts`) is everyone the cached `mapModel` gives no frame, by name. Social links count as connections, and so does the category rule, but only when the root is an owner's "This is me". So from Cara, Tess (filed by category from Robin) is not connected.
+- **The tray (decisions AA–AC):** `NotConnectedTray` is a panel under the map on /map only, titled "Not connected · N", with nothing at all when everyone is reached. Each person is a ghost button (avatar and name; pressed while previewed).
+  - It shows the first 12 (about two rows on a laptop), then "Show all N". jsdom can't measure rows, so it's a fixed count, not two measured rows.
+  - Clicking one shows an embedded MapCanvas rooted at them, 280 px tall, without moving the main map. Under it are **Make centre** (`/map?root=<id>`) and, for owners and editors, **Link to…**. The tray is keyed by root, so a new root closes the preview.
+- **Link to… (AD):** it goes to `/people/<id>?connect=1`. PersonDetailPage reads `connect` once, opens AddConnectionDialog through a new `defaultOpen` prop, and removes the param with a replace, so reloading or going Back doesn't reopen it.
+- **Freshness (AE):** `useCreateConnection` now invalidates `['people']` as well as `['connections']`, so the graph refetches straight away; the person page's own map redraws as soon as the link is saved. Returning to /map refetched already (`refetchOnMount: 'always'`), and a hook test with a real QueryClient now covers both.
+- **Checked in Chrome** on the local synthetic tree, as map-viewer (centred on Cara):
+  - With Pia Stone added with no links, the tray read "Not connected · 2" (Pia, Tess), and clicking Pia showed her preview.
+  - As an editor, Link to… opened Pia's page with the dialog open and `connect` gone from the URL. After linking her to Robin as a friend, Back to /map showed "Not connected · 1".
+  - As a viewer, the preview offered only Make centre.
+
 ---
 
 ## FG-12 Hardening: scale, keyboard, motion, freshness

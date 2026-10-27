@@ -68,7 +68,11 @@ export function useCreateConnection() {
           },
         }),
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+    // A new link can connect someone to the map (FG-11), and the map's graph sits under ['people'].
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
+    ]),
   });
 }
 
