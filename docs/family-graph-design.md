@@ -1,8 +1,8 @@
 # Family / Social Graph Viewer — Design Decisions (handoff)
 
-Status: design interview in progress. Sections 1–8 are **decided**. Section 9 lists **open questions**. The receiving session should answer them by looking at the existing relationships app and its repo, and ask the user only about the ones the code can't answer.
+Status: **built and in production** (2026-10-27). Every decision below is implemented. [family-graph-design-tickets.md](./family-graph-design-tickets.md) records how, ticket by ticket (FG-1 to FG-13), with measurements and the owner's later decisions.
 
-Update (2026-10-22): every open question is now settled, either from the code ("Findings from the relationtree repo") or by the user ("Interview decisions"). Implementation hasn't started.
+History: sections 1–8 were decided first, and the open questions that followed were settled on 2026-10-22, from the code ("Findings from the relationtree repo") or by the user ("Interview decisions").
 
 Inspiration: Prezi zoomable canvas (https://prezi.com/fugumlghvxoy/malmaison--hotel-du-vin-prezi-design).
 
@@ -55,7 +55,7 @@ The diagram starts from one person, the **root**. Their frame shows their first-
 
 9. **Root selection:** the canvas opens on a default root: `?root`, else the user's "This is me", else a person picker (FG-1). The root is kept in the URL (`?root=<id>`) so views can be shared. Every person has a **"Make centre"** action that rebuilds the canvas around them with a cross-fade (the old canvas is inert while it fades out, FG-5). Ordinary browsing is still just zooming.
 
-## Open questions (resolve against the existing app and repo)
+## Open questions (all settled: see the findings and interview decisions below)
 
 1. **Data source.** The user already has another app that tracks these relationships. How does it expose them: an API, a direct database read, or an export? What does the schema look like (person fields, relationship table, IDs)? How do its relationship types map onto those in decision 3, and are any missing (parent subtype, former partner, the three social tiers)?
 2. **Integration.** Should the viewer be a feature inside the existing app, using its stack, routing and auth, or a standalone app that reads its data?
