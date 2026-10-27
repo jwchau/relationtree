@@ -51,6 +51,9 @@ export function FamilyFrame({
   people,
   layoutOf,
   anchorScale = 1,
+  focusedId = null,
+  outerTab = 'none',
+  standsFor,
 }: {
   layout: FrameLayout;
   node: PlanNode;
@@ -58,6 +61,12 @@ export function FamilyFrame({
   layoutOf: (personId: string) => FrameLayout | null;
   /** The scale of the frame MapCanvas anchors the drawing to; card sizes are relative to it. */
   anchorScale?: number;
+  /** The focused frame: only its people are in the Tab order (FG-12). */
+  focusedId?: string | null;
+  /** What Tab reaches in the frame this one is drawn inside. */
+  outerTab?: Tab;
+  /** The role of the slot this frame fills in the frame it's drawn inside. */
+  standsFor?: Role;
 }) {
   const centre = people.get(node.personId);
   const over = parseOverflowId(node.personId);
@@ -69,6 +78,10 @@ export function FamilyFrame({
   // A slot past the frame threshold whose person owns no one has nothing to open, so it
   // stays a card.
   const detail: Detail = node.detail === 'frame' ? 'card' : node.detail;
+  // Tab reaches everyone in the focused frame. A frame open inside it keeps only its centre
+  // in the Tab order, standing for the slot it fills; every other frame is out of it.
+  const tab: Tab = node.personId === focusedId ? 'all' : outerTab === 'all' ? 'self' : 'none';
+  const canTab = (slot: Slot) => tab === 'all' || (tab === 'self' && slot.role === 'self');
   return (
     <g role="group" aria-label={label}>
       {/* Social circles: one outline per band, outermost first so inner ones draw on top.
@@ -107,7 +120,7 @@ export function FamilyFrame({
           ),
         )}
       </g>
-      {layout.slots.map((slot) => {
+      {inReadingOrder(layout.slots).map((slot) => {
         const inner = node.open.get(slot.id);
         const innerLayout = inner && layoutOf(slot.id);
         if (inner && innerLayout) {
@@ -132,6 +145,9 @@ export function FamilyFrame({
                   people={people}
                   layoutOf={layoutOf}
                   anchorScale={anchorScale}
+                  focusedId={focusedId}
+                  outerTab={tab}
+                  standsFor={slot.role}
                 />
               </g>
             </g>
@@ -146,6 +162,7 @@ export function FamilyFrame({
               band={band}
               count={layoutOf(slot.id)?.slots.length ?? 0}
               detail={detail}
+              tabbable={canTab(slot)}
             />
           );
         }
@@ -157,11 +174,22 @@ export function FamilyFrame({
             person={person}
             detail={detail}
             scale={node.scale / anchorScale}
+            tabbable={canTab(slot)}
+            // Opened inside the focused frame, the centre is Tab's one stop for the whole
+            // frame: named by its place outside, and zooming in (FG-12).
+            standsFor={tab === 'self' && slot.role === 'self' ? standsFor : undefined}
           />
         ) : null;
       })}
     </g>
   );
+}
+
+type Tab = 'all' | 'self' | 'none';
+
+/** Top row first, then left to right, so Tab reads a frame like a page. */
+function inReadingOrder(slots: Slot[]): Slot[] {
+  return [...slots].sort((a, b) => a.y - b.y || a.x - b.x);
 }
 
 const AVATAR_R = 32;
@@ -179,25 +207,48 @@ function shortName(name: string): string {
  * other slots' props (layout slot, person, level, scale) are unchanged, so they don't redraw. */
 const PersonSlot = memo(PersonSlotView);
 
-function PersonSlotView({
+/** A frame's centre is marked, so the map can move keyboard focus to it after a keyboard
+ * zoom (FG-12). */
+function PersonSlotView(props: Parameters<typeof SlotView>[0]) {
+  const { slot, person } = props;
+  return slot.role === 'self' ? (
+    <g data-centre={person.id}>
+      <SlotView {...props} />
+    </g>
+  ) : (
+    <SlotView {...props} />
+  );
+}
+
+function SlotView({
   slot,
   person,
   detail,
   scale,
+  tabbable,
+  standsFor,
 }: {
   slot: Slot;
   person: GraphPerson;
   detail: Detail;
   scale: number;
+  tabbable: boolean;
+  standsFor?: Role;
 }) {
-  const label = `${person.name}, ${ROLE_LABELS[slot.role]}`;
-  if (slot.chip) return <ChipSlot slot={slot} person={person} detail={detail} scale={scale} />;
-  if (detail === 'card') return <PersonCard slot={slot} person={person} label={label} scale={scale} />;
+  const map = useContext(MapContext);
+  const label = `${person.name}, ${ROLE_LABELS[standsFor ?? slot.role]}`;
+  // A frame's own centre doesn't zoom (it's already there), unless it stands for the frame
+  // in the one outside.
+  const zooms = (slot.role !== 'self' || standsFor !== undefined) && Boolean(map?.hasFrame(person.id));
+  if (slot.chip) return <ChipSlot slot={slot} person={person} detail={detail} scale={scale} tabbable={tabbable} />;
+  if (detail === 'card') {
+    return <PersonCard slot={slot} person={person} label={label} scale={scale} tabbable={tabbable} zooms={zooms} />;
+  }
 
   const cx = slot.x;
   const cy = slot.y + AVATAR_Y;
-  return (
-    <SlotLink href={`/people/${person.id}`} label={label} className="group cursor-pointer outline-none">
+  const contents = (
+    <>
       <rect
         x={slot.x - SLOT_W / 2}
         y={slot.y - 4}
@@ -227,6 +278,17 @@ function PersonSlotView({
           {shortName(person.name)}
         </text>
       )}
+    </>
+  );
+  // Someone with a frame of their own zooms into it (FG-12, decision BA); anyone else, and
+  // the frame's own centre, opens their page.
+  return zooms ? (
+    <SlotButton label={label} tabbable={tabbable} onPress={() => map?.zoomInto(person.id)}>
+      {contents}
+    </SlotButton>
+  ) : (
+    <SlotLink href={`/people/${person.id}`} label={label} tabbable={tabbable} className="group cursor-pointer outline-none">
+      {contents}
     </SlotLink>
   );
 }
@@ -239,11 +301,16 @@ function PersonCard({
   person,
   label,
   scale,
+  tabbable,
+  zooms,
 }: {
   slot: Slot;
   person: GraphPerson;
   label: string;
   scale: number;
+  tabbable: boolean;
+  /** Whether the card's box zooms into the person's frame (FG-12, decision BA). */
+  zooms: boolean;
 }) {
   const rootId = useContext(MapContext)?.rootId;
   const top = slot.y - 4;
@@ -255,16 +322,31 @@ function PersonCard({
   const detailLine = relation
     ? [relation, person.birthday?.slice(0, 4)].filter(Boolean).join(' · ')
     : [work, bornLine(person.birthday, new Date())].filter(Boolean).join(' · ');
+  const map = useContext(MapContext);
+  const box = (
+    <rect
+      x={slot.x - SLOT_W / 2}
+      y={top}
+      width={SLOT_W}
+      height={SLOT_H}
+      rx={12}
+      strokeWidth={3}
+      className={cn(
+        'stroke-hairline',
+        slot.role === 'self' ? 'fill-ghost' : 'fill-surface-2',
+        'group-focus-visible:stroke-ring',
+      )}
+    />
+  );
   return (
     <g role="group" aria-label={label}>
-      <rect
-        x={slot.x - SLOT_W / 2}
-        y={top}
-        width={SLOT_W}
-        height={SLOT_H}
-        rx={12}
-        className={cn('stroke-hairline', slot.role === 'self' ? 'fill-ghost' : 'fill-surface-2')}
-      />
+      {zooms ? (
+        <SlotButton label={label} tabbable={tabbable} onPress={() => map?.zoomInto(person.id)}>
+          {box}
+        </SlotButton>
+      ) : (
+        box
+      )}
       {/* Only the contents stop growing; the box keeps the slot's size so lines still meet it. */}
       <g data-card-scale={scale} style={CARD_CONTENTS}>
         <Avatar person={person} cx={slot.x} cy={top + 28} r={20} />
@@ -283,17 +365,18 @@ function PersonCard({
           </text>
         )}
         {person.id === rootId ? (
-          <CardAction href={`/people/${person.id}`} label={`Open ${person.name}`} x={slot.x - CARD_ACTION_W / 2} y={top + 90}>
+          <CardAction href={`/people/${person.id}`} label={`Open ${person.name}`} tabbable={tabbable} x={slot.x - CARD_ACTION_W / 2} y={top + 90}>
             Open
           </CardAction>
         ) : (
           <>
-            <CardAction href={`/people/${person.id}`} label={`Open ${person.name}`} x={slot.x - 56} y={top + 90}>
+            <CardAction href={`/people/${person.id}`} label={`Open ${person.name}`} tabbable={tabbable} x={slot.x - 56} y={top + 90}>
               Open
             </CardAction>
             <CardAction
               href={`/map?root=${person.id}`}
               label={`Make ${person.name} the centre`}
+              tabbable={tabbable}
               x={slot.x + 2}
               y={top + 90}
             >
@@ -314,11 +397,13 @@ function ChipSlot({
   person,
   detail,
   scale,
+  tabbable,
 }: {
   slot: Slot;
   person: GraphPerson;
   detail: Detail;
   scale: number;
+  tabbable: boolean;
 }) {
   const map = useContext(MapContext);
   const owner = map?.drawnIn(person.id) ?? null;
@@ -329,7 +414,7 @@ function ChipSlot({
   return (
     <g
       role="button"
-      tabIndex={0}
+      tabIndex={tabbable ? 0 : -1}
       aria-label={`${person.name}, ${ROLE_LABELS[slot.role]}, ${where}`}
       className="group cursor-pointer outline-none"
       onClick={go}
@@ -389,11 +474,13 @@ function MoreTile({
   band,
   count,
   detail,
+  tabbable,
 }: {
   slot: Slot;
   band: BandKind;
   count: number;
   detail: Detail;
+  tabbable: boolean;
 }) {
   const map = useContext(MapContext);
   const go = () => map?.goTo(slot.id);
@@ -401,7 +488,7 @@ function MoreTile({
   return (
     <g
       role="button"
-      tabIndex={0}
+      tabIndex={tabbable ? 0 : -1}
       aria-label={`${count} more ${band}`}
       className="group cursor-pointer outline-none"
       onClick={go}
@@ -463,18 +550,20 @@ const HIT_H = 48;
 function CardAction({
   href,
   label,
+  tabbable,
   x,
   y,
   children,
 }: {
   href: string;
   label: string;
+  tabbable: boolean;
   x: number;
   y: number;
   children: ReactNode;
 }) {
   return (
-    <SlotLink href={href} label={label} className="group outline-none">
+    <SlotLink href={href} label={label} tabbable={tabbable} className="group outline-none">
       <rect x={x} y={y + 22 - HIT_H + 4} width={CARD_ACTION_W} height={HIT_H} className="fill-transparent" />
       <rect
         x={x}
@@ -512,15 +601,51 @@ function relationLabel(slot: Slot): string | null {
  * `data-card-scale` group as the camera moves (see cardContentScale). */
 const CARD_CONTENTS = { transformBox: 'fill-box', transformOrigin: 'center' } as const;
 
+/** An SVG button: click, Enter or Space. */
+function SlotButton({
+  label,
+  tabbable,
+  onPress,
+  className = 'group cursor-pointer outline-none',
+  children,
+}: {
+  label: string;
+  tabbable: boolean;
+  onPress: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <g
+      role="button"
+      tabIndex={tabbable ? 0 : -1}
+      aria-label={label}
+      className={className}
+      onClick={onPress}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        // The map's own keys (Escape, zoom) mustn't also act on it.
+        e.stopPropagation();
+        onPress();
+      }}
+    >
+      {children}
+    </g>
+  );
+}
+
 /** An SVG link that navigates inside the app (and still opens a new tab on ctrl/cmd-click). */
 function SlotLink({
   href,
   label,
+  tabbable,
   className,
   children,
 }: {
   href: string;
   label: string;
+  tabbable: boolean;
   className?: string;
   children: ReactNode;
 }) {
@@ -529,6 +654,7 @@ function SlotLink({
     <a
       href={href}
       aria-label={label}
+      tabIndex={tabbable ? 0 : -1}
       className={className}
       onClick={(e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;

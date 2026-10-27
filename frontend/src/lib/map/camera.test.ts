@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampTransform, FIT_PADDING, fitTransform, MAX_ZOOM, MIN_ZOOM, MIN_VISIBLE, type Bounds, type Transform } from './camera';
+import { clampTransform, FIT_PADDING, fitTransform, MAX_ZOOM, MIN_ZOOM, MIN_VISIBLE, PAN_MARGIN, panToShow, type Bounds, type Transform } from './camera';
 
 const toScreen = (t: Transform, x: number, y: number) => [x * t.k + t.x, y * t.k + t.y];
 
@@ -73,5 +73,25 @@ describe('clampTransform', () => {
     const range: [number, number] = [fit.k / 2, fit.k * 1000];
     const deep = { k: fit.k * 500, x: fit.x, y: fit.y };
     expect(clampTransform(deep, viewport, bounds, range).k).toBe(fit.k * 500);
+  });
+});
+
+describe('panToShow', () => {
+  const viewport = { width: 400, height: 800 };
+  const box = (left: number, top: number, width = 100, height = 100) => ({ left, top, right: left + width, bottom: top + height });
+
+  it("doesn't move for something already on screen", () => {
+    expect(panToShow(box(100, 300), viewport)).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it('brings something past an edge just inside the margin', () => {
+    expect(panToShow(box(350, 300), viewport)).toEqual({ dx: -(450 - (400 - PAN_MARGIN)), dy: 0 });
+    expect(panToShow(box(-60, 300), viewport)).toEqual({ dx: 60 + PAN_MARGIN, dy: 0 });
+    expect(panToShow(box(100, 760), viewport)).toEqual({ dx: 0, dy: -(860 - (800 - PAN_MARGIN)) });
+    expect(panToShow(box(100, -30), viewport)).toEqual({ dx: 0, dy: 30 + PAN_MARGIN });
+  });
+
+  it('lines up the top left of something bigger than the view', () => {
+    expect(panToShow(box(-50, 300, 600, 100), viewport)).toEqual({ dx: 50 + PAN_MARGIN, dy: 0 });
   });
 });
