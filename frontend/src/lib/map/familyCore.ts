@@ -1,4 +1,5 @@
 import type { GraphConnection, GraphPerson, TreeGraph } from '@/api/client';
+import { graphIndex } from './graphIndex';
 
 /** The family rows of one person's frame (design doc D6). Every list holds person ids. */
 export interface FamilyCore {
@@ -38,7 +39,7 @@ export function firstDegree(core: FamilyCore): string[] {
 }
 
 export function familyCore(graph: TreeGraph, personId: string): FamilyCore {
-  const byId = new Map(graph.people.map((p) => [p.id, p]));
+  const { byId } = graphIndex(graph);
   const sorted = (ids: Iterable<string>) => sortPeople([...ids], byId);
   // Step-parents go after the others, so the couple bar joins the first two (FG-8).
   const parentIds = [
@@ -137,7 +138,7 @@ function childGroups(
 
 function parentKinds(graph: TreeGraph, personId: string): FamilyCore['kinds'] {
   const kinds: FamilyCore['kinds'] = {};
-  for (const c of graph.connections) {
+  for (const c of graphIndex(graph).linksOf(personId)) {
     if (c.type !== 'PARENT' || (c.parent_kind !== 'STEP' && c.parent_kind !== 'ADOPTIVE')) continue;
     if (c.person_b_id === personId) kinds[c.person_a_id] = c.parent_kind;
     else if (c.person_a_id === personId) kinds[c.person_b_id] = c.parent_kind;
@@ -147,7 +148,7 @@ function parentKinds(graph: TreeGraph, personId: string): FamilyCore['kinds'] {
 
 /** Whether two people are recorded as former partners. */
 function hasEnded(graph: TreeGraph, a: string, b: string): boolean {
-  return graph.connections.some(
+  return graphIndex(graph).linksOf(a).some(
     (c) =>
       c.type === 'SPOUSE' &&
       c.ended &&
@@ -157,7 +158,7 @@ function hasEnded(graph: TreeGraph, a: string, b: string): boolean {
 
 /** Partners whose relationship with this person has ended. */
 function endedPartners(graph: TreeGraph, personId: string): string[] {
-  return graph.connections.flatMap((c) => {
+  return graphIndex(graph).linksOf(personId).flatMap((c) => {
     if (c.type !== 'SPOUSE' || !c.ended) return [];
     if (c.person_a_id === personId) return [c.person_b_id];
     if (c.person_b_id === personId) return [c.person_a_id];
@@ -194,7 +195,8 @@ function byEarliest(
 
 /** A person's parents; `step` picks only step-parents, or only the others. */
 function parentsOf(graph: TreeGraph, personId: string, only?: { step: boolean }): string[] {
-  return graph.connections
+  return graphIndex(graph)
+    .linksOf(personId)
     .filter((c) => c.type === 'PARENT' && c.person_b_id === personId)
     .filter((c) => only === undefined || (c.parent_kind === 'STEP') === only.step)
     .map((c) => c.person_a_id);
@@ -202,7 +204,8 @@ function parentsOf(graph: TreeGraph, personId: string, only?: { step: boolean })
 
 /** A person's children; `step` picks only step-children, or only the others. */
 function childrenOf(graph: TreeGraph, personId: string, only?: { step: boolean }): string[] {
-  return graph.connections
+  return graphIndex(graph)
+    .linksOf(personId)
     .filter((c) => c.type === 'PARENT' && c.person_a_id === personId)
     .filter((c) => only === undefined || (c.parent_kind === 'STEP') === only.step)
     .map((c) => c.person_b_id);
@@ -210,7 +213,7 @@ function childrenOf(graph: TreeGraph, personId: string, only?: { step: boolean }
 
 /** The other ends of this person's links of a symmetric type. */
 function linked(graph: TreeGraph, personId: string, type: GraphConnection['type']): string[] {
-  return graph.connections.flatMap((c) => {
+  return graphIndex(graph).linksOf(personId).flatMap((c) => {
     if (c.type !== type) return [];
     if (c.person_a_id === personId) return [c.person_b_id];
     if (c.person_b_id === personId) return [c.person_a_id];

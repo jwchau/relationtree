@@ -1,5 +1,6 @@
 import type { GraphConnection, GraphPerson, TreeGraph } from '@/api/client';
 import { sortPeople } from './familyCore';
+import { graphIndex } from './graphIndex';
 
 type Band = 'friends' | 'coworkers' | 'acquaintances';
 
@@ -43,7 +44,8 @@ export function socialCircles(
   };
   const managers = new Set<string>();
   const reports = new Set<string>();
-  for (const c of graph.connections) {
+  const { byId, linksOf } = graphIndex(graph);
+  for (const c of linksOf(personId)) {
     const band = BAND_OF[c.type];
     if (!band) continue;
     // "a MANAGER b" reads "a is b's manager".
@@ -57,7 +59,7 @@ export function socialCircles(
   }
   if (categoryRule) {
     const linked = new Set(
-      graph.connections.flatMap((c) =>
+      linksOf(personId).flatMap((c) =>
         c.person_a_id === personId ? [c.person_b_id] : c.person_b_id === personId ? [c.person_a_id] : [],
       ),
     );
@@ -66,7 +68,6 @@ export function socialCircles(
       if (band && p.id !== personId && !linked.has(p.id)) bands[band].add(p.id);
     }
   }
-  const byId = new Map(graph.people.map((p) => [p.id, p]));
   const sorted = (ids: Set<string>) => sortPeople([...ids], byId);
   return {
     friends: sorted(bands.friends),
@@ -81,5 +82,5 @@ export function socialCircles(
  * when the root is the "This is me" of one of the tree's owners, because the category records
  * how an owner knows someone and means nothing from anyone else's point of view. */
 export function categoryRuleApplies(graph: TreeGraph, personId: string, rootId: string): boolean {
-  return personId === rootId && graph.people.some((p) => p.id === personId && p.is_owner_me);
+  return personId === rootId && Boolean(graphIndex(graph).byId.get(personId)?.is_owner_me);
 }

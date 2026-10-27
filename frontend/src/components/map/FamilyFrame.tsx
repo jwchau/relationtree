@@ -454,6 +454,11 @@ function MoreTile({
   );
 }
 
+/** An action's invisible hit area, taller than the button: 48 units is 45 px on screen at
+ * the smallest card (a 120 px slot, scale 0.94), so a finger can still press it on a phone.
+ * It reaches up over the detail line, which isn't interactive, and stays inside the card. */
+const HIT_H = 48;
+
 /** A small button-shaped link on a card, 54 wide and 22 tall from (x, y). */
 function CardAction({
   href,
@@ -470,6 +475,7 @@ function CardAction({
 }) {
   return (
     <SlotLink href={href} label={label} className="group outline-none">
+      <rect x={x} y={y + 22 - HIT_H + 4} width={CARD_ACTION_W} height={HIT_H} className="fill-transparent" />
       <rect
         x={x}
         y={y}

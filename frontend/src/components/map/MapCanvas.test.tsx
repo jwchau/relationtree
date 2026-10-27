@@ -2,6 +2,8 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DETAIL_THRESHOLDS } from '@/lib/map/detail';
+import { SLOT_W } from '@/lib/map/frameLayout';
 import { tree, type Link } from '@/lib/map/testTree';
 import { FixedSizeObserver, observedSize } from '@/test/resizeObserver';
 import { MapCanvas } from './MapCanvas';
@@ -104,6 +106,21 @@ describe('MapCanvas cards', () => {
     renderMap();
     expect(screen.getByRole('link', { name: 'Open Robin' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Make Robin the centre' })).not.toBeInTheDocument();
+  });
+
+  it('give Open and Centre a hit area at least 44 px each way, even at the smallest card size', () => {
+    renderMap();
+    // A card is drawn once its slot is DETAIL_THRESHOLDS[2] px wide on screen.
+    const smallest = DETAIL_THRESHOLDS[2] / SLOT_W;
+    const actions = screen.getAllByRole('link', { name: /^(Open|Make) / });
+    expect(actions.length).toBeGreaterThan(0);
+    for (const action of actions) {
+      const sizes = Array.from(action.querySelectorAll('rect'), (r) => [
+        Number(r.getAttribute('width')) * smallest,
+        Number(r.getAttribute('height')) * smallest,
+      ]);
+      expect(sizes.some(([w, h]) => w >= 44 && h >= 44)).toBe(true);
+    }
   });
 });
 

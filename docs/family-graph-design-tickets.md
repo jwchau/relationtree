@@ -460,3 +460,26 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 - **Themes:** check AA contrast of dots, bands, bars and chips in both Kiln themes, and readability on a phone outdoors.
 
 **Done when:** the measured numbers are recorded, the canvas can be used fully by keyboard, and a final review against the design doc finds no open gaps.
+
+**Status: in progress.** Done in three parts: 12a scale, 12b keyboard and screen readers, 12c motion, freshness, themes and the final review (decisions BA–BF).
+
+**12a scale, notes from building it:**
+- **The fixture:** `seed_scale_tree --owner <user>` (backend) adds "Synthetic scale (1,000)": generations of couples and children (about 10% step or adoptive, 15% former partners, some second partners with half-siblings), then random friend, coworker, acquaintance and manager links up to 3,000. Every name is made up, it's the same on every run, and it skips the search embedding signals. `bigTree()` in `lib/map/testTree.ts` builds a tree of the same shape for tests.
+- **The slow part:** every family-core and social-circle lookup scanned all 3,000 links, so the ownership walk did it about 1,000 times. `graphIndex(graph)` (`lib/map/graphIndex.ts`) now builds each person's links and a by-id map once per graph, cached in a WeakMap like `mapModel`. `scale.test.ts` pins ownership from five roots and everyone's family core and social circles on the 1,000-person tree; its snapshots were recorded on the old code and the new code matches them.
+- **Measured in Node (vitest), 1,000 people and 3,000 links:**
+
+  | | Before | After |
+  |---|---|---|
+  | Ownership walk | 381 ms | 15 ms (9.5 warm) |
+  | Root frame's model and layout | 369 ms | 9.5 ms |
+  | Laying out all 969 frames (the app does it lazily) | 447 ms | 88 ms |
+
+- **Measured in Chrome, desktop (2560 px, a ~240 Hz display), Vite dev build:**
+  - Making someone new the centre, to the first frame showing their family: 467–483 ms with one ~445 ms frozen frame before; 32–48 ms with no frame over 17 ms after. FG-10's first-open stutter (3 frames over 17 ms) is gone.
+  - Zooming, one ctrl+wheel per frame for 3 s (in, then out) across card size and frame openings, after a warm-up: 215–229 fps, 95th percentile 4.3–8.3 ms, no frame over 17 ms.
+- **Measured as a phone (decision BF):** Chrome DevTools at 4× CPU slowdown, the map panel 390 px wide, a production build (`vite build` and `vite preview` against a second local API). The GPU isn't slowed, so this is a CPU-only stand-in for a mid-range phone.
+  - Zooming: 90–163 fps, 95th percentile 12.5–25 ms, the worst frame 29–67 ms. No long animation frame (50 ms or more) while zooming.
+  - Making someone new the centre: 120–180 ms to the first frame, with three frames over 17 ms (the worst 46–58 ms) during the cross-fade.
+  - The dev build's slow frames at level changes (60–120 ms) were mostly React's development build: about 42 ms of each was `react-dom` dev code.
+- **Hiding text below name size: not done.** With all map text hidden, zooming at 4× slowdown went from 170 to 220 fps (95th percentile 12.5 to 4.3 ms). But only 9–46 text elements are drawn at any time, and only the names while zoomed far out are under 9 px. Hiding those would remove little, and no frame is slow because of them.
+- **Phone-size card actions:** Open and Centre have an invisible hit area 54 × 48 units, which is at least 50 × 45 px at the smallest card (a 120 px slot). The visible button is unchanged.
