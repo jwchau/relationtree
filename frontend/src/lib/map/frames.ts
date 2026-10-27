@@ -1,5 +1,5 @@
 import type { TreeGraph } from '@/api/client';
-import { familyCore, type FamilyCore } from './familyCore';
+import { familyCore, firstDegree, type FamilyCore } from './familyCore';
 import { frameLayout, type FrameLayout } from './frameLayout';
 import { assignOwnership, type Ownership } from './ownership';
 import { categoryRuleApplies, socialCircles, type SocialCircles } from './social';
@@ -35,10 +35,7 @@ export function frameLayouts(
  * people around them in that frame, or to its centre, already show there. */
 function hasFrame(frame: Frame, ownership: Ownership): boolean {
   const all = [
-    ...frame.parents.ids,
-    ...frame.spouses,
-    ...frame.siblings,
-    ...frame.children.flatMap((g) => g.children),
+    ...firstDegree(frame),
     ...frame.social.friends,
     ...frame.social.coworkers,
     ...frame.social.acquaintances,
@@ -59,10 +56,9 @@ export function frameFor(graph: TreeGraph, ownership: Ownership, personId: strin
     categoryRule: categoryRuleApplies(graph, personId, rootId),
   });
   const everyone = [
-    ...core.parents.ids,
-    ...core.spouses,
-    ...core.siblings,
-    ...core.children.flatMap((g) => g.children),
+    ...firstDegree(core),
+    // A half-sibling's other parent: never this frame's, so always a chip (FG-9).
+    ...core.half.map((g) => g.partner),
     ...social.friends,
     ...social.coworkers,
     ...social.acquaintances,

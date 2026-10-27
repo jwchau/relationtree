@@ -115,3 +115,39 @@ describe('zoomCeiling', () => {
     );
   });
 });
+
+describe('planRender with a blended family (FG-9)', () => {
+  it('draws everyone once when fully zoomed in, with half-siblings and their other parents', () => {
+    const blended = tree(
+      ['A', 'P1', 'P2', 'P0', 'P3', 'H0', 'H', 'F', 'G'],
+      [
+        ['P1', 'PARENT', 'A'],
+        ['P2', 'PARENT', 'A'],
+        ['P1', 'PARENT', 'F'],
+        ['P2', 'PARENT', 'F'],
+        ['P1', 'PARENT', 'H0'],
+        ['P0', 'PARENT', 'H0'],
+        ['P2', 'PARENT', 'H'],
+        ['P3', 'PARENT', 'H'],
+        ['P2', 'SPOUSE', 'P3'],
+        ['G', 'PARENT', 'P3'],
+      ],
+      { P1: '1950-01-01', P2: '1952-01-01', P0: '1949-01-01', P3: '1951-01-01', H0: '1980-01-01', H: '1985-01-01' },
+    );
+    const layouts = frameLayouts(blended, 'A');
+    // The whole root frame on screen at a huge zoom, so every frame opens and none is culled.
+    const bounds = layouts('A')!.bounds;
+    const k = 1e6 / SLOT_W;
+    const viewport = { width: bounds.width * k, height: bounds.height * k };
+    const t = { k, x: -bounds.x * k, y: -bounds.y * k };
+    const drawn: string[] = ['A'];
+    const walk = (node: PlanNode) => {
+      for (const slot of layouts(node.personId)!.slots) {
+        if (slot.id !== node.personId && !slot.chip) drawn.push(slot.id);
+      }
+      node.open.forEach(walk);
+    };
+    walk(planRender('A', t, viewport, layouts));
+    expect([...drawn].sort()).toEqual(['A', 'F', 'G', 'H', 'H0', 'P0', 'P1', 'P2', 'P3']);
+  });
+});

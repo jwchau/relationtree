@@ -22,6 +22,7 @@ import { MapContext } from './MapContext';
 const ROLE_LABELS: Record<Role, string> = {
   self: 'centre',
   parent: 'parent',
+  parentPartner: "parent's partner",
   spouse: 'spouse',
   former: 'former partner',
   sibling: 'sibling',
@@ -90,10 +91,14 @@ export function FamilyFrame({
         ))}
       </g>
       <g className="stroke-subtle" strokeWidth={2} fill="none" aria-hidden>
-        {layout.lines.map(({ dashed, ...l }, i) => (
-          // A former partner's couple bar is dashed (Q8a).
-          <line key={i} {...l} strokeDasharray={dashed ? '10 8' : undefined} />
-        ))}
+        {layout.lines.map(({ ended, ...l }, i) =>
+          // An ended couple's bar is dotted, wherever it is (Q8a).
+          ended ? (
+            <line key={i} {...l} strokeDasharray="0.1 9" strokeLinecap="round" />
+          ) : (
+            <line key={i} {...l} />
+          ),
+        )}
       </g>
       {layout.slots.map((slot) => {
         const inner = node.open.get(slot.id);
@@ -402,11 +407,12 @@ function CardAction({
   );
 }
 
-/** How a card names a step, adoptive or former relation; null for anyone else. */
+/** How a card names a step, adoptive, half or former relation; null for anyone else. */
 function relationLabel(slot: Slot): string | null {
   if (slot.role === 'former') return 'Former partner';
   if (slot.kind === 'STEP') return slot.role === 'parent' ? 'Step-parent' : 'Step-child';
   if (slot.kind === 'ADOPTIVE') return slot.role === 'parent' ? 'Adoptive parent' : 'Adopted child';
+  if (slot.kind === 'HALF') return 'Half-sibling';
   return null;
 }
 

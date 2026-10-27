@@ -125,3 +125,23 @@ describe('assignOwnership with the category rule', () => {
     expect(assignOwnership(graph, 'X').has('F')).toBe(false);
   });
 });
+
+describe('assignOwnership with half-siblings (FG-9)', () => {
+  it("draws a half-sibling in the person's frame, and their other parent in the shared parent's", () => {
+    const graph = tree(
+      ['A', 'P1', 'P2', 'P3', 'H'],
+      [
+        ['P1', 'PARENT', 'A'],
+        ['P2', 'PARENT', 'A'],
+        ['P2', 'PARENT', 'H'],
+        ['P3', 'PARENT', 'H'],
+        ['P2', 'SPOUSE', 'P3'],
+      ],
+      // Both P2 (spouse) and H (child) claim P3; the elder, P2, wins (D7).
+      { P2: '1950-01-01', H: '1985-01-01' },
+    );
+    const o = assignOwnership(graph, 'A');
+    expect(o.get('H')).toEqual({ owner: 'A', depth: 1 });
+    expect(o.get('P3')?.owner).toBe('P2');
+  });
+});

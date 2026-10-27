@@ -2,22 +2,39 @@ import type { GraphConnection, GraphPerson, TreeGraph } from '@/api/client';
 
 /** The family rows of one person's frame (design doc D6). Every list holds person ids. */
 export interface FamilyCore {
-  /** Top row. `couple` is true when exactly two parents are recorded, drawn with a bar. */
-  parents: { ids: string[]; couple: boolean };
+  /** Top row. `couple` is true when exactly two parents are recorded, drawn with a bar;
+   * `ended` when those two are recorded as former partners, drawn dotted. */
+  parents: { ids: string[]; couple: boolean; ended: boolean };
   /** Middle row: the person, their spouses next to them, then their siblings. */
   self: string;
   /** Every partner: current ones first, then former ones (Q8a). */
   spouses: string[];
   /** The former partners among `spouses`, earliest relationship first. */
   former: string[];
-  /** Explicit sibling links plus anyone who shares a recorded parent. */
+  /** Full siblings, plus plain ones: an explicit sibling link, or too little parent data to
+   * tell full from half (FG-9). */
   siblings: string[];
+  /** Half-siblings, grouped by the parent they share and that parent's other partner;
+   * `ended` when those two are recorded as former partners. */
+  half: { parent: string; partner: string; ended: boolean; children: string[] }[];
   /** Bottom row: children grouped by their recorded parents (this person first), eldest
    * child's group first. A child with only this person recorded is in a group of their own. */
   children: { parents: string[]; children: string[] }[];
   /** Parents and children linked to this person as step or adoptive (biological is left
    * out), for their card labels (FG-8). */
   kinds: Record<string, 'STEP' | 'ADOPTIVE'>;
+}
+
+/** Everyone in a person's own family: parents, partners, siblings (half ones too) and
+ * children. A half-sibling's other parent isn't one of them. */
+export function firstDegree(core: FamilyCore): string[] {
+  return [
+    ...core.parents.ids,
+    ...core.spouses,
+    ...core.siblings,
+    ...core.half.flatMap((g) => g.children),
+    ...core.children.flatMap((g) => g.children),
+  ];
 }
 
 export function familyCore(graph: TreeGraph, personId: string): FamilyCore {
@@ -37,20 +54,67 @@ export function familyCore(graph: TreeGraph, personId: string): FamilyCore {
     children,
     byId,
   );
-  const siblings = new Set(linked(graph, personId, 'SIBLING'));
-  for (const parent of parentIds) {
-    for (const child of childrenOf(graph, parent)) siblings.add(child);
-  }
-  siblings.delete(personId);
+  const { siblings, half } = siblingsOf(graph, personId, sorted);
   return {
-    parents: { ids: parentIds, couple },
+    parents: {
+      ids: parentIds,
+      couple,
+      ended: couple && hasEnded(graph, parentIds[0], parentIds[1]),
+    },
     self: personId,
     spouses: [...partners.filter((id) => !ended.has(id)), ...former],
     former,
-    siblings: sorted(siblings),
+    siblings,
+    half,
     children,
     kinds: parentKinds(graph, personId),
   };
+}
+
+/** Siblings from explicit links and from sharing a parent (not a step-parent). With two
+ * recorded parents on both sides, sharing both makes a full sibling and sharing one a
+ * half-sibling; with less to go on, a plain sibling (FG-9, Q8b). */
+function siblingsOf(
+  graph: TreeGraph,
+  personId: string,
+  sorted: (ids: Iterable<string>) => string[],
+): Pick<FamilyCore, 'siblings' | 'half'> {
+  const mine = sorted(parentsOf(graph, personId, { step: false }));
+  const candidates = new Set(linked(graph, personId, 'SIBLING'));
+  for (const parent of mine) {
+    for (const child of childrenOf(graph, parent, { step: false })) candidates.add(child);
+  }
+  candidates.delete(personId);
+
+  const siblings: string[] = [];
+  const groups = new Map<string, FamilyCore['half'][number]>();
+  for (const id of candidates) {
+    const theirs = parentsOf(graph, id, { step: false });
+    const shared = theirs.filter((p) => mine.includes(p));
+    if (mine.length === 2 && theirs.length === 2 && shared.length === 1) {
+      const partner = theirs.find((p) => p !== shared[0])!;
+      const key = `${shared[0]} ${partner}`;
+      const group = groups.get(key) ?? {
+        parent: shared[0],
+        partner,
+        ended: hasEnded(graph, shared[0], partner),
+        children: [],
+      };
+      group.children.push(id);
+      groups.set(key, group);
+    } else {
+      siblings.push(id);
+    }
+  }
+  const half = [...groups.values()]
+    .map((g) => ({ ...g, children: sorted(g.children) }))
+    // Groups through the first parent first, then by the other partner.
+    .sort((a, b) => mine.indexOf(a.parent) - mine.indexOf(b.parent) || compareInOrder(sorted, a.partner, b.partner));
+  return { siblings: sorted(siblings), half };
+}
+
+function compareInOrder(sorted: (ids: Iterable<string>) => string[], a: string, b: string): number {
+  return a === b ? 0 : sorted([a, b])[0] === a ? -1 : 1;
 }
 
 function childGroups(
@@ -79,6 +143,16 @@ function parentKinds(graph: TreeGraph, personId: string): FamilyCore['kinds'] {
     else if (c.person_a_id === personId) kinds[c.person_b_id] = c.parent_kind;
   }
   return kinds;
+}
+
+/** Whether two people are recorded as former partners. */
+function hasEnded(graph: TreeGraph, a: string, b: string): boolean {
+  return graph.connections.some(
+    (c) =>
+      c.type === 'SPOUSE' &&
+      c.ended &&
+      ((c.person_a_id === a && c.person_b_id === b) || (c.person_a_id === b && c.person_b_id === a)),
+  );
 }
 
 /** Partners whose relationship with this person has ended. */
@@ -126,9 +200,11 @@ function parentsOf(graph: TreeGraph, personId: string, only?: { step: boolean })
     .map((c) => c.person_a_id);
 }
 
-function childrenOf(graph: TreeGraph, personId: string): string[] {
+/** A person's children; `step` picks only step-children, or only the others. */
+function childrenOf(graph: TreeGraph, personId: string, only?: { step: boolean }): string[] {
   return graph.connections
     .filter((c) => c.type === 'PARENT' && c.person_a_id === personId)
+    .filter((c) => only === undefined || (c.parent_kind === 'STEP') === only.step)
     .map((c) => c.person_b_id);
 }
 

@@ -194,3 +194,54 @@ describe('MapCanvas cards for blended families', () => {
     expect(document.querySelectorAll('line[stroke-dasharray]')).toHaveLength(1);
   });
 });
+
+describe('MapCanvas half-siblings', () => {
+  it("labels a half-sibling, and shows their other parent as a chip", () => {
+    observedSize({ width: 1600, height: 1000 }); // cards for the whole frame
+    const graph = tree(
+      ['Robin', 'Alan', 'Beth', 'Otto', 'Hana'],
+      [
+        ['Alan', 'PARENT', 'Robin'],
+        ['Beth', 'PARENT', 'Robin'],
+        ['Beth', 'PARENT', 'Hana'],
+        ['Otto', 'PARENT', 'Hana'],
+      ],
+      { Alan: '1950-01-01', Beth: '1952-01-01', Hana: '1990-01-01' },
+    );
+    render(
+      <MemoryRouter>
+        <MapCanvas graph={graph} rootId="Robin" people={new Map(graph.people.map((p) => [p.id, p]))} />
+      </MemoryRouter>,
+    );
+    expect(within(screen.getByRole('group', { name: 'Hana, sibling' })).getByText(/^Half-sibling/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: "Otto, parent's partner, drawn in Hana's family" })).toBeInTheDocument();
+  });
+});
+
+describe('MapCanvas ended couples', () => {
+  it('draws every ended couple dotted: the parents, a parent and their other partner, and a former partner', () => {
+    const graph = tree(
+      ['Robin', 'Alan', 'Beth', 'Otto', 'Hana', 'Lee', 'Sam'],
+      [
+        ['Alan', 'PARENT', 'Robin'],
+        ['Beth', 'PARENT', 'Robin'],
+        ['Alan', 'SPOUSE', 'Beth', { ended: true }],
+        ['Beth', 'PARENT', 'Hana'],
+        ['Otto', 'PARENT', 'Hana'],
+        ['Beth', 'SPOUSE', 'Otto', { ended: true }],
+        ['Robin', 'SPOUSE', 'Lee', { ended: true }],
+        ['Robin', 'SPOUSE', 'Sam'],
+      ],
+      { Alan: '1950-01-01', Beth: '1952-01-01', Hana: '1990-01-01' },
+    );
+    render(
+      <MemoryRouter>
+        <MapCanvas graph={graph} rootId="Robin" people={new Map(graph.people.map((p) => [p.id, p]))} />
+      </MemoryRouter>,
+    );
+    const root = screen.getByRole('group', { name: 'Family of Robin' });
+    const dotted = root.querySelectorAll(':scope > g line[stroke-dasharray]');
+    expect(dotted).toHaveLength(3);
+    for (const line of Array.from(dotted)) expect(line).toHaveAttribute('stroke-linecap', 'round');
+  });
+});

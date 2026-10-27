@@ -35,9 +35,10 @@ const ownership = assignOwnership(family, 'A');
 
 const NO_SOCIAL = { friends: [], coworkers: [], acquaintances: [], managers: [], reports: [] };
 const NO_ONE = {
-  parents: { ids: [], couple: false },
+  parents: { ids: [], couple: false , ended: false },
   spouses: [],
   former: [],
+  half: [],
   kinds: {},
   siblings: [],
   children: [],
@@ -50,7 +51,7 @@ describe('frameFor', () => {
     expect(frameFor(family, ownership, 'AA')).toEqual({
       ...NO_ONE,
       self: 'AA',
-      parents: { ids: ['A', 'S'], couple: true },
+      parents: { ids: ['A', 'S'], couple: true , ended: false },
       siblings: ['AA2'],
       spouses: ['AAS'],
       children: [{ parents: ['AA', 'AAS'], children: ['AAA'] }],
@@ -62,7 +63,7 @@ describe('frameFor', () => {
     expect(frameFor(family, ownership, 'B')).toEqual({
       ...NO_ONE,
       self: 'B',
-      parents: { ids: ['P1', 'P2'], couple: true },
+      parents: { ids: ['P1', 'P2'], couple: true , ended: false },
       siblings: ['A'],
       spouses: ['BS'],
       children: [{ parents: ['B', 'BS'], children: ['BK'] }],
@@ -74,7 +75,7 @@ describe('frameFor', () => {
     expect(frameFor(family, ownership, 'P1')).toEqual({
       ...NO_ONE,
       self: 'P1',
-      parents: { ids: ['G1', 'G2'], couple: true },
+      parents: { ids: ['G1', 'G2'], couple: true , ended: false },
       siblings: ['U'],
       spouses: ['P2'],
       children: [{ parents: ['P1', 'P2'], children: ['A', 'B'] }],
@@ -155,5 +156,33 @@ describe('frameLayouts', () => {
     const layoutOf = frameLayouts(family, 'A');
     expect(layoutOf('AA2')).toBeNull();
     expect(frameLayouts(tree(['A'], []), 'A')('A')?.slots.map((s) => s.id)).toEqual(['A']);
+  });
+});
+
+describe('frames with half-siblings (FG-9)', () => {
+  const graph = tree(
+    ['A', 'P1', 'P2', 'P3', 'H'],
+    [
+      ['P1', 'PARENT', 'A'],
+      ['P2', 'PARENT', 'A'],
+      ['P2', 'PARENT', 'H'],
+      ['P3', 'PARENT', 'H'],
+      ['P2', 'SPOUSE', 'P3'],
+    ],
+    { P2: '1950-01-01', H: '1985-01-01' },
+  );
+  const o = assignOwnership(graph, 'A');
+
+  it("draws the other parent as a chip in the person's frame and a slot in the shared parent's", () => {
+    const layoutOf = frameLayouts(graph, 'A', o);
+    const p3In = (frame: string) => layoutOf(frame)!.slots.filter((s) => s.id === 'P3');
+    expect(p3In('A')).toEqual([expect.objectContaining({ chip: true })]);
+    expect(p3In('P2')).toEqual([expect.not.objectContaining({ chip: true })]);
+  });
+
+  it('draws the half-sibling as a slot in the person\'s frame', () => {
+    const h = frameLayouts(graph, 'A', o)('A')!.slots.find((s) => s.id === 'H');
+    expect(h).toBeDefined();
+    expect(h?.chip).toBeUndefined();
   });
 });

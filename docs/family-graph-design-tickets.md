@@ -335,7 +335,7 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 - **Dialog:** a Kind select for Parent and a Former partner checkbox for Spouse. The sentence under the type follows them ("Sam Reed is the step-parent of Kit Moss").
 - **Map:**
   - Middle row: current partners right next to the person, on the right (decision N). Former partners go further out, the most recent nearest, alternating left then right. Siblings sit beyond the left-hand former partners.
-  - Former couple bars are dashed. Child groups are ordered by their partner's position, so each couple's children hang on that couple's side.
+  - Former couple bars are dashed (changed to dotted for every ended couple in FG-9, at the owner's request). Child groups are ordered by their partner's position, so each couple's children hang on that couple's side.
   - Step-parents don't decide which couple a child belongs to, and they sit after the other parents, so the couple bar still joins the other two.
   - Cards label "Step-parent", "Step-child", "Adoptive parent", "Adopted child" and "Former partner", with the birth year (the card is too narrow for the age as well).
   - Step-siblings still show as siblings (decision P, FG-9).
@@ -361,6 +361,24 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 - P3 is a chip in the person's frame and a slot in P2's frame, never both as slots.
 
 **Done when:** a synthetic blended family reads correctly at every zoom level.
+
+**Status: done.** Notes from building it:
+- **Who is full, half or plain (decisions Q, R, T):** siblings come from explicit links and from sharing a parent other than a step-parent. Adoptive parents count like biological ones.
+  - When both children have two recorded parents, sharing both makes a full sibling and sharing one a half-sibling.
+  - With less parent data it's a plain sibling, shown with the full ones.
+  - A step-parent's other children aren't siblings unless they're explicitly linked; they show in the step-parent's frame.
+- **`familyCore`** keeps full and plain siblings in `siblings`, and half-siblings in `half` groups: the shared parent, their other partner, and the children. `firstDegree(core)` lists a person's own family for ownership and frames. Half-siblings are first-degree; their other parent isn't.
+- **Layout (decision S):**
+  - The two parents sit centred over the person, with each parent's other partners at that parent's end of the top row and step-parents after them.
+  - Half-siblings take the far ends of the middle row, beyond siblings and partners, each group hanging from its own couple's bar slightly above the full siblings' bar.
+  - The other partner is never the person's to draw, so the FG-7 chip rule makes them a chip, and their slot stays where ownership puts them (the shared parent's frame when they're that parent's spouse).
+  - Cards read "Half-sibling · 1975" (decision U).
+- **Checked in Chrome** on the synthetic tree, with Beth given a former partner, Otto Brandt, and their daughter Hana (added on the local database through the shell):
+  - Robin's frame reads Alan, Beth and Otto (a chip, "drawn in Beth Ash's family") on the top row, and Cara, Dev, Lee, Robin, Sam and Hana on the middle row, with Hana hanging from the Beth–Otto bar.
+  - Hana's own frame is the mirror image: Otto, Beth and Alan on top, and Cara and Robin as half-sibling chips under Beth–Alan.
+  - At card size Hana's card reads "Half-sibling · 1975".
+  - On a 360 px map Robin's slots are 43 px, still names. That's down from 62 px in FG-6, because the family is wider now.
+- **Ended couples are dotted everywhere (added at the owner's request).** Any couple recorded as former partners now has a dotted bar (round dots, `0.1 9`), in the same style wherever it shows: the person's former partner, their parents' bar, and a parent's bar with their other partner. `familyCore` gives `parents.ended` and each half group's `ended`, and lines carry `ended`, not `dashed`. Co-parents never linked as partners stay solid, since nothing says they ended. In Chrome, Robin's frame shows Robin–Lee and Beth–Otto dotted, and the dots read clearly at card size.
 
 ---
 
