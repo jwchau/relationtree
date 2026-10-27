@@ -2,7 +2,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { tree } from '@/lib/map/testTree';
+import { tree, type Link } from '@/lib/map/testTree';
 import { FixedSizeObserver, observedSize } from '@/test/resizeObserver';
 import { MapCanvas } from './MapCanvas';
 
@@ -192,5 +192,98 @@ describe('MapCanvas cards for blended families', () => {
     expect(within(card('Kit, child')).getByText('Adopted child')).toBeInTheDocument();
     // The former couple's bar is the only dashed line in the frame.
     expect(document.querySelectorAll('line[stroke-dasharray]')).toHaveLength(1);
+  });
+});
+
+describe('MapCanvas half-siblings', () => {
+  it("labels a half-sibling, and shows their other parent as a chip", () => {
+    observedSize({ width: 1600, height: 1000 }); // cards for the whole frame
+    const graph = tree(
+      ['Robin', 'Alan', 'Beth', 'Otto', 'Hana'],
+      [
+        ['Alan', 'PARENT', 'Robin'],
+        ['Beth', 'PARENT', 'Robin'],
+        ['Beth', 'PARENT', 'Hana'],
+        ['Otto', 'PARENT', 'Hana'],
+      ],
+      { Alan: '1950-01-01', Beth: '1952-01-01', Hana: '1990-01-01' },
+    );
+    render(
+      <MemoryRouter>
+        <MapCanvas graph={graph} rootId="Robin" people={new Map(graph.people.map((p) => [p.id, p]))} />
+      </MemoryRouter>,
+    );
+    expect(within(screen.getByRole('group', { name: 'Hana, sibling' })).getByText(/^Half-sibling/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: "Otto, parent's partner, drawn in Hana's family" })).toBeInTheDocument();
+  });
+});
+
+describe('MapCanvas ended couples', () => {
+  it('draws every ended couple dotted: the parents, a parent and their other partner, and a former partner', () => {
+    const graph = tree(
+      ['Robin', 'Alan', 'Beth', 'Otto', 'Hana', 'Lee', 'Sam'],
+      [
+        ['Alan', 'PARENT', 'Robin'],
+        ['Beth', 'PARENT', 'Robin'],
+        ['Alan', 'SPOUSE', 'Beth', { ended: true }],
+        ['Beth', 'PARENT', 'Hana'],
+        ['Otto', 'PARENT', 'Hana'],
+        ['Beth', 'SPOUSE', 'Otto', { ended: true }],
+        ['Robin', 'SPOUSE', 'Lee', { ended: true }],
+        ['Robin', 'SPOUSE', 'Sam'],
+      ],
+      { Alan: '1950-01-01', Beth: '1952-01-01', Hana: '1990-01-01' },
+    );
+    render(
+      <MemoryRouter>
+        <MapCanvas graph={graph} rootId="Robin" people={new Map(graph.people.map((p) => [p.id, p]))} />
+      </MemoryRouter>,
+    );
+    const root = screen.getByRole('group', { name: 'Family of Robin' });
+    const dotted = root.querySelectorAll(':scope > g line[stroke-dasharray]');
+    expect(dotted).toHaveLength(3);
+    for (const line of Array.from(dotted)) expect(line).toHaveAttribute('stroke-linecap', 'round');
+  });
+});
+
+describe('MapCanvas crowded bands', () => {
+  const names = Array.from({ length: 60 }, (_, i) => `W${String(i).padStart(2, '0')}`);
+  const crowded = tree(['Robin', ...names], names.map((w): Link => ['Robin', 'COWORKER', w]));
+  const everyone = new Map(crowded.people.map((p) => [p.id, p]));
+  const renderCrowded = (initialFocus: string | null = null, onFocusChange = vi.fn()) => {
+    render(
+      <MemoryRouter>
+        <MapCanvas graph={crowded} rootId="Robin" people={everyone} initialFocus={initialFocus} onFocusChange={onFocusChange} />
+      </MemoryRouter>,
+    );
+    return onFocusChange;
+  };
+
+  it('shows a "+N more" tile that takes the camera to the rest', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const onFocusChange = renderCrowded();
+    fireEvent.click(screen.getByRole('button', { name: '37 more coworkers' }));
+    expect(onFocusChange).toHaveBeenLastCalledWith(['Robin', 'Robin~coworkers']);
+  });
+
+  it('names the overflow frame in the breadcrumb and for screen readers', () => {
+    renderCrowded('Robin~coworkers');
+    expect(screen.getByRole('navigation', { name: 'Frames above this one' })).toHaveTextContent('Coworkers (37 more)');
+    expect(screen.getByRole('group', { name: "Robin's coworkers" })).toBeInTheDocument();
+  });
+});
+
+describe('MapCanvas card sizes while zooming', () => {
+  it('caps each card directly, without a zoom variable on the whole canvas', () => {
+    observedSize({ width: 1600, height: 1000 });
+    const map = renderMap();
+    const cards = () => Array.from(map.querySelectorAll<SVGGElement>('[data-card-scale]'));
+    expect(cards().length).toBeGreaterThan(0);
+    expect(map.style.getPropertyValue('--map-k')).toBe('');
+    expect(cards().every((c) => /^scale\(/.test(c.style.transform))).toBe(true);
+    // Zoom far in: the cards on screen are now wider than the cap, so they shrink.
+    for (let i = 0; i < 6; i++) wheel(map, { ctrlKey: true, deltaY: -100 });
+    const scales = cards().map((c) => Number(c.style.transform.match(/scale\((.*)\)/)?.[1]));
+    expect(Math.min(...scales)).toBeLessThan(1);
   });
 });

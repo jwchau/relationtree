@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { frameLayout, SLOT_H, SLOT_W, type FrameLayout, type Slot } from './frameLayout';
+import { AVATAR_Y, CARD_MAX_PX, cardContentScale, frameLayout, SLOT_H, SLOT_W, type FrameLayout, type Slot } from './frameLayout';
 import type { Frame } from './frames';
 
 const ids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
@@ -7,10 +7,11 @@ const ids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `
 /** A frame with a small family (two parents, a spouse, a child) and these many in each band. */
 function frameWith(friends: number, coworkers: number, acquaintances: number): Frame {
   return {
-    parents: { ids: ['P1', 'P2'], couple: true },
+    parents: { ids: ['P1', 'P2'], couple: true , ended: false },
     self: 'A',
     spouses: ['S'],
     former: [],
+    half: [],
     kinds: {},
     siblings: [],
     children: [{ parents: ['A', 'S'], children: ['K'] }],
@@ -22,6 +23,7 @@ function frameWith(friends: number, coworkers: number, acquaintances: number): F
       reports: [],
     },
     chips: new Set(),
+    overflow: {},
   };
 }
 
@@ -146,12 +148,13 @@ describe('frameLayout chips', () => {
 describe('frameLayout partners (Q8a)', () => {
   const core = (spouses: string[], former: string[], siblings: string[] = ['Sib']) =>
     frameLayout({
-      parents: { ids: [], couple: false },
+      parents: { ids: [], couple: false , ended: false },
       self: 'A',
       spouses,
       former,
       siblings,
       children: [],
+      half: [],
       kinds: {},
     });
   /** The middle row, left to right. */
@@ -189,7 +192,7 @@ describe('frameLayout partners (Q8a)', () => {
     expect(new Set(gaps).size).toBe(1);
   });
 
-  it('draws a former partner as a former partner, with a dashed couple bar', () => {
+  it('draws a former partner as a former partner, with an ended couple bar', () => {
     const layout = core(['C', 'F'], ['F']);
     expect(layout.slots.find((s) => s.id === 'F')?.role).toBe('former');
     expect(layout.slots.find((s) => s.id === 'C')?.role).toBe('spouse');
@@ -198,14 +201,14 @@ describe('frameLayout partners (Q8a)', () => {
       const partner = layout.slots.find((s) => s.id === id)!;
       return layout.lines.find((l) => l.y1 === l.y2 && Math.abs(l.x2 - partner.x) === 40);
     };
-    expect(barTo('F')?.dashed).toBe(true);
+    expect(barTo('F')?.ended).toBe(true);
     expect(barTo('C')).toBeDefined();
-    expect(barTo('C')?.dashed).toBeFalsy();
+    expect(barTo('C')?.ended).toBeFalsy();
   });
 
   it("hangs each couple's children under that couple, on the partner's side", () => {
     const layout = frameLayout({
-      parents: { ids: [], couple: false },
+      parents: { ids: [], couple: false , ended: false },
       self: 'A',
       spouses: ['C', 'F'],
       former: ['F'],
@@ -216,6 +219,7 @@ describe('frameLayout partners (Q8a)', () => {
         { parents: ['A', 'C'], children: ['KC'] },
         { parents: ['A', 'F'], children: ['KF'] },
       ],
+      half: [],
       kinds: {},
     });
     const x = (id: string) => layout.slots.find((s) => s.id === id)!.x;
@@ -228,15 +232,168 @@ describe('frameLayout partners (Q8a)', () => {
 describe('frameLayout parent kinds', () => {
   it('marks step and adoptive parents and children on their slots', () => {
     const layout = frameLayout({
-      parents: { ids: ['Mum', 'Step'], couple: true },
+      parents: { ids: ['Mum', 'Step'], couple: true , ended: false },
       self: 'A',
       spouses: [],
       former: [],
       siblings: [],
       children: [{ parents: ['A'], children: ['Kid', 'Adopted'] }],
+      half: [],
       kinds: { Step: 'STEP', Adopted: 'ADOPTIVE' },
     });
     const kind = (id: string) => layout.slots.find((s) => s.id === id)?.kind;
     expect([kind('Mum'), kind('Step'), kind('Kid'), kind('Adopted')]).toEqual([undefined, 'STEP', undefined, 'ADOPTIVE']);
+  });
+});
+
+describe('frameLayout half-siblings (FG-9, Q8b)', () => {
+  // A's parents P1 and P2; full sibling F; P1 also has H0 with P0, and P2 has H with P3.
+  const layout = frameLayout({
+    parents: { ids: ['P1', 'P2'], couple: true , ended: false },
+    self: 'A',
+    spouses: ['C'],
+    former: [],
+    siblings: ['F'],
+    half: [
+      { parent: 'P1', partner: 'P0', ended: false, children: ['H0'] },
+      { parent: 'P2', partner: 'P3', ended: false, children: ['H'] },
+    ],
+    children: [],
+    kinds: {},
+  });
+  const slot = (id: string) => layout.slots.find((s) => s.id === id)!;
+  const rowOf = (id: string) =>
+    layout.slots
+      .filter((s) => s.y === slot(id).y)
+      .sort((a, b) => a.x - b.x)
+      .map((s) => s.id);
+
+  it("puts each parent's other partner at that end of the top row", () => {
+    expect(rowOf('P1')).toEqual(['P0', 'P1', 'P2', 'P3']);
+    expect(slot('P0').role).toBe('parentPartner');
+  });
+
+  it('keeps the parents centred over the person', () => {
+    expect(slot('P1').x + slot('P2').x).toBe(0);
+  });
+
+  it('puts half-siblings at the far ends of the middle row, on their parent\'s side', () => {
+    expect(rowOf('A')).toEqual(['H0', 'F', 'A', 'C', 'H']);
+  });
+
+  it('spaces the middle row evenly', () => {
+    const xs = rowOf('A').map((id) => slot(id).x);
+    expect(new Set(xs.slice(1).map((x, i) => x - xs[i])).size).toBe(1);
+  });
+
+  it("joins each other partner to the parent with a bar, and hangs their child from it", () => {
+    const barY = slot('P2').y + AVATAR_Y;
+    const between = (a: string, b: string) =>
+      layout.lines.find(
+        (l) => l.y1 === barY && l.y2 === barY && Math.min(l.x1, l.x2) > slot(a).x && Math.max(l.x1, l.x2) < slot(b).x,
+      );
+    expect(between('P2', 'P3')).toBeDefined();
+    expect(between('P0', 'P1')).toBeDefined();
+    // A line comes straight down onto H.
+    const h = slot('H');
+    expect(layout.lines.some((l) => l.x1 === h.x && l.x2 === h.x && l.y2 === h.y)).toBe(true);
+  });
+
+  it('marks half-siblings for their card label', () => {
+    expect(slot('H').kind).toBe('HALF');
+    expect(slot('H0').kind).toBe('HALF');
+    expect(slot('F').kind).toBeUndefined();
+  });
+});
+
+describe('frameLayout ended couples', () => {
+  const barBetween = (layout: FrameLayout, a: string, b: string) => {
+    const [sa, sb] = [layout.slots.find((s) => s.id === a)!, layout.slots.find((s) => s.id === b)!];
+    return layout.lines.find(
+      (l) =>
+        l.y1 === sa.y + AVATAR_Y &&
+        l.y2 === l.y1 &&
+        Math.min(l.x1, l.x2) > Math.min(sa.x, sb.x) &&
+        Math.max(l.x1, l.x2) < Math.max(sa.x, sb.x),
+    );
+  };
+  const core = (parentsEnded: boolean, halfEnded: boolean) =>
+    frameLayout({
+      parents: { ids: ['P1', 'P2'], couple: true, ended: parentsEnded },
+      self: 'A',
+      spouses: [],
+      former: [],
+      siblings: [],
+      half: [{ parent: 'P2', partner: 'P3', ended: halfEnded, children: ['H'] }],
+      children: [],
+      kinds: {},
+    });
+
+  it("marks the parents' bar when their relationship has ended", () => {
+    expect(barBetween(core(true, false), 'P1', 'P2')?.ended).toBe(true);
+    expect(barBetween(core(false, false), 'P1', 'P2')?.ended).toBeFalsy();
+  });
+
+  it("marks a parent's bar with their other partner when that relationship has ended", () => {
+    expect(barBetween(core(false, true), 'P2', 'P3')?.ended).toBe(true);
+    expect(barBetween(core(false, false), 'P2', 'P3')?.ended).toBeFalsy();
+  });
+});
+
+describe('frameLayout wrapping children (FG-10)', () => {
+  const kids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
+  const layoutWith = (groups: { parents: string[]; children: string[] }[]) =>
+    frameLayout({
+      parents: { ids: [], couple: false, ended: false },
+      self: 'A',
+      spouses: ['S'],
+      former: [],
+      siblings: [],
+      half: [],
+      children: groups,
+      kinds: {},
+    });
+  const childSlots = (layout: FrameLayout) => layout.slots.filter((s) => s.role === 'child');
+
+  it('keeps a family of up to six children on one row', () => {
+    const layout = layoutWith([{ parents: ['A', 'S'], children: kids('K', 6) }]);
+    expect(new Set(childSlots(layout).map((s) => s.y)).size).toBe(1);
+  });
+
+  it('wraps many children into rows that keep the frame roughly square', () => {
+    for (const n of [7, 20, 40, 100, 200]) {
+      const layout = layoutWith([{ parents: ['A', 'S'], children: kids('K', n) }]);
+      const rows = new Map<number, number>();
+      for (const s of childSlots(layout)) rows.set(s.y, (rows.get(s.y) ?? 0) + 1);
+      expect(Math.max(...rows.values()), `${n}`).toBeLessThanOrEqual(Math.max(6, Math.ceil(Math.sqrt(n))));
+      expect(childSlots(layout), `${n}`).toHaveLength(n);
+      const ratio = layout.bounds.width / layout.bounds.height;
+      expect(ratio, `${n}`).toBeGreaterThanOrEqual(0.5);
+      expect(ratio, `${n}`).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("keeps each couple's children together and connects every child to a line", () => {
+    const layout = layoutWith([
+      { parents: ['A', 'S'], children: kids('K', 20) },
+      { parents: ['A'], children: kids('J', 3) },
+    ]);
+    const xs = (prefix: string) => childSlots(layout).filter((s) => s.id.startsWith(prefix)).map((s) => s.x);
+    // The groups' columns don't interleave.
+    expect(Math.max(...xs('K')) < Math.min(...xs('J')) || Math.max(...xs('J')) < Math.min(...xs('K'))).toBe(true);
+    for (const s of childSlots(layout)) {
+      expect(layout.lines.some((l) => l.x1 === s.x && l.x2 === s.x && l.y2 === s.y), s.id).toBe(true);
+    }
+  });
+});
+
+describe('cardContentScale', () => {
+  it("leaves a card's contents at full size while its slot is under the cap on screen", () => {
+    expect(cardContentScale(1, CARD_MAX_PX / SLOT_W / 2)).toBe(1);
+  });
+
+  it('shrinks them so they stay at the cap once the slot is wider', () => {
+    // A slot twice the cap on screen: anchored zoom 2 on a frame drawn at the cap's scale.
+    expect(cardContentScale(2, CARD_MAX_PX / SLOT_W)).toBeCloseTo(0.5);
   });
 });

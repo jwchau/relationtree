@@ -1,5 +1,5 @@
 import type { TreeGraph } from '@/api/client';
-import { familyCore } from './familyCore';
+import { familyCore, firstDegree } from './familyCore';
 import { categoryRuleApplies, socialCircles } from './social';
 
 /** Which frame draws each person: `owner` is the person whose frame they sit in (null for
@@ -32,13 +32,7 @@ export function assignOwnership(graph: TreeGraph, rootId: string): Ownership {
 }
 
 function familyOf(graph: TreeGraph, personId: string): string[] {
-  const core = familyCore(graph, personId);
-  return [
-    ...core.parents.ids,
-    ...core.spouses,
-    ...core.siblings,
-    ...core.children.flatMap((g) => g.children),
-  ];
+  return firstDegree(familyCore(graph, personId));
 }
 
 /** Eldest first, unknown birthdays last, then by id (D7's fixed tie-break). */

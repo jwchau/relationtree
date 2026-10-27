@@ -35,14 +35,16 @@ const ownership = assignOwnership(family, 'A');
 
 const NO_SOCIAL = { friends: [], coworkers: [], acquaintances: [], managers: [], reports: [] };
 const NO_ONE = {
-  parents: { ids: [], couple: false },
+  parents: { ids: [], couple: false , ended: false },
   spouses: [],
   former: [],
+  half: [],
   kinds: {},
   siblings: [],
   children: [],
   social: NO_SOCIAL,
   chips: new Set<string>(),
+  overflow: {},
 };
 
 describe('frameFor', () => {
@@ -50,7 +52,7 @@ describe('frameFor', () => {
     expect(frameFor(family, ownership, 'AA')).toEqual({
       ...NO_ONE,
       self: 'AA',
-      parents: { ids: ['A', 'S'], couple: true },
+      parents: { ids: ['A', 'S'], couple: true , ended: false },
       siblings: ['AA2'],
       spouses: ['AAS'],
       children: [{ parents: ['AA', 'AAS'], children: ['AAA'] }],
@@ -62,7 +64,7 @@ describe('frameFor', () => {
     expect(frameFor(family, ownership, 'B')).toEqual({
       ...NO_ONE,
       self: 'B',
-      parents: { ids: ['P1', 'P2'], couple: true },
+      parents: { ids: ['P1', 'P2'], couple: true , ended: false },
       siblings: ['A'],
       spouses: ['BS'],
       children: [{ parents: ['B', 'BS'], children: ['BK'] }],
@@ -74,7 +76,7 @@ describe('frameFor', () => {
     expect(frameFor(family, ownership, 'P1')).toEqual({
       ...NO_ONE,
       self: 'P1',
-      parents: { ids: ['G1', 'G2'], couple: true },
+      parents: { ids: ['G1', 'G2'], couple: true , ended: false },
       siblings: ['U'],
       spouses: ['P2'],
       children: [{ parents: ['P1', 'P2'], children: ['A', 'B'] }],
@@ -155,5 +157,73 @@ describe('frameLayouts', () => {
     const layoutOf = frameLayouts(family, 'A');
     expect(layoutOf('AA2')).toBeNull();
     expect(frameLayouts(tree(['A'], []), 'A')('A')?.slots.map((s) => s.id)).toEqual(['A']);
+  });
+});
+
+describe('frames with half-siblings (FG-9)', () => {
+  const graph = tree(
+    ['A', 'P1', 'P2', 'P3', 'H'],
+    [
+      ['P1', 'PARENT', 'A'],
+      ['P2', 'PARENT', 'A'],
+      ['P2', 'PARENT', 'H'],
+      ['P3', 'PARENT', 'H'],
+      ['P2', 'SPOUSE', 'P3'],
+    ],
+    { P2: '1950-01-01', H: '1985-01-01' },
+  );
+  const o = assignOwnership(graph, 'A');
+
+  it("draws the other parent as a chip in the person's frame and a slot in the shared parent's", () => {
+    const layoutOf = frameLayouts(graph, 'A', o);
+    const p3In = (frame: string) => layoutOf(frame)!.slots.filter((s) => s.id === 'P3');
+    expect(p3In('A')).toEqual([expect.objectContaining({ chip: true })]);
+    expect(p3In('P2')).toEqual([expect.not.objectContaining({ chip: true })]);
+  });
+
+  it('draws the half-sibling as a slot in the person\'s frame', () => {
+    const h = frameLayouts(graph, 'A', o)('A')!.slots.find((s) => s.id === 'H');
+    expect(h).toBeDefined();
+    expect(h?.chip).toBeUndefined();
+  });
+});
+
+describe('frames with crowded bands (FG-10)', () => {
+  const withCoworkers = (n: number) => {
+    const names = Array.from({ length: n }, (_, i) => `W${String(n - i).padStart(3, '0')}`);
+    return tree(['A', ...names], names.map((w): Link => ['A', 'COWORKER', w]));
+  };
+  const aspect = (b: { width: number; height: number }) => b.width / b.height;
+
+  it('shows 23 coworkers and a "+N more" tile when there are 60', () => {
+    const band = frameLayouts(withCoworkers(60), 'A')('A')!.slots.filter((s) => s.id !== 'A');
+    expect(band).toHaveLength(24);
+    expect(band.filter((s) => s.role === 'more').map((s) => s.id)).toEqual(['A~coworkers']);
+  });
+
+  it('puts the other 37 in the overflow frame, by name, drawn there and not as chips', () => {
+    const layoutOf = frameLayouts(withCoworkers(60), 'A');
+    const shown = new Set(layoutOf('A')!.slots.map((s) => s.id));
+    const overflow = layoutOf('A~coworkers')!.slots;
+    expect(overflow).toHaveLength(37);
+    const ids = overflow.map((s) => s.id);
+    expect(ids).toEqual([...ids].sort());
+    expect(ids.some((id) => shown.has(id))).toBe(false);
+    expect(overflow.every((s) => !s.chip && s.role === 'coworker')).toBe(true);
+  });
+
+  it('keeps the frame and the overflow frame roughly square for 1 to 200 per band', () => {
+    for (const n of [1, 5, 12, 24, 25, 60, 120, 200]) {
+      const layoutOf = frameLayouts(withCoworkers(n), 'A');
+      expect(aspect(layoutOf('A')!.bounds), `frame, ${n}`).toBeGreaterThanOrEqual(0.5);
+      expect(aspect(layoutOf('A')!.bounds), `frame, ${n}`).toBeLessThanOrEqual(2);
+      const overflow = layoutOf('A~coworkers');
+      if (n > 24) {
+        expect(aspect(overflow!.bounds), `overflow, ${n}`).toBeGreaterThanOrEqual(0.5);
+        expect(aspect(overflow!.bounds), `overflow, ${n}`).toBeLessThanOrEqual(2);
+      } else {
+        expect(overflow).toBeNull();
+      }
+    }
   });
 });

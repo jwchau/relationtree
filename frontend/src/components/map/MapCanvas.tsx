@@ -18,8 +18,9 @@ import {
   framePath,
   frameToRoot,
 } from '@/lib/map/focus';
-import { ZOOM_VAR } from '@/lib/map/frameLayout';
+import { cardContentScale } from '@/lib/map/frameLayout';
 import { mapModel } from '@/lib/map/model';
+import { frameName } from '@/lib/map/overflow';
 import { planKey, planRender, zoomCeiling, type PlanNode } from '@/lib/map/renderPlan';
 import { cn } from '@/lib/utils';
 import { FamilyFrame } from './FamilyFrame';
@@ -111,13 +112,31 @@ export function MapCanvas({
   // Draws the anchored frame for a camera, and works out what should be on screen.
   const anchorMRef = useRef(anchorM);
   anchorMRef.current = anchorM;
+  // The cards drawn, each with its frame's scale and the content scale last set on it.
+  const cardsRef = useRef<{ el: SVGGElement; scale: number; set: number }[]>([]);
   const drawAnchored = (t: Transform) => {
     const a = anchoredTransform(t, anchorMRef.current);
     anchorRef.current?.setAttribute('transform', `translate(${a.x},${a.y}) scale(${a.k})`);
-    svgRef.current?.style.setProperty(ZOOM_VAR, String(a.k));
+    // Cap each card's contents. Only cards whose scale changed are touched, so ordinary
+    // zooming restyles a few elements, not the whole canvas.
+    for (const card of cardsRef.current) {
+      const s = cardContentScale(a.k, card.scale);
+      if (s !== card.set) {
+        card.el.style.transform = `scale(${s})`;
+        card.set = s;
+      }
+    }
   };
-  // Re-anchoring changes the group's transform: apply it before the browser paints.
+  // After each render, find the cards (new ones have no scale yet), then draw: re-anchoring
+  // changes the group's transform, so apply it before the browser paints.
   useLayoutEffect(() => {
+    const groups = anchorRef.current?.querySelectorAll<SVGGElement>('[data-card-scale]') ?? [];
+    const known = new Map(cardsRef.current.map((c) => [c.el, c]));
+    cardsRef.current = Array.from(groups, (el) => {
+      const scale = Number(el.dataset.cardScale);
+      const old = known.get(el);
+      return old && old.scale === scale ? old : { el, scale, set: NaN };
+    });
     if (cameraRef.current) drawAnchored(cameraRef.current);
   });
 
@@ -240,6 +259,8 @@ export function MapCanvas({
     [rootId, ownership, people],
   );
 
+  const nameOfFrame = (id: string) =>
+    frameName(id, (personId) => people.get(personId)?.name, (frameId) => layoutOf(frameId)?.slots.length ?? 0);
   const anchorNode = plan && nodeAt(plan, anchorPath);
   const anchorLayout = layoutOf(anchorId);
   const narrow = (viewport?.width ?? 0) < NARROW_PX;
@@ -281,7 +302,7 @@ export function MapCanvas({
                   </span>
                 ) : i === all.length - 1 ? (
                   <span aria-current="location" className="px-1.5 font-semibold">
-                    {people.get(id)?.name ?? '?'}
+                    {nameOfFrame(id)}
                   </span>
                 ) : (
                   <button
@@ -289,7 +310,7 @@ export function MapCanvas({
                     onClick={() => moveTo(focus.slice(0, focus.indexOf(id) + 1))}
                     className="focus-ring hover:bg-ghost-hover min-h-9 rounded-[8px] px-1.5"
                   >
-                    {people.get(id)?.name ?? '?'}
+                    {nameOfFrame(id)}
                   </button>
                 )}
               </li>

@@ -335,7 +335,7 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 - **Dialog:** a Kind select for Parent and a Former partner checkbox for Spouse. The sentence under the type follows them ("Sam Reed is the step-parent of Kit Moss").
 - **Map:**
   - Middle row: current partners right next to the person, on the right (decision N). Former partners go further out, the most recent nearest, alternating left then right. Siblings sit beyond the left-hand former partners.
-  - Former couple bars are dashed. Child groups are ordered by their partner's position, so each couple's children hang on that couple's side.
+  - Former couple bars are dashed (changed to dotted for every ended couple in FG-9, at the owner's request). Child groups are ordered by their partner's position, so each couple's children hang on that couple's side.
   - Step-parents don't decide which couple a child belongs to, and they sit after the other parents, so the couple bar still joins the other two.
   - Cards label "Step-parent", "Step-child", "Adoptive parent", "Adopted child" and "Former partner", with the birth year (the card is too narrow for the age as well).
   - Step-siblings still show as siblings (decision P, FG-9).
@@ -362,6 +362,24 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 
 **Done when:** a synthetic blended family reads correctly at every zoom level.
 
+**Status: done.** Notes from building it:
+- **Who is full, half or plain (decisions Q, R, T):** siblings come from explicit links and from sharing a parent other than a step-parent. Adoptive parents count like biological ones.
+  - When both children have two recorded parents, sharing both makes a full sibling and sharing one a half-sibling.
+  - With less parent data it's a plain sibling, shown with the full ones.
+  - A step-parent's other children aren't siblings unless they're explicitly linked; they show in the step-parent's frame.
+- **`familyCore`** keeps full and plain siblings in `siblings`, and half-siblings in `half` groups: the shared parent, their other partner, and the children. `firstDegree(core)` lists a person's own family for ownership and frames. Half-siblings are first-degree; their other parent isn't.
+- **Layout (decision S):**
+  - The two parents sit centred over the person, with each parent's other partners at that parent's end of the top row and step-parents after them.
+  - Half-siblings take the far ends of the middle row, beyond siblings and partners, each group hanging from its own couple's bar slightly above the full siblings' bar.
+  - The other partner is never the person's to draw, so the FG-7 chip rule makes them a chip, and their slot stays where ownership puts them (the shared parent's frame when they're that parent's spouse).
+  - Cards read "Half-sibling · 1975" (decision U).
+- **Checked in Chrome** on the synthetic tree, with Beth given a former partner, Otto Brandt, and their daughter Hana (added on the local database through the shell):
+  - Robin's frame reads Alan, Beth and Otto (a chip, "drawn in Beth Ash's family") on the top row, and Cara, Dev, Lee, Robin, Sam and Hana on the middle row, with Hana hanging from the Beth–Otto bar.
+  - Hana's own frame is the mirror image: Otto, Beth and Alan on top, and Cara and Robin as half-sibling chips under Beth–Alan.
+  - At card size Hana's card reads "Half-sibling · 1975".
+  - On a 360 px map Robin's slots are 43 px, still names. That's down from 62 px in FG-6, because the family is wider now.
+- **Ended couples are dotted everywhere (added at the owner's request).** Any couple recorded as former partners now has a dotted bar (round dots, `0.1 9`), in the same style wherever it shows: the person's former partner, their parents' bar, and a parent's bar with their other partner. `familyCore` gives `parents.ended` and each half group's `ended`, and lines carry `ended`, not `dashed`. Co-parents never linked as partners stay solid, since nothing says they ended. In Chrome, Robin's frame shows Robin–Lee and Beth–Otto dotted, and the dots read clearly at card size.
+
 ---
 
 ## FG-10 Crowded bands
@@ -377,6 +395,27 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 - The cap: exactly 24 shown with "+N more" where N is right; the overflow frame holds the rest in name order.
 
 **Done when:** a synthetic tree with 60 coworkers is legible and every coworker can be reached.
+
+**Status: done.** Notes from building it:
+- **Cap (decisions V, W):**
+  - A band of more than 24 shows the first 23 in its usual order plus a "+N more" tile, so it stays at 24 slots.
+  - The rest go to the band's overflow frame, sorted by name: a virtual frame with the id `<ownerId>~<band>` (decision X), laid out as a square grid.
+  - Its people stay owned by the band's owner, so they're drawn there once and their own frames open from it.
+  - The overflow frame has no cap of its own (decision Z).
+- **Paths:** `framePath` steps through the overflow frame for anyone drawn in it, so chips, `?focus=` and shared links reach them. An overflow id in `?focus=` opens that frame. The breadcrumb names it "Coworkers (41 more)", and screen readers hear "Robin Ash's coworkers".
+- **The tile:** shaped like a chip, with a dashed outline, "+41" where the avatar would be and "more coworkers" under it. It's one button (click, Enter or Space) that flies there, and zooming opens it like any frame.
+- **Children (decision Y):** no cap. Rows wrap at max(6, √n), each couple's children stay together, and a wrapped group hangs its rows from a spine in the gap to its left. The frame stays within a 0.5–2 aspect ratio for 1 to 200 children and 1 to 200 per band.
+- **Checked in Chrome** with 60 synthetic colleagues added to Robin on the local database (64 in the band with Wes, Mia, Ray and Tess):
+  - The band shows 23 and "+41 more", and the frame stays square.
+  - The tile flies to a 7 × 6 grid of the other 41, in name order, and reloading that URL reopens it.
+  - Every coworker is reachable: 23 + 41.
+- **Smoothness (fixed at the owner's request before committing):**
+  - The first measurement, zooming toward the tile for 3 s with frames laid out, gave 64–87 fps with a 95th percentile of 29–33 ms and about 70 of 250 frames over 17 ms.
+  - The slow frames changed no DOM. The cause was the camera writing a `--map-k` CSS variable on the `<svg>` every frame for the card cap: an inherited custom property, so every write restyled the whole canvas. Measured without those writes, the 95th percentile fell to 20.6 ms. `will-change: transform` made no clear difference.
+  - Fix: MapCanvas keeps a list of the card content groups (`data-card-scale`) after each render, and on each camera move sets `style.transform` on the ones whose `cardContentScale` changed. `--map-k` and `cardScaleCss` are gone.
+  - After the fix, toward the tile: 140–148 fps, 95th percentile 16.6–20.5 ms, 18–29 frames over 17 ms. Toward Robin in the same tree: 156 fps, 95th percentile 16.7 ms (it was 139 fps and 21 ms). The display idles at about 140 frames a second, so the map now keeps up with it.
+  - Cards still cap: a 666 px slot's contents are scaled 0.36 and come out 210 px wide.
+  - Left for FG-12: hiding all text would give 190 fps and a 12 ms 95th percentile, so dropping text below name size remains worth measuring.
 
 ---
 

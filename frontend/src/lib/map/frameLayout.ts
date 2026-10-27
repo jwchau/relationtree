@@ -1,5 +1,6 @@
 import type { Bounds } from './camera';
 import type { FamilyCore } from './familyCore';
+import { parseOverflowId } from './overflow';
 import type { SocialCircles } from './social';
 
 // Every person gets the same fixed slot (design doc D5). Units are the frame's own; the
@@ -20,6 +21,7 @@ const BAND_PAD = 16;
 export type Role =
   | 'self'
   | 'parent'
+  | 'parentPartner'
   | 'spouse'
   | 'former'
   | 'sibling'
@@ -28,7 +30,9 @@ export type Role =
   | 'coworker'
   | 'manager'
   | 'report'
-  | 'acquaintance';
+  | 'acquaintance'
+  /** A band's "+N more" tile, opening into its overflow frame (FG-10). */
+  | 'more';
 
 export type BandKind = 'friends' | 'coworkers' | 'acquaintances';
 
@@ -44,8 +48,9 @@ export interface Slot {
   role: Role;
   /** Drawn in another frame: this slot is a chip that takes you there, and never opens (D8). */
   chip?: true;
-  /** A step or adoptive parent or child, labelled at card size (FG-8). */
-  kind?: 'STEP' | 'ADOPTIVE';
+  /** A step or adoptive parent or child (FG-8), or a half-sibling (FG-9), labelled at card
+   * size. */
+  kind?: 'STEP' | 'ADOPTIVE' | 'HALF';
   /** Centre x and top y. */
   x: number;
   y: number;
@@ -56,8 +61,9 @@ export interface Line {
   y1: number;
   x2: number;
   y2: number;
-  /** A former partner's couple bar. */
-  dashed?: true;
+  /** The bar of a couple whose relationship has ended, drawn dotted wherever it appears:
+   * the person's former partner, their parents, or a parent and their other partner. */
+  ended?: true;
 }
 
 /** A row of slots side by side, its centre at `centreX`. */
@@ -121,19 +127,65 @@ export function frameLayout(
     x: -(leftFormer.length + all.length - i) * step,
     y: midY,
   }));
+  // Half-siblings at the far ends (Q8b): through the first parent on the left, through the
+  // second on the right, beyond everyone else, each group under its own couple.
+  const [firstParent, secondParent] = core.parents.couple ? core.parents.ids : [];
+  const leftHalf = core.half.filter((g) => g.parent === firstParent);
+  const rightHalf = core.half.filter((g) => g.parent === secondParent);
+  const halfSlots: Slot[] = [
+    ...leftHalf
+      .flatMap((g) => g.children)
+      .map((id, i): Slot => ({ id, role: 'sibling', x: -(leftFormer.length + siblings.length + i + 1) * step, y: midY })),
+    ...rightHalf
+      .flatMap((g) => g.children)
+      .map((id, i): Slot => ({ id, role: 'sibling', x: (current.length + rightFormer.length + i + 1) * step, y: midY })),
+  ];
   for (const s of spouses) {
     const side = Math.sign(s.x);
     const bar: Line = { x1: side * (SLOT_W / 2 - 8), y1: midY + AVATAR_Y, x2: s.x - side * 40, y2: midY + AVATAR_Y };
-    lines.push(s.role === 'former' ? { ...bar, dashed: true } : bar);
+    lines.push(s.role === 'former' ? { ...bar, ended: true } : bar);
   }
 
-  // Top row: parents centred over the person, joined by a couple bar.
-  const parents = row(core.parents.ids, 'parent', 0, topY);
+  // Top row: parents centred over the person, joined by a couple bar. A couple's other
+  // partners (from half-siblings) sit at that parent's end, step-parents after them.
+  const partnerIds = (groups: FamilyCore['half']) =>
+    [...new Set(groups.map((g) => g.partner))].filter((id) => !core.parents.ids.includes(id));
+  let parents: Slot[];
+  let partnerSlots: Slot[] = [];
+  if (core.parents.couple) {
+    const [p1, p2, ...steps] = core.parents.ids;
+    const left = partnerIds(leftHalf).map((id, i): Slot => ({ id, role: 'parentPartner', x: -step / 2 - (i + 1) * step, y: topY }));
+    const right = partnerIds(rightHalf).map((id, i): Slot => ({ id, role: 'parentPartner', x: step / 2 + (i + 1) * step, y: topY }));
+    partnerSlots = [...left, ...right];
+    parents = [
+      { id: p1, role: 'parent', x: -step / 2, y: topY },
+      { id: p2, role: 'parent', x: step / 2, y: topY },
+      ...steps.map((id, i): Slot => ({ id, role: 'parent', x: step / 2 + (right.length + i + 1) * step, y: topY })),
+    ];
+  } else {
+    parents = row(core.parents.ids, 'parent', 0, topY);
+  }
+  const topSlot = (id: string) => [...parents, ...partnerSlots].find((s) => s.id === id);
+  const halfY = midY - 32;
+  for (const group of [...leftHalf, ...rightHalf]) {
+    const [a, b] = [topSlot(group.parent), topSlot(group.partner)];
+    if (!a || !b) continue;
+    const barY = topY + AVATAR_Y;
+    const bar: Line = { x1: Math.min(a.x, b.x) + 40, y1: barY, x2: Math.max(a.x, b.x) - 40, y2: barY };
+    lines.push(group.ended ? { ...bar, ended: true } : bar);
+    const mx = (a.x + b.x) / 2;
+    const kids = halfSlots.filter((s) => group.children.includes(s.id));
+    lines.push({ x1: mx, y1: barY, x2: mx, y2: halfY });
+    const xs = [mx, ...kids.map((k) => k.x)];
+    lines.push({ x1: Math.min(...xs), y1: halfY, x2: Math.max(...xs), y2: halfY });
+    for (const k of kids) lines.push({ x1: k.x, y1: halfY, x2: k.x, y2: midY });
+  }
   if (parents.length > 0) {
     const sibshipY = midY - 20;
     const fromY = core.parents.couple ? topY + AVATAR_Y : topY + SLOT_H;
     if (core.parents.couple) {
-      lines.push({ x1: parents[0].x + 40, y1: fromY, x2: parents[1].x - 40, y2: fromY });
+      const bar: Line = { x1: parents[0].x + 40, y1: fromY, x2: parents[1].x - 40, y2: fromY };
+      lines.push(core.parents.ended ? { ...bar, ended: true } : bar);
     }
     lines.push({ x1: 0, y1: fromY, x2: 0, y2: sibshipY });
     if (siblings.length > 0) {
@@ -151,25 +203,40 @@ export function frameLayout(
     .map((group, order) => ({ group, order }))
     .sort((a, b) => partnerX(a.group) - partnerX(b.group) || a.order - b.order)
     .map(({ group }) => group);
-  const groupWidths = groups.map((g) => g.children.length * step - GAP);
+  // Many children wrap into rows so the frame stays roughly square (Q8c): at most
+  // max(6, √n) a row, each couple's children kept together. A wrapped group hangs its rows
+  // from a spine in the gap to its left.
+  const perRow = Math.max(6, Math.ceil(Math.sqrt(groups.reduce((n, g) => n + g.children.length, 0))));
+  const rowStep = SLOT_H + ROW_GAP;
+  const groupWidths = groups.map((g) => Math.min(g.children.length, perRow) * step - GAP);
   const totalWidth = groupWidths.reduce((a, b) => a + b, 0) + (groupWidths.length - 1) * GROUP_GAP;
   let left = -totalWidth / 2;
   const children: Slot[] = [];
   groups.forEach((group, g) => {
-    const kids = row(group.children, 'child', left + groupWidths[g] / 2, bottomY);
-    children.push(...kids);
+    const rows: Slot[][] = [];
+    for (let r = 0; r * perRow < group.children.length; r++) {
+      const ids = group.children.slice(r * perRow, (r + 1) * perRow);
+      // Rows start at the group's left edge, so wrapped rows line up in columns.
+      const width = ids.length * step - GAP;
+      rows.push(row(ids, 'child', left + width / 2, bottomY + r * rowStep));
+    }
+    children.push(...rows.flat());
     const spouse = spouses.find((s) => group.parents.includes(s.id));
     const anchorX = spouse ? spouse.x / 2 : 0;
     const anchorY = spouse ? midY + AVATAR_Y : midY + SLOT_H;
-    const barY = bottomY - 24;
-    lines.push({ x1: anchorX, y1: anchorY, x2: anchorX, y2: barY });
-    const xs = [anchorX, ...kids.map((k) => k.x)];
-    lines.push({ x1: Math.min(...xs), y1: barY, x2: Math.max(...xs), y2: barY });
-    for (const k of kids) lines.push({ x1: k.x, y1: barY, x2: k.x, y2: bottomY });
+    const barY = (r: number) => bottomY + r * rowStep - 24;
+    lines.push({ x1: anchorX, y1: anchorY, x2: anchorX, y2: barY(0) });
+    const spineX = rows.length > 1 ? left - step / 2 : null;
+    if (spineX !== null) lines.push({ x1: spineX, y1: barY(0), x2: spineX, y2: barY(rows.length - 1) });
+    rows.forEach((kids, r) => {
+      const xs = [...(r === 0 ? [anchorX] : []), ...(spineX === null ? [] : [spineX]), ...kids.map((k) => k.x)];
+      lines.push({ x1: Math.min(...xs), y1: barY(r), x2: Math.max(...xs), y2: barY(r) });
+      for (const k of kids) lines.push({ x1: k.x, y1: barY(r), x2: k.x, y2: k.y });
+    });
     left += groupWidths[g] + GROUP_GAP;
   });
 
-  const coreSlots = [...parents, ...siblings, self, ...spouses, ...children];
+  const coreSlots = [...partnerSlots, ...parents, ...halfSlots, ...siblings, self, ...spouses, ...children];
   // The family core's extent, as slot boxes (each box starts 4 units above its slot's y).
   let box: Bounds = {
     x: Math.min(...coreSlots.map((s) => s.x)) - SLOT_W / 2,
@@ -185,11 +252,8 @@ export function frameLayout(
   const social = core.social;
   if (social) {
     const roleOf = (kind: BandKind, id: string): Role => {
-      if (kind === 'friends') return 'friend';
-      if (kind === 'acquaintances') return 'acquaintance';
-      if (social.managers.includes(id)) return 'manager';
-      if (social.reports.includes(id)) return 'report';
-      return 'coworker';
+      if (parseOverflowId(id)) return 'more';
+      return bandRole(kind, id, social);
     };
     for (const kind of ['friends', 'coworkers', 'acquaintances'] as const) {
       const ids = social[kind];
@@ -211,10 +275,45 @@ export function frameLayout(
   // down to the family core.
   const inner = [...bands].reverse().map((b) => padded(b.inner));
   const marked = slots.map((s): Slot => {
-    const kind = (s.role === 'parent' || s.role === 'child') && core.kinds[s.id];
+    const half = core.half.some((g) => g.children.includes(s.id));
+    const kind = half ? 'HALF' : (s.role === 'parent' || s.role === 'child') && core.kinds[s.id];
     return { ...s, ...(core.chips?.has(s.id) && { chip: true }), ...(kind && { kind }) };
   });
   return { slots: marked, lines, bands, bounds: padded(box), fitAreas: [padded(box), ...inner] };
+}
+
+/** A band member's role: a friend, an acquaintance, or a coworker who may manage this person
+ * or be managed by them. */
+function bandRole(kind: BandKind, id: string, social: SocialCircles): Role {
+  if (kind === 'friends') return 'friend';
+  if (kind === 'acquaintances') return 'acquaintance';
+  if (social.managers.includes(id)) return 'manager';
+  if (social.reports.includes(id)) return 'report';
+  return 'coworker';
+}
+
+/** A band's overflow frame (FG-10): everyone past the cap, in name order, as a square grid
+ * of the usual slots. No family core and no bands; it scales down in its tile like any frame. */
+export function overflowLayout(
+  band: BandKind,
+  ids: string[],
+  social: SocialCircles,
+  chips: Set<string>,
+): FrameLayout {
+  const cols = Math.ceil(Math.sqrt(ids.length));
+  const step = { x: SLOT_W + GAP, y: SLOT_H + GAP };
+  const slots = ids.map((id, i): Slot => {
+    const slot: Slot = { id, role: bandRole(band, id, social), x: (i % cols) * step.x, y: Math.floor(i / cols) * step.y + 4 };
+    return chips.has(id) ? { ...slot, chip: true } : slot;
+  });
+  const rows = Math.ceil(ids.length / cols);
+  const box: Bounds = {
+    x: -SLOT_W / 2 - PAD,
+    y: -PAD,
+    width: cols * step.x - GAP + 2 * PAD,
+    height: rows * step.y - GAP + 2 * PAD,
+  };
+  return { slots, lines: [], bands: [], bounds: box, fitAreas: [box] };
 }
 
 /** One ring of slots around `around`: a row above and below, and a column each side. If
@@ -279,12 +378,10 @@ function bandAround(
 
 /** The card stops growing once its slot is this wide on screen. */
 export const CARD_MAX_PX = 240;
-/** The camera's scale, set on the canvas by MapCanvas, so cards at any depth can cap their
- * size in CSS without React re-rendering as you zoom. */
-export const ZOOM_VAR = '--map-k';
-
-/** The CSS transform that keeps a card's contents at most CARD_MAX_PX wide on screen, for a
- * frame whose units are `scale` root-frame units. */
-export function cardScaleCss(scale: number): string {
-  return `scale(min(1, calc(${CARD_MAX_PX} / (var(${ZOOM_VAR}, 1) * ${SLOT_W * scale}))))`;
+/** How much a card's contents shrink so they're at most CARD_MAX_PX wide on screen: 1 below
+ * the cap. `anchorK` is the anchored frame's scale on screen and `scale` the card's frame in
+ * the anchored frame's units. MapCanvas sets it on each card as the camera moves, not
+ * through a CSS variable, which made the browser restyle the whole canvas every frame. */
+export function cardContentScale(anchorK: number, scale: number): number {
+  return Math.min(1, CARD_MAX_PX / (anchorK * SLOT_W * scale));
 }

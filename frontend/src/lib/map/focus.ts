@@ -1,6 +1,7 @@
 import { fitTransform, MAX_ZOOM, MIN_ZOOM, type Transform, type Viewport } from './camera';
 import { DETAIL_THRESHOLDS, detailFor } from './detail';
 import { fitInSlot, SLOT_W, type FrameLayout } from './frameLayout';
+import { parseOverflowId } from './overflow';
 import type { Ownership } from './ownership';
 
 type LayoutOf = (personId: string) => FrameLayout | null;
@@ -33,15 +34,34 @@ function nestIn(parent: FrameToRoot, fit: FrameToRoot): FrameToRoot {
 }
 
 /** The frames from the root out to this person's frame. Someone with no frame of their own
- * ends the path at the frame they're drawn in; someone not on the map gives just the root. */
+ * ends the path at the frame they're drawn in; someone not on the map gives just the root.
+ * Someone drawn in a band's overflow frame is reached through it, and an overflow frame's
+ * own id (from `?focus=`) ends the path there (FG-10). */
 export function framePath(ownership: Ownership, layoutOf: LayoutOf, personId: string): string[] {
+  const over = parseOverflowId(personId);
+  if (over) {
+    const base = framePath(ownership, layoutOf, over.owner);
+    return layoutOf(personId) && base[base.length - 1] === over.owner ? [...base, personId] : base;
+  }
   if (!ownership.has(personId)) {
     const root = [...ownership].find(([, o]) => o.owner === null);
     return root ? [root[0]] : [];
   }
-  const path: string[] = [];
+  const chain: string[] = [];
   for (let id: string | null = personId; id !== null; id = ownership.get(id)?.owner ?? null) {
-    path.unshift(id);
+    chain.unshift(id);
+  }
+  const path: string[] = [];
+  for (const id of chain) {
+    const owner = path[path.length - 1];
+    const ownerLayout = owner === undefined ? null : layoutOf(owner);
+    if (ownerLayout && !ownerLayout.slots.some((s) => s.id === id)) {
+      const tile = ownerLayout.slots.find(
+        (s) => s.role === 'more' && layoutOf(s.id)?.slots.some((t) => t.id === id),
+      );
+      if (tile) path.push(tile.id);
+    }
+    path.push(id);
   }
   return layoutOf(personId) ? path : path.slice(0, -1);
 }
