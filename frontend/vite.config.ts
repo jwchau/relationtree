@@ -21,5 +21,7 @@ export default defineConfig({
     // Pure tests run in node; component tests opt into jsdom with a
     // `// @vitest-environment jsdom` comment.
     setupFiles: ['./src/test/setup.ts'],
+    // The map's contrast test reads the theme tokens (FG-12); other CSS stays unprocessed.
+    css: { include: [/index\.css/] },
   },
 })

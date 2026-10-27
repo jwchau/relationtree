@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/api/client';
 import { tree } from '@/lib/map/testTree';
-import { useCreateConnection } from './useConnections';
+import { useCreateConnection, useDeleteConnection } from './useConnections';
 import { useTreeGraph } from './useTreeGraph';
 
 const ok = (data: unknown) => Promise.resolve({ data, error: undefined, response: new Response(null, { status: 200 }) });
@@ -44,6 +44,28 @@ describe('useTreeGraph freshness', () => {
     });
     await waitFor(() => expect(result.current.graph.graph).not.toBeNull());
     await act(() => result.current.create.mutateAsync({ personAId: 'Zoe', personBId: 'Robin', type: 'FRIEND' }));
+    await waitFor(() => expect(graphFetches).toBe(2));
+  });
+
+  it('fetches the graph again every 45 minutes, before its photo links expire', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderHook(() => useTreeGraph('ash'), { wrapper });
+      await waitFor(() => expect(graphFetches).toBe(1));
+      await act(() => vi.advanceTimersByTimeAsync(44 * 60 * 1000));
+      expect(graphFetches).toBe(1);
+      await act(() => vi.advanceTimersByTimeAsync(60 * 1000));
+      await waitFor(() => expect(graphFetches).toBe(2));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('fetches the graph again after a connection is deleted', async () => {
+    vi.spyOn(api, 'DELETE').mockImplementation((() => ok(undefined)) as never);
+    const { result } = renderHook(() => ({ graph: useTreeGraph('ash'), remove: useDeleteConnection() }), { wrapper });
+    await waitFor(() => expect(result.current.graph.graph).not.toBeNull());
+    await act(() => result.current.remove.mutateAsync('c1'));
     await waitFor(() => expect(graphFetches).toBe(2));
   });
 });

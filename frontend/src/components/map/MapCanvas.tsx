@@ -194,6 +194,8 @@ export function MapCanvas({
         const c = clampTransform(t, viewport, rootBounds, range);
         return sameTransform(c, t) ? t : toD3(c);
       })
+      // A double-click zooms in over d3's 250 ms; at once when motion is reduced (FG-12).
+      .duration(prefersReducedMotion() ? 0 : 250)
       .on('zoom', (event: D3ZoomEvent<SVGSVGElement, unknown>) => onCamera(event.transform));
     if (embedded) behaviour.filter(embeddedZoomFilter);
     zoomRef.current = behaviour;
@@ -382,8 +384,9 @@ export function MapCanvas({
         onFocus={onFocus}
         className={cn(
           'block size-full cursor-grab select-none active:cursor-grabbing',
-          // Drawn inside the edge: the panel around the map clips anything outside it.
-          'rounded-[inherit] outline-none focus-visible:outline-3 focus-visible:outline-solid focus-visible:-outline-offset-3 focus-visible:outline-ring',
+          // An inset 2px --accent-text outline, as DESIGN.md gives a focusable box; inside the
+          // edge, as the panel around the map clips anything outside it.
+          'rounded-[inherit] outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2 focus-visible:outline-accent-text',
           // Embedded, the browser keeps one-finger scrolling; pinches still reach d3-zoom.
           embedded ? 'touch-pan-x touch-pan-y' : 'touch-none',
         )}

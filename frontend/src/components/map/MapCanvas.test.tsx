@@ -500,4 +500,30 @@ describe('MapCanvas by keyboard', () => {
       'Tab moves through the people in view. Enter zooms into a person, Escape zooms out. Plus and minus zoom, and the arrow keys pan.',
     );
   });
+
+  it('zooms at once on a double-click when motion is reduced', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    renderFamily();
+    const before = camera().k;
+    fireEvent.dblClick(screen.getByLabelText('Family map'), { clientX: 100, clientY: 100 });
+    expect(camera().k).toBeCloseTo(before * 2);
+  });
+});
+
+describe('MapCanvas photos', () => {
+  it("shows a person's initials when their photo fails to load, as when its link has expired", () => {
+    const withPhoto = tree(['Robin', 'Alan'], [['Alan', 'PARENT', 'Robin']]);
+    withPhoto.people[1].photo_url = 'https://photos.example/alan.jpg?expires=1';
+    render(
+      <MemoryRouter>
+        <MapCanvas graph={withPhoto} rootId="Robin" people={new Map(withPhoto.people.map((p) => [p.id, p]))} className="h-96" />
+      </MemoryRouter>,
+    );
+    const map = screen.getByLabelText('Family map');
+    const photo = map.querySelector('image[href*="alan.jpg"]')!;
+    expect(photo).toBeInTheDocument();
+    fireEvent.error(photo);
+    expect(map.querySelector('image[href*="alan.jpg"]')).not.toBeInTheDocument();
+    expect(within(map).getAllByText('A').length).toBeGreaterThan(0);
+  });
 });

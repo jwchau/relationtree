@@ -461,7 +461,7 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 
 **Done when:** the measured numbers are recorded, the canvas can be used fully by keyboard, and a final review against the design doc finds no open gaps.
 
-**Status: in progress.** Done in three parts: 12a scale, 12b keyboard and screen readers, 12c motion, freshness, themes and the final review (decisions BA–BF).
+**Status: done.** Done in three parts: 12a scale, 12b keyboard and screen readers, 12c motion, freshness, themes and the final review (decisions BA–BF).
 
 **12a scale, notes from building it:**
 - **The fixture:** `seed_scale_tree --owner <user>` (backend) adds "Synthetic scale (1,000)": generations of couples and children (about 10% step or adoptive, 15% former partners, some second partners with half-siblings), then random friend, coworker, acquaintance and manager links up to 3,000. Every name is made up, it's the same on every run, and it skips the search embedding signals. `bigTree()` in `lib/map/testTree.ts` builds a tree of the same shape for tests.
@@ -494,3 +494,27 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
   - After Enter or Escape, keyboard focus moves to the new frame's centre (the slot itself, or the card's first stop), so Tab carries on there.
 - **Keeping focus in view:** the focused frame only has to cover half the view, so Tab can land on someone off screen. The browser would then scroll the map's clipped panel; that scroll is undone and the camera pans instead (`panToShow`, 16 px margin). In Chrome, Otto's chip 542 px past the right edge came fully into view, and the panel's scroll stayed 0.
 - **Focus rings:** slots, chips, card actions and "+N more" tiles already drew the `ring` colour as a stroke. The map itself had none (`outline: none`); it now has a 3 px outline just inside its edge, because the panel clips anything outside. At small sizes the 40%-opacity ring is faint; the 12c contrast check covers it.
+
+**12c motion, freshness, themes and the final review, notes from building it:**
+- **Motion:** a global `prefers-reduced-motion` rule in `index.css` already cut every CSS transition and animation to 1 ms (slot hovers, the loading pulse), and every scripted camera move checked it (Fit, breadcrumb, chips, Enter and Escape, keys, pan-to-show, the cross-fade). The one gap was d3-zoom's own double-click zoom, which eased over 250 ms regardless; it now zooms at once when motion is reduced.
+- **Freshness:**
+  - The graph now also refetches every 45 minutes (`refetchInterval`), so a tab left open never holds photo links past their hour; it still goes stale after 30 minutes and refetches on returning to the tab.
+  - A photo that fails to load (an expired link, say) is dropped so the initials show; a new link from the next refetch gets its own try. Checked in Chrome on a production build, with a temporary API whose R2 account was made up: Chrome requested Hana's signed link, it failed, and her card showed "HB".
+  - Deleting a connection now refreshes the graph too, as creating and editing one already did.
+  - Found on the way: locally `CLOUDFLARE_R2_ACCOUNT_ID` is empty, so any person with a photo makes the graph endpoint fail with a 500 (signing raises "Invalid endpoint"). Prod has R2 configured; local trees have no photos, which is why it never showed.
+- **Themes (`lib/map/contrast.test.ts`):** reads both themes' tokens from `index.css` and checks the map's colours against the panel gradient's ends and a card. Worst cases:
+
+  | Mark | Token | Dark | Light | Needs |
+  |---|---|---|---|---|
+  | Names | `--text` | 12.8:1 | 17.2:1 | 4.5 |
+  | Detail lines, band labels, dots | `--muted` | 6.0:1 | 11.5:1 | 4.5 |
+  | Family lines, chip outlines | `--subtle` | 5.3:1 | 4.9:1 | 3 |
+  | Focus rings, before | `--ring` (40%) | 2.0:1 | 1.4:1 | 3 |
+  | Focus rings, now | `--accent-text` | 6.0:1 or better | 6.2:1 or better | 3 |
+  | Band outlines, card borders | `--hairline` (10%) | 1.3:1 | 1.3:1 | see below |
+
+  - The map's focus rings now use `--accent-text`, as DESIGN.md does for a focused field edge and the teams strip's inset 2px outline; the map's own outline is that inset 2px. The app-wide `--focus` shadow (also 40%) is unchanged.
+  - Hairlines: band outlines and card borders don't carry information on their own: bands are told apart by position and, at card size, labels (FG-6), and every person's accessible name says their role. They stay as Kiln's hairline (the owner confirmed).
+  - Vitest skips CSS by default, so `vite.config.ts` lets it process `index.css` alone for this test.
+  - Light theme on a phone outdoors: text is 17:1 and the detail lines 11.5:1, so it should hold up; not checked on a real phone.
+- **Final review against the design doc:** every decision is built. Three lines of its text had drifted from decisions made in the tickets and are corrected: cards leave out "last contacted" (FG-2), dots are one neutral colour (FG-6), and the default root is `?root`, then "This is me", then the picker (FG-1).

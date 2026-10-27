@@ -1,4 +1,4 @@
-import { memo, useContext, type ReactNode } from 'react';
+import { memo, useContext, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GraphPerson } from '@/api/client';
 import type { Detail } from '@/lib/map/detail';
@@ -257,7 +257,7 @@ function SlotView({
         rx={12}
         strokeWidth={3}
         className={cn(
-          'stroke-transparent transition-colors duration-200 group-hover:fill-ghost-hover group-focus-visible:stroke-ring',
+          'stroke-transparent transition-colors duration-200 group-hover:fill-ghost-hover group-focus-visible:stroke-accent-text',
           slot.role === 'self' && detail !== 'dot' ? 'fill-ghost' : 'fill-transparent',
         )}
       />
@@ -334,7 +334,7 @@ function PersonCard({
       className={cn(
         'stroke-hairline',
         slot.role === 'self' ? 'fill-ghost' : 'fill-surface-2',
-        'group-focus-visible:stroke-ring',
+        'group-focus-visible:stroke-accent-text',
       )}
     />
   );
@@ -442,7 +442,7 @@ function ChipSlot({
           rx={12}
           strokeWidth={2}
           strokeDasharray="8 6"
-          className="fill-transparent stroke-subtle transition-colors duration-200 group-hover:fill-ghost-hover group-focus-visible:stroke-ring"
+          className="fill-transparent stroke-subtle transition-colors duration-200 group-hover:fill-ghost-hover group-focus-visible:stroke-accent-text"
         />
       )}
       {(detail === 'avatar' || detail === 'name') && <Avatar person={person} cx={slot.x} cy={cy} r={AVATAR_R} />}
@@ -517,7 +517,7 @@ function MoreTile({
             rx={12}
             strokeWidth={2}
             strokeDasharray="8 6"
-            className="fill-transparent stroke-subtle transition-colors duration-200 group-hover:fill-ghost-hover group-focus-visible:stroke-ring"
+            className="fill-transparent stroke-subtle transition-colors duration-200 group-hover:fill-ghost-hover group-focus-visible:stroke-accent-text"
           />
           <text
             x={slot.x}
@@ -572,7 +572,7 @@ function CardAction({
         height={22}
         rx={6}
         strokeWidth={2}
-        className="fill-ghost stroke-transparent group-hover:fill-ghost-hover group-focus-visible:stroke-ring"
+        className="fill-ghost stroke-transparent group-hover:fill-ghost-hover group-focus-visible:stroke-accent-text"
       />
       <text
         x={x + CARD_ACTION_W / 2}
@@ -671,6 +671,9 @@ function SlotLink({
  * them showing. */
 function Avatar({ person, cx, cy, r }: { person: GraphPerson; cx: number; cy: number; r: number }) {
   const clipId = `map-avatar-${person.id}`;
+  // A photo that won't load (its link expired, say) is dropped so the initials show. The next
+  // refetch brings a new link, which gets its own try (FG-12).
+  const [failed, setFailed] = useState<string | null>(null);
   return (
     <>
       <clipPath id={clipId}>
@@ -688,9 +691,10 @@ function Avatar({ person, cx, cy, r }: { person: GraphPerson; cx: number; cy: nu
       >
         {initials(person.name)}
       </text>
-      {person.photo_url && (
+      {person.photo_url && person.photo_url !== failed && (
         <image
           href={person.photo_url}
+          onError={() => setFailed(person.photo_url)}
           x={cx - r}
           y={cy - r}
           width={r * 2}
