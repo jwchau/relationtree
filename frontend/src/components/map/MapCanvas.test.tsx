@@ -2,6 +2,8 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DETAIL_THRESHOLDS } from '@/lib/map/detail';
+import { SLOT_W } from '@/lib/map/frameLayout';
 import { tree, type Link } from '@/lib/map/testTree';
 import { FixedSizeObserver, observedSize } from '@/test/resizeObserver';
 import { MapCanvas } from './MapCanvas';
@@ -104,6 +106,21 @@ describe('MapCanvas cards', () => {
     renderMap();
     expect(screen.getByRole('link', { name: 'Open Robin' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Make Robin the centre' })).not.toBeInTheDocument();
+  });
+
+  it('give Open and Centre a hit area at least 44 px each way, even at the smallest card size', () => {
+    renderMap();
+    // A card is drawn once its slot is DETAIL_THRESHOLDS[2] px wide on screen.
+    const smallest = DETAIL_THRESHOLDS[2] / SLOT_W;
+    const actions = screen.getAllByRole('link', { name: /^(Open|Make) / });
+    expect(actions.length).toBeGreaterThan(0);
+    for (const action of actions) {
+      const sizes = Array.from(action.querySelectorAll('rect'), (r) => [
+        Number(r.getAttribute('width')) * smallest,
+        Number(r.getAttribute('height')) * smallest,
+      ]);
+      expect(sizes.some(([w, h]) => w >= 44 && h >= 44)).toBe(true);
+    }
   });
 });
 
@@ -285,5 +302,228 @@ describe('MapCanvas card sizes while zooming', () => {
     for (let i = 0; i < 6; i++) wheel(map, { ctrlKey: true, deltaY: -100 });
     const scales = cards().map((c) => Number(c.style.transform.match(/scale\((.*)\)/)?.[1]));
     expect(Math.min(...scales)).toBeLessThan(1);
+  });
+});
+
+describe('MapCanvas by keyboard', () => {
+  // Gus is Alan's parent, so Alan has a frame of his own; Sam and Beth don't.
+  const family = tree(['Robin', 'Alan', 'Beth', 'Sam', 'Gus'], [
+    ['Alan', 'PARENT', 'Robin'],
+    ['Beth', 'PARENT', 'Robin'],
+    ['Robin', 'SPOUSE', 'Sam'],
+    ['Gus', 'PARENT', 'Alan'],
+  ], { Alan: '1950-01-01', Beth: '1952-01-01' });
+  const everyone = new Map(family.people.map((p) => [p.id, p]));
+  const renderFamily = (initialFocus: string | null = null, onFocusChange = vi.fn()) => {
+    render(
+      <MemoryRouter>
+        <MapCanvas
+          graph={family}
+          rootId="Robin"
+          people={everyone}
+          initialFocus={initialFocus}
+          onFocusChange={onFocusChange}
+          className="h-96"
+        />
+      </MemoryRouter>,
+    );
+    return onFocusChange;
+  };
+  /** What Tab reaches inside the map, in order, by accessible name. */
+  const tabOrder = () => {
+    const map = screen.getByLabelText('Family map');
+    return [map, ...Array.from(map.querySelectorAll('[tabindex="0"]'))].map((el) => el.getAttribute('aria-label'));
+  };
+
+  it("lets Tab reach only the focused frame's people, in reading order", () => {
+    // Cards at this size: someone with a frame of their own (Alan) has a button that zooms
+    // in, then Open and Make centre; the rest have only their links.
+    renderFamily();
+    expect(tabOrder()).toEqual([
+      'Family map',
+      'Alan, parent',
+      'Open Alan',
+      'Make Alan the centre',
+      'Open Beth',
+      'Make Beth the centre',
+      'Open Robin',
+      'Open Sam',
+      'Make Sam the centre',
+    ]);
+  });
+
+  it('reads top to bottom, though the social bands above the family are laid out last', () => {
+    const social = tree(['Robin', 'Sam', 'Kid', 'Fay', 'Wes', 'Al', 'Bo'], [
+      ['Robin', 'SPOUSE', 'Sam'],
+      ['Robin', 'PARENT', 'Kid'],
+      ['Robin', 'FRIEND', 'Fay'],
+      ['Robin', 'COWORKER', 'Wes'],
+      ['Al', 'PARENT', 'Robin'],
+      ['Bo', 'PARENT', 'Robin'],
+    ]);
+    render(
+      <MemoryRouter>
+        <MapCanvas graph={social} rootId="Robin" people={new Map(social.people.map((p) => [p.id, p]))} className="h-96" />
+      </MemoryRouter>,
+    );
+    // The coworker band's top row is highest, then the friends', then the family's rows.
+    const people = tabOrder()
+      .slice(1)
+      .map((label) => label!.replace(/^(Open|Make) /, '').replace(/( the centre|, .*)$/, ''));
+    expect(people.filter((name, i) => name !== people[i - 1])).toEqual(['Wes', 'Fay', 'Al', 'Bo', 'Robin', 'Sam', 'Kid']);
+  });
+
+  it("moves Tab to the new frame's people when the focus moves", () => {
+    renderFamily('Alan');
+    expect(tabOrder()).toEqual([
+      'Family map',
+      'Gus, parent',
+      'Alan, centre',
+      'Robin, child, at the centre of the map',
+    ]);
+  });
+
+  it.each(['Enter', ' '])("zooms into the frame of a card's person on %j", (key) => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const onFocusChange = renderFamily();
+    expect(onFocusChange).toHaveBeenLastCalledWith(['Robin']);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Alan, parent' }), { key });
+    expect(onFocusChange).toHaveBeenLastCalledWith(['Robin', 'Alan']);
+  });
+
+  it('zooms into the frame of someone drawn smaller than a card, and keeps a link for anyone with no frame', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    // Ed is Gus's parent, so Gus has a frame inside Alan's.
+    const deeper = tree(['Robin', 'Alan', 'Gus', 'Ed'], [
+      ['Alan', 'PARENT', 'Robin'],
+      ['Gus', 'PARENT', 'Alan'],
+      ['Ed', 'PARENT', 'Gus'],
+    ]);
+    const onFocusChange = vi.fn();
+    render(
+      <MemoryRouter>
+        <MapCanvas
+          graph={deeper}
+          rootId="Robin"
+          people={new Map(deeper.people.map((p) => [p.id, p]))}
+          initialFocus="Alan"
+          onFocusChange={onFocusChange}
+          className="h-96"
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'Alan, centre' })).toHaveAttribute('href', '/people/Alan');
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Gus, parent' }), { key: 'Enter' });
+    expect(onFocusChange).toHaveBeenLastCalledWith(['Robin', 'Alan', 'Gus']);
+  });
+
+  it('zooms out to the parent frame on Escape, and leaves Escape alone at the root', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const onFocusChange = renderFamily('Alan');
+    const map = screen.getByLabelText('Family map');
+    expect(fireEvent.keyDown(map, { key: 'Escape' })).toBe(false); // handled
+    expect(onFocusChange).toHaveBeenLastCalledWith(['Robin']);
+    onFocusChange.mockClear();
+    expect(fireEvent.keyDown(map, { key: 'Escape' })).toBe(true); // not handled
+    expect(onFocusChange).not.toHaveBeenCalled();
+  });
+
+  /** The camera as the drawing's transform says it, relative to the anchored frame. */
+  const camera = () => {
+    const g = screen.getByLabelText('Family map').querySelector(':scope > g')!;
+    const [x, y, k] = (g.getAttribute('transform')!.match(/-?\d[\d.]*(?:e-?\d+)?/g) ?? []).map(Number);
+    return { x, y, k };
+  };
+
+  it('zooms in and out on + and -, about the middle, up to the limits', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    renderFamily();
+    const map = screen.getByLabelText('Family map');
+    const start = camera();
+    fireEvent.keyDown(map, { key: '+' });
+    expect(camera().k).toBeCloseTo(start.k * 1.5);
+    fireEvent.keyDown(map, { key: '-' });
+    expect(camera().k).toBeCloseTo(start.k);
+    for (let i = 0; i < 30; i++) fireEvent.keyDown(map, { key: '-' });
+    const zoomedOut = camera().k;
+    fireEvent.keyDown(map, { key: '-' });
+    expect(camera().k).toBe(zoomedOut);
+    expect(zoomedOut).toBeGreaterThan(0);
+  });
+
+  it('pans by part of the view on the arrow keys', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    renderFamily();
+    const map = screen.getByLabelText('Family map');
+    fireEvent.keyDown(map, { key: '+' }); // room to pan
+    const start = camera();
+    fireEvent.keyDown(map, { key: 'ArrowRight' });
+    // Looking further right moves the drawing left.
+    expect(camera().x).toBeLessThan(start.x);
+    fireEvent.keyDown(map, { key: 'ArrowLeft' });
+    expect(camera().x).toBeCloseTo(start.x);
+    fireEvent.keyDown(map, { key: 'ArrowDown' });
+    expect(camera().y).toBeLessThan(start.y);
+  });
+
+  it("puts keyboard focus on the new frame's centre after Enter or Escape", () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    renderFamily();
+    const alan = screen.getByRole('button', { name: 'Alan, parent' });
+    alan.focus();
+    fireEvent.keyDown(alan, { key: 'Enter' });
+    expect(document.activeElement).toHaveAccessibleName('Alan, centre');
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    // Robin's frame is at card size: his card's first stop.
+    expect(document.activeElement).toHaveAccessibleName('Open Robin');
+  });
+
+  it("names a frame opened inside the focused one by its place there, and zooms into it", () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    observedSize({ width: 1600, height: 1000 });
+    const onFocusChange = renderFamily();
+    const map = screen.getByLabelText('Family map');
+    for (let i = 0; i < 8 && !screen.queryByRole('group', { name: 'Family of Alan' }); i++) {
+      fireEvent.keyDown(map, { key: '+' });
+    }
+    expect(screen.getByRole('group', { name: 'Family of Alan' })).toBeInTheDocument();
+    expect(onFocusChange).toHaveBeenLastCalledWith(['Robin']);
+    // Alan's own frame is open in his slot; Tab reaches him once, as Robin's parent.
+    expect(tabOrder().filter((label) => label?.startsWith('Alan'))).toEqual(['Alan, parent']);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Alan, parent' }), { key: 'Enter' });
+    expect(onFocusChange).toHaveBeenLastCalledWith(['Robin', 'Alan']);
+  });
+
+  it('tells screen reader users which keys move the map', () => {
+    renderFamily();
+    expect(screen.getByLabelText('Family map')).toHaveAccessibleDescription(
+      'Tab moves through the people in view. Enter zooms into a person, Escape zooms out. Plus and minus zoom, and the arrow keys pan.',
+    );
+  });
+
+  it('zooms at once on a double-click when motion is reduced', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    renderFamily();
+    const before = camera().k;
+    fireEvent.dblClick(screen.getByLabelText('Family map'), { clientX: 100, clientY: 100 });
+    expect(camera().k).toBeCloseTo(before * 2);
+  });
+});
+
+describe('MapCanvas photos', () => {
+  it("shows a person's initials when their photo fails to load, as when its link has expired", () => {
+    const withPhoto = tree(['Robin', 'Alan'], [['Alan', 'PARENT', 'Robin']]);
+    withPhoto.people[1].photo_url = 'https://photos.example/alan.jpg?expires=1';
+    render(
+      <MemoryRouter>
+        <MapCanvas graph={withPhoto} rootId="Robin" people={new Map(withPhoto.people.map((p) => [p.id, p]))} className="h-96" />
+      </MemoryRouter>,
+    );
+    const map = screen.getByLabelText('Family map');
+    const photo = map.querySelector('image[href*="alan.jpg"]')!;
+    expect(photo).toBeInTheDocument();
+    fireEvent.error(photo);
+    expect(map.querySelector('image[href*="alan.jpg"]')).not.toBeInTheDocument();
+    expect(within(map).getAllByText('A').length).toBeGreaterThan(0);
   });
 });

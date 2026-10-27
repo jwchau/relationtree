@@ -72,6 +72,10 @@ cd backend
 uv run python manage.py embed_worker
 ```
 
+To try the map at scale, `uv run python manage.py seed_scale_tree --owner <username>` adds a
+generated tree of 1,000 made-up people and 3,000 connections ("Synthetic scale (1,000)"),
+the same every time; `--replace` rebuilds it. Local databases only.
+
 ### After changing the API
 
 The frontend's API types are generated from the backend's OpenAPI schema. CI fails if either

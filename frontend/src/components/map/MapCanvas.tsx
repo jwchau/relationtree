@@ -1,12 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { select } from 'd3-selection';
 import 'd3-transition';
-import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomBehavior } from 'd3-zoom';
+import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
 import { ChevronRight, Maximize } from 'lucide-react';
 import type { GraphPerson, TreeGraph } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { crumbs } from '@/lib/map/breadcrumb';
-import { clampTransform, type Transform, type Viewport } from '@/lib/map/camera';
+import { clampTransform, panToShow, type Transform, type Viewport } from '@/lib/map/camera';
 import { embeddedHint, embeddedZoomFilter, type EmbeddedHint } from '@/lib/map/embedded';
 import {
   anchoredTransform,
@@ -27,6 +27,17 @@ import { FamilyFrame } from './FamilyFrame';
 import { MapContext, type MapContextValue } from './MapContext';
 
 const MOVE_MS = 300;
+/** Keyboard zoom and pan (FG-12, decision BB): +/- zoom by this much, arrows pan by this
+ * share of the view, each eased over KEY_MS. */
+const KEY_ZOOM = 1.5;
+const KEY_PAN = 0.15;
+const KEY_MS = 150;
+const PAN_KEYS: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
 /** Below this width the breadcrumb shortens to root › … › last two. */
 const NARROW_PX = 640;
 /** How many frames above the focus are drawn. Higher ones are many screens wide. */
@@ -88,6 +99,7 @@ export function MapCanvas({
   const [plan, setPlan] = useState<PlanNode | null>(null);
   const [focus, setFocus] = useState<string[]>([rootId]);
   const [hint, setHint] = useState<EmbeddedHint | null>(null);
+  const keysId = useId();
 
   // Each frame is laid out once per root and reused while you zoom, and when you come back.
   const { ownership, layoutOf } = mapModel(graph, rootId);
@@ -182,6 +194,8 @@ export function MapCanvas({
         const c = clampTransform(t, viewport, rootBounds, range);
         return sameTransform(c, t) ? t : toD3(c);
       })
+      // A double-click zooms in over d3's 250 ms; at once when motion is reduced (FG-12).
+      .duration(prefersReducedMotion() ? 0 : 250)
       .on('zoom', (event: D3ZoomEvent<SVGSVGElement, unknown>) => onCamera(event.transform));
     if (embedded) behaviour.filter(embeddedZoomFilter);
     zoomRef.current = behaviour;
@@ -240,6 +254,91 @@ export function MapCanvas({
     }
   };
 
+  // After a zoom in or out, keyboard focus moves to the new frame's centre, so Tab carries on
+  // among its people. Its card's first stop at card size; the map itself for a frame with no
+  // centre of its own (a band's overflow frame).
+  const focusAfterMoveRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = focusAfterMoveRef.current;
+    const svg = svgRef.current;
+    if (!id || !svg || focus[focus.length - 1] !== id) return;
+    focusAfterMoveRef.current = null;
+    const centre = svg.querySelector(`[data-centre="${CSS.escape(id)}"]`);
+    const target = centre?.querySelector<SVGElement>('[tabindex="0"]') ?? svg;
+    target.focus({ preventScroll: true });
+  }, [focus]);
+
+  /** When Tab reaches someone, keep them in view. The browser scrolls clipped containers to
+   * show a focused element, which would shift the map out from under the camera, so that
+   * scroll is undone and the camera pans instead. */
+  const onFocus = (event: React.FocusEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    const behaviour = zoomRef.current;
+    if (!svg || !behaviour || !viewport || event.target === svg) return;
+    // Only clipped boxes (the map's panel); a page that really scrolls is left alone.
+    for (let el: Element | null = svg; el && el !== document.body; el = el.parentElement) {
+      if ((el.scrollTop || el.scrollLeft) && ['hidden', 'clip'].includes(getComputedStyle(el).overflowY)) {
+        el.scrollTop = el.scrollLeft = 0;
+      }
+    }
+    const view = svg.getBoundingClientRect();
+    const r = (event.target as Element).getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return;
+    const box = { left: r.left - view.left, top: r.top - view.top, right: r.right - view.left, bottom: r.bottom - view.top };
+    const { dx, dy } = panToShow(box, viewport);
+    if (dx === 0 && dy === 0) return;
+    const k = cameraRef.current?.k ?? 1;
+    const selection = select(svg);
+    (prefersReducedMotion() ? selection : selection.transition().duration(KEY_MS)).call(behaviour.translateBy, dx / k, dy / k);
+  };
+
+  /** The map's own keys: Escape out to the parent frame, +/- to zoom, arrows to pan. */
+  // Where the last key's eased move is heading. A key pressed while it runs builds on that,
+  // not on where the camera has got to, so quick presses and key repeat add up.
+  const keyTargetRef = useRef<ZoomTransform | null>(null);
+  const onKeyDown = (event: React.KeyboardEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    const behaviour = zoomRef.current;
+    const camera = cameraRef.current;
+    if (!svg || !behaviour || !viewport || !camera || event.ctrlKey || event.metaKey || event.altKey) return;
+    const path = focusRef.current ?? [rootId];
+    const base = keyTargetRef.current ?? toD3(camera);
+    const pan = PAN_KEYS[event.key];
+    let next: ZoomTransform;
+    if (event.key === 'Escape') {
+      // At the root there's nowhere to go, so Escape is left to whatever else wants it.
+      if (path.length < 2) return;
+      event.preventDefault();
+      focusAfterMoveRef.current = path[path.length - 2];
+      moveTo(path.slice(0, -1));
+      return;
+    } else if (event.key === '+' || event.key === '=' || event.key === '-' || event.key === '_') {
+      // About the middle of the view, within the zoom limits.
+      const [min, max] = behaviour.scaleExtent();
+      const k = Math.min(max, Math.max(min, base.k * (event.key === '+' || event.key === '=' ? KEY_ZOOM : 1 / KEY_ZOOM)));
+      const [cx, cy] = [viewport.width / 2, viewport.height / 2];
+      const [wx, wy] = base.invert([cx, cy]);
+      next = zoomIdentity.translate(cx - wx * k, cy - wy * k).scale(k);
+    } else if (pan) {
+      next = base.translate((-pan[0] * KEY_PAN * viewport.width) / base.k, (-pan[1] * KEY_PAN * viewport.height) / base.k);
+    } else {
+      return;
+    }
+    event.preventDefault();
+    const extent: [[number, number], [number, number]] = [[0, 0], [viewport.width, viewport.height]];
+    const target = behaviour.constrain()(next, extent, behaviour.translateExtent());
+    const selection = select(svg);
+    if (prefersReducedMotion()) {
+      selection.call(behaviour.transform, target);
+      return;
+    }
+    keyTargetRef.current = target;
+    const done = () => {
+      if (keyTargetRef.current === target) keyTargetRef.current = null;
+    };
+    selection.transition().duration(KEY_MS).call(behaviour.transform, target).on('end interrupt', done);
+  };
+
   // A chip flies out to the nearest frame it shares with where its person is drawn, then in.
   const goToRef = useRef((personId: string) => {
     void personId;
@@ -247,16 +346,25 @@ export function MapCanvas({
   goToRef.current = (personId: string) => {
     moveTo(...chipRoute(focusRef.current ?? [rootId], framePath(ownership, layoutOf, personId)));
   };
+  const zoomIntoRef = useRef((personId: string) => {
+    void personId;
+  });
+  zoomIntoRef.current = (personId: string) => {
+    focusAfterMoveRef.current = personId;
+    moveTo(framePath(ownership, layoutOf, personId));
+  };
   const mapContext = useMemo<MapContextValue>(
     () => ({
       rootId,
       goTo: (personId) => goToRef.current(personId),
+      hasFrame: (personId) => layoutOf(personId) !== null,
+      zoomInto: (personId) => zoomIntoRef.current(personId),
       drawnIn: (personId) => {
         const owner = ownership.get(personId)?.owner ?? null;
         return owner === null ? null : (people.get(owner)?.name ?? '?');
       },
     }),
-    [rootId, ownership, people],
+    [rootId, ownership, people, layoutOf],
   );
 
   const nameOfFrame = (id: string) =>
@@ -270,8 +378,15 @@ export function MapCanvas({
       <svg
         ref={svgRef}
         aria-label="Family map"
+        aria-describedby={keysId}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        onFocus={onFocus}
         className={cn(
           'block size-full cursor-grab select-none active:cursor-grabbing',
+          // An inset 2px --accent-text outline, as DESIGN.md gives a focusable box; inside the
+          // edge, as the panel around the map clips anything outside it.
+          'rounded-[inherit] outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2 focus-visible:outline-accent-text',
           // Embedded, the browser keeps one-finger scrolling; pinches still reach d3-zoom.
           embedded ? 'touch-pan-x touch-pan-y' : 'touch-none',
         )}
@@ -285,11 +400,17 @@ export function MapCanvas({
                 people={people}
                 layoutOf={layoutOf}
                 anchorScale={anchorM.scale}
+                focusedId={focus[focus.length - 1]}
               />
             </MapContext.Provider>
           )}
         </g>
       </svg>
+      {/* Read out as the map's description; hidden from the page itself. */}
+      <p id={keysId} hidden>
+        Tab moves through the people in view. Enter zooms into a person, Escape zooms out. Plus and minus zoom, and
+        the arrow keys pan.
+      </p>
       {focus.length > 1 && (
         <nav aria-label="Frames above this one" className="absolute top-3 left-3 max-w-[calc(100%-7rem)]">
           <ol className="bg-surface-2/90 flex flex-wrap items-center gap-0.5 rounded-[12px] px-1.5 py-1 text-[14px] shadow-sm">

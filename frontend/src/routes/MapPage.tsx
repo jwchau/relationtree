@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { GraphPerson } from '@/api/client';
 import { MapCanvas } from '@/components/map/MapCanvas';
+import { NotConnectedTray } from '@/components/map/NotConnectedTray';
 import { Note, PageBand, PageBody } from '@/components/kiln/Page';
 import { PersonAvatar } from '@/components/person/PersonAvatar';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,7 @@ const FADE_MS = 300;
 const MAP_HEIGHT = 'h-[calc(100svh-15rem)] min-h-[360px]';
 
 export default function MapPage() {
-  const { tree, loading: treesLoading, error: treesError } = useCurrentTree();
+  const { tree, loading: treesLoading, error: treesError, canEdit } = useCurrentTree();
   const { graph, loading: graphLoading, error: graphError } = useTreeGraph(tree?.id);
   const [params, setParams] = useSearchParams();
   const rootParam = params.get('root');
@@ -113,6 +114,10 @@ export default function MapPage() {
               </div>
             ))}
           </div>
+        )}
+
+        {graph && rootId && (
+          <NotConnectedTray key={rootId} graph={graph} rootId={rootId} people={people} canEdit={canEdit} />
         )}
 
         {graph && graph.people.length > 0 && root && root.kind !== 'person' && (

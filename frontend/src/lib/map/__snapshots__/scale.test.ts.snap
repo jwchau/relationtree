@@ -1,0 +1,18 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`a 1,000-person tree > gives the same family core and social circles for everyone 1`] = `
+[
+  "8a060b36",
+  "67d16bfa",
+]
+`;
+
+exports[`a 1,000-person tree > gives the same ownership from several roots 1`] = `
+[
+  "54915e49",
+  "8adf9045",
+  "78a24ac5",
+  "93e3d70d",
+  "d2340ff0",
+]
+`;

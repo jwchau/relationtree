@@ -68,7 +68,11 @@ export function useCreateConnection() {
           },
         }),
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+    // A new link can connect someone to the map (FG-11), and the map's graph sits under ['people'].
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
+    ]),
   });
 }
 
@@ -103,6 +107,10 @@ export function useDeleteConnection() {
           params: { path: { connection_id: connectionId } },
         }),
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+    // Removing a link can disconnect someone from the map, whose graph sits under ['people'].
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: connectionsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: peopleQueryKey }),
+    ]),
   });
 }

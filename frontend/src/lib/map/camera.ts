@@ -82,3 +82,26 @@ export function clampTransform(
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
+
+/** Space kept between something brought into view and the edge of the map, in screen px. */
+export const PAN_MARGIN = 16;
+
+/** A box on screen, relative to the map's top left. */
+export interface ScreenBox {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** How far to move the drawing so a box is on screen with a margin: not at all when it
+ * already is, else just far enough; something bigger than the view lines up top left. Used
+ * when Tab reaches someone partly off screen (FG-12). */
+export function panToShow(box: ScreenBox, viewport: Viewport, margin = PAN_MARGIN): { dx: number; dy: number } {
+  const shift = (start: number, end: number, size: number) => {
+    if (start < margin) return margin - start;
+    if (end > size - margin) return Math.max(size - margin - end, margin - start);
+    return 0;
+  };
+  return { dx: shift(box.left, box.right, viewport.width), dy: shift(box.top, box.bottom, viewport.height) };
+}

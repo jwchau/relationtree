@@ -41,12 +41,19 @@ export interface AddConnectionDialogProps {
   personName: string;
   /** The person's tree: new people are added to it, and only its people can be picked. */
   treeId: string;
+  /** Open on first render, as when the map's Link to… sends someone here (FG-11). */
+  defaultOpen?: boolean;
 }
 
 const NO_KIND: ConnectionKind = { parentKind: null, ended: false };
 
-export function AddConnectionDialog({ personId, personName, treeId }: AddConnectionDialogProps) {
-  const [open, setOpen] = useState(false);
+export function AddConnectionDialog({
+  personId,
+  personName,
+  treeId,
+  defaultOpen = false,
+}: AddConnectionDialogProps) {
+  const [open, setOpen] = useState(defaultOpen);
   const [otherPerson, setOtherPerson] = useState<Person | null>(null);
   const [newPersonName, setNewPersonName] = useState<string | null>(null);
   const [newPersonCategory, setNewPersonCategory] = useState<RelationshipCategory>('FRIEND');

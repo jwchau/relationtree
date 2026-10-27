@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Person, Tree, TreeGraph } from '@/api/client';
@@ -52,6 +52,10 @@ vi.mock('@/hooks/useConnections', () => ({
   useCreateConnection: () => mutation,
   useDeleteConnection: () => mutation,
 }));
+vi.mock('@/hooks/usePersonList', () => ({
+  peopleQueryKey: ['people'],
+  usePersonList: () => ({ people: [], loading: false, error: null }),
+}));
 vi.mock('@/hooks/useSummary', () => ({
   useSummary: () => ({ text: '', status: 'idle', error: null, generate: vi.fn() }),
 }));
@@ -77,12 +81,12 @@ function LocationProbe() {
   return <output aria-label="location">{location.pathname + location.search}</output>;
 }
 
-function renderPage() {
+function renderPage(url = '/people/Robin') {
   render(
     <CurrentTreeContext.Provider
       value={{ tree: ashTree, trees: [ashTree], loading: false, error: null, select: vi.fn() }}
     >
-      <MemoryRouter initialEntries={['/people/Robin']}>
+      <MemoryRouter initialEntries={[url]}>
         <Routes>
           <Route path="/people/:personId" element={<PersonDetailPage />} />
         </Routes>
@@ -135,5 +139,20 @@ describe('PersonDetailPage map', () => {
   it("keeps the map's focus out of the page's URL", () => {
     renderPage();
     expect(screen.getByLabelText('location')).toHaveTextContent(/^\/people\/Robin$/);
+  });
+});
+
+describe('PersonDetailPage ?connect=1', () => {
+  it('opens Add connection on arrival, once, and clears the param', () => {
+    renderPage('/people/Robin?connect=1');
+    expect(screen.getByRole('dialog', { name: 'Add connection' })).toBeInTheDocument();
+    expect(screen.getByLabelText('location')).toHaveTextContent(/^\/people\/Robin$/);
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('leaves the dialog closed without it', () => {
+    renderPage();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

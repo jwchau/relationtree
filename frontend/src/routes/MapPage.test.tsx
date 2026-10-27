@@ -8,7 +8,8 @@ import { tree } from '@/lib/map/testTree';
 import { FixedSizeObserver, observedSize } from '@/test/resizeObserver';
 import MapPage from './MapPage';
 
-const graph = tree(['Robin', 'Alan', 'Beth', 'Sam', 'Gus'], [
+// Zed has no links, so no root reaches him.
+const graph = tree(['Robin', 'Alan', 'Beth', 'Sam', 'Gus', 'Zed'], [
   ['Alan', 'PARENT', 'Robin'],
   ['Beth', 'PARENT', 'Robin'],
   ['Robin', 'SPOUSE', 'Sam'],
@@ -86,5 +87,16 @@ describe('MapPage Make centre', () => {
       vi.advanceTimersByTime(300);
     });
     expect(screen.getAllByLabelText('Family map')).toHaveLength(1);
+  });
+});
+
+describe('MapPage not connected tray', () => {
+  it('lists the people the map cannot reach, under the map', () => {
+    reducedMotion = true;
+    renderMapPage('/map?root=Robin');
+    const tray = screen.getByRole('region', { name: 'Not connected · 1' });
+    expect(within(tray).getByRole('button', { name: 'Zed' })).toBeInTheDocument();
+    fireEvent.click(within(tray).getByRole('button', { name: 'Zed' }));
+    expect(within(tray).getByRole('link', { name: 'Link Zed to…' })).toBeInTheDocument();
   });
 });
