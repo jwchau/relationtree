@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AVATAR_Y, frameLayout, SLOT_H, SLOT_W, type FrameLayout, type Slot } from './frameLayout';
+import { AVATAR_Y, CARD_MAX_PX, cardContentScale, frameLayout, SLOT_H, SLOT_W, type FrameLayout, type Slot } from './frameLayout';
 import type { Frame } from './frames';
 
 const ids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
@@ -23,6 +23,7 @@ function frameWith(friends: number, coworkers: number, acquaintances: number): F
       reports: [],
     },
     chips: new Set(),
+    overflow: {},
   };
 }
 
@@ -336,5 +337,63 @@ describe('frameLayout ended couples', () => {
   it("marks a parent's bar with their other partner when that relationship has ended", () => {
     expect(barBetween(core(false, true), 'P2', 'P3')?.ended).toBe(true);
     expect(barBetween(core(false, false), 'P2', 'P3')?.ended).toBeFalsy();
+  });
+});
+
+describe('frameLayout wrapping children (FG-10)', () => {
+  const kids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
+  const layoutWith = (groups: { parents: string[]; children: string[] }[]) =>
+    frameLayout({
+      parents: { ids: [], couple: false, ended: false },
+      self: 'A',
+      spouses: ['S'],
+      former: [],
+      siblings: [],
+      half: [],
+      children: groups,
+      kinds: {},
+    });
+  const childSlots = (layout: FrameLayout) => layout.slots.filter((s) => s.role === 'child');
+
+  it('keeps a family of up to six children on one row', () => {
+    const layout = layoutWith([{ parents: ['A', 'S'], children: kids('K', 6) }]);
+    expect(new Set(childSlots(layout).map((s) => s.y)).size).toBe(1);
+  });
+
+  it('wraps many children into rows that keep the frame roughly square', () => {
+    for (const n of [7, 20, 40, 100, 200]) {
+      const layout = layoutWith([{ parents: ['A', 'S'], children: kids('K', n) }]);
+      const rows = new Map<number, number>();
+      for (const s of childSlots(layout)) rows.set(s.y, (rows.get(s.y) ?? 0) + 1);
+      expect(Math.max(...rows.values()), `${n}`).toBeLessThanOrEqual(Math.max(6, Math.ceil(Math.sqrt(n))));
+      expect(childSlots(layout), `${n}`).toHaveLength(n);
+      const ratio = layout.bounds.width / layout.bounds.height;
+      expect(ratio, `${n}`).toBeGreaterThanOrEqual(0.5);
+      expect(ratio, `${n}`).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("keeps each couple's children together and connects every child to a line", () => {
+    const layout = layoutWith([
+      { parents: ['A', 'S'], children: kids('K', 20) },
+      { parents: ['A'], children: kids('J', 3) },
+    ]);
+    const xs = (prefix: string) => childSlots(layout).filter((s) => s.id.startsWith(prefix)).map((s) => s.x);
+    // The groups' columns don't interleave.
+    expect(Math.max(...xs('K')) < Math.min(...xs('J')) || Math.max(...xs('J')) < Math.min(...xs('K'))).toBe(true);
+    for (const s of childSlots(layout)) {
+      expect(layout.lines.some((l) => l.x1 === s.x && l.x2 === s.x && l.y2 === s.y), s.id).toBe(true);
+    }
+  });
+});
+
+describe('cardContentScale', () => {
+  it("leaves a card's contents at full size while its slot is under the cap on screen", () => {
+    expect(cardContentScale(1, CARD_MAX_PX / SLOT_W / 2)).toBe(1);
+  });
+
+  it('shrinks them so they stay at the cap once the slot is wider', () => {
+    // A slot twice the cap on screen: anchored zoom 2 on a frame drawn at the cap's scale.
+    expect(cardContentScale(2, CARD_MAX_PX / SLOT_W)).toBeCloseTo(0.5);
   });
 });

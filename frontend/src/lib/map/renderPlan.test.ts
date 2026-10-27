@@ -3,7 +3,7 @@ import { fitTransform, MAX_ZOOM, type Transform, type Viewport } from './camera'
 import { frameLayouts } from './frames';
 import { SLOT_W } from './frameLayout';
 import { planKey, planRender, zoomCeiling, type PlanNode } from './renderPlan';
-import { tree } from './testTree';
+import { tree, type Link } from './testTree';
 
 // Root A with parents P1 and P2 (P1 has parents G1, G2 and a sibling U), and a sibling B with
 // no partner or children, so B's slot has nothing to open into.
@@ -149,5 +149,30 @@ describe('planRender with a blended family (FG-9)', () => {
     };
     walk(planRender('A', t, viewport, layouts));
     expect([...drawn].sort()).toEqual(['A', 'F', 'G', 'H', 'H0', 'P0', 'P1', 'P2', 'P3']);
+  });
+});
+
+describe('planRender with a crowded band (FG-10)', () => {
+  it('opens the "+N more" tile into the overflow frame, and draws all 60 coworkers once', () => {
+    const names = Array.from({ length: 60 }, (_, i) => `W${String(i).padStart(2, '0')}`);
+    const graph = tree(
+      ['A', ...names, 'S'],
+      [...names.map((w): Link => ['A', 'COWORKER', w]), ['W59', 'SPOUSE', 'S']],
+    );
+    const layouts = frameLayouts(graph, 'A');
+    const bounds = layouts('A')!.bounds;
+    const k = 1e7 / SLOT_W;
+    const root = planRender('A', { k, x: -bounds.x * k, y: -bounds.y * k }, { width: bounds.width * k, height: bounds.height * k }, layouts);
+    expect(root.open.has('A~coworkers')).toBe(true);
+    expect(root.open.get('A~coworkers')!.open.has('W59')).toBe(true);
+    const drawn: string[] = ['A'];
+    const walk = (node: PlanNode) => {
+      for (const slot of layouts(node.personId)!.slots) {
+        if (slot.id !== node.personId && !slot.chip && slot.role !== 'more') drawn.push(slot.id);
+      }
+      node.open.forEach(walk);
+    };
+    walk(root);
+    expect([...drawn].sort()).toEqual(['A', ...names, 'S'].sort());
   });
 });

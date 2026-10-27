@@ -301,3 +301,30 @@ describe('chipRoute', () => {
     expect(chipRoute(['R', 'A'], ['R', 'B'])).toEqual([['R'], ['R', 'B']]);
   });
 });
+
+describe('paths through an overflow frame (FG-10)', () => {
+  // A has 30 coworkers; the last by the band's order go to the overflow. W29 also has a
+  // spouse, so W29 has a frame of their own.
+  const names = Array.from({ length: 30 }, (_, i) => `W${String(i).padStart(2, '0')}`);
+  const graph = tree(
+    ['A', ...names, 'S'],
+    [...names.map((w): Link => ['A', 'COWORKER', w]), ['W29', 'SPOUSE', 'S']],
+  );
+  const ownership = assignOwnership(graph, 'A');
+  const layoutOf = frameLayouts(graph, 'A', ownership);
+  const inOverflow = layoutOf('A~coworkers')!.slots.map((s) => s.id);
+
+  it('goes through the overflow frame to reach someone drawn in it', () => {
+    expect(inOverflow).toContain('W29');
+    expect(framePath(ownership, layoutOf, 'W29')).toEqual(['A', 'A~coworkers', 'W29']);
+  });
+
+  it('ends at the overflow frame for someone in it who has no frame', () => {
+    const plain = inOverflow.find((id) => id !== 'W29')!;
+    expect(framePath(ownership, layoutOf, plain)).toEqual(['A', 'A~coworkers']);
+  });
+
+  it('opens an overflow frame from ?focus=', () => {
+    expect(focusFromParam('A~coworkers', ownership, layoutOf)).toEqual(['A', 'A~coworkers']);
+  });
+});

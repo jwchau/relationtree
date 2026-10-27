@@ -1,5 +1,6 @@
 import type { Bounds } from './camera';
 import type { FamilyCore } from './familyCore';
+import { parseOverflowId } from './overflow';
 import type { SocialCircles } from './social';
 
 // Every person gets the same fixed slot (design doc D5). Units are the frame's own; the
@@ -29,7 +30,9 @@ export type Role =
   | 'coworker'
   | 'manager'
   | 'report'
-  | 'acquaintance';
+  | 'acquaintance'
+  /** A band's "+N more" tile, opening into its overflow frame (FG-10). */
+  | 'more';
 
 export type BandKind = 'friends' | 'coworkers' | 'acquaintances';
 
@@ -200,21 +203,36 @@ export function frameLayout(
     .map((group, order) => ({ group, order }))
     .sort((a, b) => partnerX(a.group) - partnerX(b.group) || a.order - b.order)
     .map(({ group }) => group);
-  const groupWidths = groups.map((g) => g.children.length * step - GAP);
+  // Many children wrap into rows so the frame stays roughly square (Q8c): at most
+  // max(6, √n) a row, each couple's children kept together. A wrapped group hangs its rows
+  // from a spine in the gap to its left.
+  const perRow = Math.max(6, Math.ceil(Math.sqrt(groups.reduce((n, g) => n + g.children.length, 0))));
+  const rowStep = SLOT_H + ROW_GAP;
+  const groupWidths = groups.map((g) => Math.min(g.children.length, perRow) * step - GAP);
   const totalWidth = groupWidths.reduce((a, b) => a + b, 0) + (groupWidths.length - 1) * GROUP_GAP;
   let left = -totalWidth / 2;
   const children: Slot[] = [];
   groups.forEach((group, g) => {
-    const kids = row(group.children, 'child', left + groupWidths[g] / 2, bottomY);
-    children.push(...kids);
+    const rows: Slot[][] = [];
+    for (let r = 0; r * perRow < group.children.length; r++) {
+      const ids = group.children.slice(r * perRow, (r + 1) * perRow);
+      // Rows start at the group's left edge, so wrapped rows line up in columns.
+      const width = ids.length * step - GAP;
+      rows.push(row(ids, 'child', left + width / 2, bottomY + r * rowStep));
+    }
+    children.push(...rows.flat());
     const spouse = spouses.find((s) => group.parents.includes(s.id));
     const anchorX = spouse ? spouse.x / 2 : 0;
     const anchorY = spouse ? midY + AVATAR_Y : midY + SLOT_H;
-    const barY = bottomY - 24;
-    lines.push({ x1: anchorX, y1: anchorY, x2: anchorX, y2: barY });
-    const xs = [anchorX, ...kids.map((k) => k.x)];
-    lines.push({ x1: Math.min(...xs), y1: barY, x2: Math.max(...xs), y2: barY });
-    for (const k of kids) lines.push({ x1: k.x, y1: barY, x2: k.x, y2: bottomY });
+    const barY = (r: number) => bottomY + r * rowStep - 24;
+    lines.push({ x1: anchorX, y1: anchorY, x2: anchorX, y2: barY(0) });
+    const spineX = rows.length > 1 ? left - step / 2 : null;
+    if (spineX !== null) lines.push({ x1: spineX, y1: barY(0), x2: spineX, y2: barY(rows.length - 1) });
+    rows.forEach((kids, r) => {
+      const xs = [...(r === 0 ? [anchorX] : []), ...(spineX === null ? [] : [spineX]), ...kids.map((k) => k.x)];
+      lines.push({ x1: Math.min(...xs), y1: barY(r), x2: Math.max(...xs), y2: barY(r) });
+      for (const k of kids) lines.push({ x1: k.x, y1: barY(r), x2: k.x, y2: k.y });
+    });
     left += groupWidths[g] + GROUP_GAP;
   });
 
@@ -234,11 +252,8 @@ export function frameLayout(
   const social = core.social;
   if (social) {
     const roleOf = (kind: BandKind, id: string): Role => {
-      if (kind === 'friends') return 'friend';
-      if (kind === 'acquaintances') return 'acquaintance';
-      if (social.managers.includes(id)) return 'manager';
-      if (social.reports.includes(id)) return 'report';
-      return 'coworker';
+      if (parseOverflowId(id)) return 'more';
+      return bandRole(kind, id, social);
     };
     for (const kind of ['friends', 'coworkers', 'acquaintances'] as const) {
       const ids = social[kind];
@@ -265,6 +280,40 @@ export function frameLayout(
     return { ...s, ...(core.chips?.has(s.id) && { chip: true }), ...(kind && { kind }) };
   });
   return { slots: marked, lines, bands, bounds: padded(box), fitAreas: [padded(box), ...inner] };
+}
+
+/** A band member's role: a friend, an acquaintance, or a coworker who may manage this person
+ * or be managed by them. */
+function bandRole(kind: BandKind, id: string, social: SocialCircles): Role {
+  if (kind === 'friends') return 'friend';
+  if (kind === 'acquaintances') return 'acquaintance';
+  if (social.managers.includes(id)) return 'manager';
+  if (social.reports.includes(id)) return 'report';
+  return 'coworker';
+}
+
+/** A band's overflow frame (FG-10): everyone past the cap, in name order, as a square grid
+ * of the usual slots. No family core and no bands; it scales down in its tile like any frame. */
+export function overflowLayout(
+  band: BandKind,
+  ids: string[],
+  social: SocialCircles,
+  chips: Set<string>,
+): FrameLayout {
+  const cols = Math.ceil(Math.sqrt(ids.length));
+  const step = { x: SLOT_W + GAP, y: SLOT_H + GAP };
+  const slots = ids.map((id, i): Slot => {
+    const slot: Slot = { id, role: bandRole(band, id, social), x: (i % cols) * step.x, y: Math.floor(i / cols) * step.y + 4 };
+    return chips.has(id) ? { ...slot, chip: true } : slot;
+  });
+  const rows = Math.ceil(ids.length / cols);
+  const box: Bounds = {
+    x: -SLOT_W / 2 - PAD,
+    y: -PAD,
+    width: cols * step.x - GAP + 2 * PAD,
+    height: rows * step.y - GAP + 2 * PAD,
+  };
+  return { slots, lines: [], bands: [], bounds: box, fitAreas: [box] };
 }
 
 /** One ring of slots around `around`: a row above and below, and a column each side. If
@@ -329,12 +378,10 @@ function bandAround(
 
 /** The card stops growing once its slot is this wide on screen. */
 export const CARD_MAX_PX = 240;
-/** The camera's scale, set on the canvas by MapCanvas, so cards at any depth can cap their
- * size in CSS without React re-rendering as you zoom. */
-export const ZOOM_VAR = '--map-k';
-
-/** The CSS transform that keeps a card's contents at most CARD_MAX_PX wide on screen, for a
- * frame whose units are `scale` root-frame units. */
-export function cardScaleCss(scale: number): string {
-  return `scale(min(1, calc(${CARD_MAX_PX} / (var(${ZOOM_VAR}, 1) * ${SLOT_W * scale}))))`;
+/** How much a card's contents shrink so they're at most CARD_MAX_PX wide on screen: 1 below
+ * the cap. `anchorK` is the anchored frame's scale on screen and `scale` the card's frame in
+ * the anchored frame's units. MapCanvas sets it on each card as the camera moves, not
+ * through a CSS variable, which made the browser restyle the whole canvas every frame. */
+export function cardContentScale(anchorK: number, scale: number): number {
+  return Math.min(1, CARD_MAX_PX / (anchorK * SLOT_W * scale));
 }

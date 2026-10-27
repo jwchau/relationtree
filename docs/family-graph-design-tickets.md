@@ -396,6 +396,27 @@ Dependencies: FG-1 → FG-2 → FG-3 → FG-4. FG-5 to FG-7 and FG-11 need FG-3.
 
 **Done when:** a synthetic tree with 60 coworkers is legible and every coworker can be reached.
 
+**Status: done.** Notes from building it:
+- **Cap (decisions V, W):**
+  - A band of more than 24 shows the first 23 in its usual order plus a "+N more" tile, so it stays at 24 slots.
+  - The rest go to the band's overflow frame, sorted by name: a virtual frame with the id `<ownerId>~<band>` (decision X), laid out as a square grid.
+  - Its people stay owned by the band's owner, so they're drawn there once and their own frames open from it.
+  - The overflow frame has no cap of its own (decision Z).
+- **Paths:** `framePath` steps through the overflow frame for anyone drawn in it, so chips, `?focus=` and shared links reach them. An overflow id in `?focus=` opens that frame. The breadcrumb names it "Coworkers (41 more)", and screen readers hear "Robin Ash's coworkers".
+- **The tile:** shaped like a chip, with a dashed outline, "+41" where the avatar would be and "more coworkers" under it. It's one button (click, Enter or Space) that flies there, and zooming opens it like any frame.
+- **Children (decision Y):** no cap. Rows wrap at max(6, √n), each couple's children stay together, and a wrapped group hangs its rows from a spine in the gap to its left. The frame stays within a 0.5–2 aspect ratio for 1 to 200 children and 1 to 200 per band.
+- **Checked in Chrome** with 60 synthetic colleagues added to Robin on the local database (64 in the band with Wes, Mia, Ray and Tess):
+  - The band shows 23 and "+41 more", and the frame stays square.
+  - The tile flies to a 7 × 6 grid of the other 41, in name order, and reloading that URL reopens it.
+  - Every coworker is reachable: 23 + 41.
+- **Smoothness (fixed at the owner's request before committing):**
+  - The first measurement, zooming toward the tile for 3 s with frames laid out, gave 64–87 fps with a 95th percentile of 29–33 ms and about 70 of 250 frames over 17 ms.
+  - The slow frames changed no DOM. The cause was the camera writing a `--map-k` CSS variable on the `<svg>` every frame for the card cap: an inherited custom property, so every write restyled the whole canvas. Measured without those writes, the 95th percentile fell to 20.6 ms. `will-change: transform` made no clear difference.
+  - Fix: MapCanvas keeps a list of the card content groups (`data-card-scale`) after each render, and on each camera move sets `style.transform` on the ones whose `cardContentScale` changed. `--map-k` and `cardScaleCss` are gone.
+  - After the fix, toward the tile: 140–148 fps, 95th percentile 16.6–20.5 ms, 18–29 frames over 17 ms. Toward Robin in the same tree: 156 fps, 95th percentile 16.7 ms (it was 139 fps and 21 ms). The display idles at about 140 frames a second, so the map now keeps up with it.
+  - Cards still cap: a 666 px slot's contents are scaled 0.36 and come out 210 px wide.
+  - Left for FG-12: hiding all text would give 190 fps and a 12 ms 95th percentile, so dropping text below name size remains worth measuring.
+
 ---
 
 ## FG-11 Not connected tray

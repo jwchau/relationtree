@@ -5,7 +5,6 @@ import type { Detail } from '@/lib/map/detail';
 import { bornLine } from '@/lib/map/card';
 import {
   AVATAR_Y,
-  cardScaleCss,
   fitInSlot,
   SLOT_H,
   SLOT_W,
@@ -18,6 +17,7 @@ import type { PlanNode } from '@/lib/map/renderPlan';
 import { initials } from '@/lib/people';
 import { cn } from '@/lib/utils';
 import { MapContext } from './MapContext';
+import { parseOverflowId } from '@/lib/map/overflow';
 
 const ROLE_LABELS: Record<Role, string> = {
   self: 'centre',
@@ -32,6 +32,7 @@ const ROLE_LABELS: Record<Role, string> = {
   manager: 'manager',
   report: 'report',
   acquaintance: 'acquaintance',
+  more: 'more',
 };
 
 const BAND_LABELS: Record<BandKind, string> = {
@@ -59,11 +60,17 @@ export function FamilyFrame({
   anchorScale?: number;
 }) {
   const centre = people.get(node.personId);
+  const over = parseOverflowId(node.personId);
+  const label = over
+    ? `${people.get(over.owner)?.name ?? '?'}'s ${over.band}`
+    : centre
+      ? `Family of ${centre.name}`
+      : 'Family';
   // A slot past the frame threshold whose person owns no one has nothing to open, so it
   // stays a card.
   const detail: Detail = node.detail === 'frame' ? 'card' : node.detail;
   return (
-    <g role="group" aria-label={centre ? `Family of ${centre.name}` : 'Family'}>
+    <g role="group" aria-label={label}>
       {/* Social circles: one outline per band, outermost first so inner ones draw on top.
           Labels only from card size, where they're big enough to read. */}
       <g aria-hidden>
@@ -128,6 +135,18 @@ export function FamilyFrame({
                 />
               </g>
             </g>
+          );
+        }
+        if (slot.role === 'more') {
+          const band = parseOverflowId(slot.id)!.band;
+          return (
+            <MoreTile
+              key={slot.id}
+              slot={slot}
+              band={band}
+              count={layoutOf(slot.id)?.slots.length ?? 0}
+              detail={detail}
+            />
           );
         }
         const person = people.get(slot.id);
@@ -247,13 +266,7 @@ function PersonCard({
         className={cn('stroke-hairline', slot.role === 'self' ? 'fill-ghost' : 'fill-surface-2')}
       />
       {/* Only the contents stop growing; the box keeps the slot's size so lines still meet it. */}
-      <g
-        style={{
-          transform: cardScaleCss(scale),
-          transformBox: 'fill-box',
-          transformOrigin: 'center',
-        }}
-      >
+      <g data-card-scale={scale} style={CARD_CONTENTS}>
         <Avatar person={person} cx={slot.x} cy={top + 28} r={20} />
         <text
           x={slot.x}
@@ -354,7 +367,7 @@ function ChipSlot({
         </text>
       )}
       {(detail === 'card' || detail === 'frame') && (
-        <g style={{ transform: cardScaleCss(scale), transformBox: 'fill-box', transformOrigin: 'center' }}>
+        <g data-card-scale={scale} style={CARD_CONTENTS}>
           <Avatar person={person} cx={slot.x} cy={top + 28} r={20} />
           <text x={slot.x} y={top + 64} textAnchor="middle" aria-hidden className="fill-text text-[12px]">
             {shortName(person.name)} ↗
@@ -363,6 +376,79 @@ function ChipSlot({
             {owner === null ? 'At the centre' : `In ${shortName(owner)}'s family`}
           </text>
         </g>
+      )}
+    </g>
+  );
+}
+
+/** A crowded band's "+N more" tile (FG-10): the shape of a chip, a dashed outline, with the
+ * count where a person's avatar would be. One button that takes the camera to the overflow
+ * frame; zooming in opens it there like any frame. */
+function MoreTile({
+  slot,
+  band,
+  count,
+  detail,
+}: {
+  slot: Slot;
+  band: BandKind;
+  count: number;
+  detail: Detail;
+}) {
+  const map = useContext(MapContext);
+  const go = () => map?.goTo(slot.id);
+  const cy = slot.y + AVATAR_Y;
+  return (
+    <g
+      role="button"
+      tabIndex={0}
+      aria-label={`${count} more ${band}`}
+      className="group cursor-pointer outline-none"
+      onClick={go}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        go();
+      }}
+    >
+      {detail === 'dot' ? (
+        <circle
+          cx={slot.x}
+          cy={slot.y + SLOT_H / 2 - 4}
+          r={36}
+          strokeWidth={8}
+          strokeDasharray="12 10"
+          className="fill-none stroke-muted-foreground"
+        />
+      ) : (
+        <>
+          <rect
+            x={slot.x - SLOT_W / 2}
+            y={slot.y - 4}
+            width={SLOT_W}
+            height={SLOT_H}
+            rx={12}
+            strokeWidth={2}
+            strokeDasharray="8 6"
+            className="fill-transparent stroke-subtle transition-colors duration-200 group-hover:fill-ghost-hover group-focus-visible:stroke-ring"
+          />
+          <text
+            x={slot.x}
+            y={cy}
+            textAnchor="middle"
+            dominantBaseline="central"
+            aria-hidden
+            className="fill-text font-semibold"
+            style={{ fontSize: 26 }}
+          >
+            +{count}
+          </text>
+          {detail !== 'avatar' && (
+            <text x={slot.x} y={cy + AVATAR_R + 22} textAnchor="middle" aria-hidden className="fill-muted-foreground text-[14px]">
+              more {band}
+            </text>
+          )}
+        </>
       )}
     </g>
   );
@@ -415,6 +501,10 @@ function relationLabel(slot: Slot): string | null {
   if (slot.kind === 'HALF') return 'Half-sibling';
   return null;
 }
+
+/** A card's contents, scaled about their centre. MapCanvas sets the scale itself on every
+ * `data-card-scale` group as the camera moves (see cardContentScale). */
+const CARD_CONTENTS = { transformBox: 'fill-box', transformOrigin: 'center' } as const;
 
 /** An SVG link that navigates inside the app (and still opens a new tab on ctrl/cmd-click). */
 function SlotLink({
