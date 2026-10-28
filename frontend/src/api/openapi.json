@@ -2820,6 +2820,21 @@
           },
           "type": {
             "$ref": "#/components/schemas/RelationshipType"
+          },
+          "parent_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParentKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended": {
+            "default": false,
+            "title": "Ended",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2929,6 +2944,10 @@
             "title": "Connections Added",
             "type": "integer"
           },
+          "connections_updated": {
+            "title": "Connections Updated",
+            "type": "integer"
+          },
           "connections_skipped": {
             "title": "Connections Skipped",
             "type": "integer"
@@ -2938,6 +2957,7 @@
           "created",
           "updated",
           "connections_added",
+          "connections_updated",
           "connections_skipped"
         ],
         "title": "AppliedOut",

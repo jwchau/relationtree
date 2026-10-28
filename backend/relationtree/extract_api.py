@@ -39,6 +39,10 @@ class ProposedConnection(Schema):
     a: str
     b: str
     type: Connection.RelationshipType
+    # Biological, adoptive or step on a PARENT link (null on others); a SPOUSE link that has
+    # ended is a former partner. Saved as they are, like the Add connection dialog's.
+    parent_kind: Connection.ParentKind | None = None
+    ended: bool = False
 
 
 class Proposal(Schema):
@@ -53,6 +57,7 @@ class AppliedOut(Schema):
     created: list[PersonOut]
     updated: list[PersonOut]
     connections_added: int
+    connections_updated: int
     connections_skipped: int
 
 
@@ -100,6 +105,7 @@ def apply_proposal(
             "created": applied.created,
             "updated": applied.updated,
             "connections_added": applied.connections_added,
+            "connections_updated": applied.connections_updated,
             "connections_skipped": applied.connections_skipped,
         },
     )

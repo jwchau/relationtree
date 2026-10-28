@@ -906,6 +906,12 @@ export interface components {
             /** B */
             b: string;
             type: components["schemas"]["RelationshipType"];
+            parent_kind?: components["schemas"]["ParentKind"] | null;
+            /**
+             * Ended
+             * @default false
+             */
+            ended?: boolean;
         };
         /** ProposedPerson */
         ProposedPerson: {
@@ -934,6 +940,8 @@ export interface components {
             updated: components["schemas"]["PersonOut"][];
             /** Connections Added */
             connections_added: number;
+            /** Connections Updated */
+            connections_updated: number;
             /** Connections Skipped */
             connections_skipped: number;
         };

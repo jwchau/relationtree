@@ -36,7 +36,7 @@ def build_summary_context(person: Person, today: date | None = None) -> str:
         lines.append("Last contacted: never recorded")
     if person.notes:
         lines.append(f"Notes:\n{person.notes}")
-    connections = [f"{v.other.name} ({v.label})" for v in connections_of(person)]
+    connections = [f"{v.other.name} ({v.role})" for v in connections_of(person)]
     if connections:
         lines.append("Connected to: " + ", ".join(connections))
     lines.append(f"Today's date: {today.isoformat()}")
@@ -47,7 +47,9 @@ ASK_SYSTEM_PROMPT = (
     "You answer questions about the people in someone's life, using only the tools to look "
     "things up. Never guess at relationships: look them up. Roles are always the other "
     "person's role relative to the one you looked up (in get_person, a connection with role "
-    "'Child' is that person's child). Answer in one or two short sentences of plain text (no "
+    "'Child' is that person's child). A 'Former spouse' is an ex, never a current partner, and "
+    "step and adoptive relations are named so ('Step-child', 'Adoptive parent'): say so when "
+    "you mention them. Answer in one or two short sentences of plain text (no "
     "markdown, bold or lists), naming people by their full name. If the tools don't give an "
     "answer, say you don't know."
 )
@@ -85,6 +87,10 @@ EXTRACT_SYSTEM_PROMPT = (
     "List connections the note states or clearly implies, naming people exactly as in your "
     "people list (or the known list). Types: SPOUSE, SIBLING, FRIEND, COWORKER, ACQUAINTANCE "
     "have no direction. PARENT means from is to's parent; MANAGER means from is to's manager. "
+    "On PARENT, set parent_kind to STEP for a step-parent or step-child, ADOPTIVE for an "
+    "adoptive parent or adopted child, otherwise BIOLOGICAL. On SPOUSE, set ended to true "
+    "for an ex, a divorce or a former partner. On every other type, parent_kind is null and "
+    "ended is false. "
     "Only add a connection when the note states how two people are related (family, "
     "friends, work together, manages): being at the same event, meeting someone, or doing "
     "something together is not a connection. Never invent people or connections the note "
@@ -131,8 +137,13 @@ EXTRACT_FORMAT: dict[str, object] = {
                             "MANAGER",
                         ],
                     },
+                    "parent_kind": {
+                        "type": ["string", "null"],
+                        "enum": ["BIOLOGICAL", "ADOPTIVE", "STEP", None],
+                    },
+                    "ended": {"type": "boolean"},
                 },
-                "required": ["from", "to", "type"],
+                "required": ["from", "to", "type", "parent_kind", "ended"],
             },
         },
     },

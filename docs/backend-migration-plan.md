@@ -156,6 +156,9 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
   list of names. Measured: a list of 1000 names is ~6800 tokens (silently cut at the 2048 context)
   and 10 names already pulled the vector to 0.83 similarity with the person's own description; the
   summary is ~40 tokens at any size (0.94). Natural sentences beat labels ("who is married?").
+  Since 2026-10-27 the sentences tell kinds apart ("Has a former spouse.", "Has a stepchild.",
+  "Has an adoptive parent."), so an ex no longer makes someone "married"; migration 0008
+  re-embedded everyone once for it.
 - Summaries change only when a connection is added/removed (signals on Connection bump both
   people, including cascades from deleting a person). Renames affect no one else. Changing
   `document_text()` requires a migration that marks everyone stale (see migration 0004).
@@ -171,6 +174,11 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
   `get_person`, `people_with_relationship` (role-based: "Child" lists parents), `path_between`
   (shortest chain, max 6 steps, 2 queries at any size), `semantic_search`. Unknown tools and bad
   arguments go back to the model as errors.
+- Roles carry their kind (`relationships.role_of`): "Former spouse", "Step-parent", "Step-child",
+  "Adoptive parent", "Adopted child". In `people_with_relationship`, "Spouse" is current spouses
+  only, "Child" and "Parent" take in step and adoptive ones, named ("Kit (step-child)"), and a
+  kind asks for just that kind. The API's own `label` stays plain; the frontend words it.
+  Measured (18 people, 16 questions): 14–15/16 against 12/16 before.
 - Streams newline-delimited JSON: `{"tool": progress}`, `{"text": delta}`, `{"error": …}` if the
   AI stops mid-answer, then `{"people": [{id, name}]}` (tool-result people named in the answer,
   shown as links). 503 before streaming when Ollama is down, as for summaries.
@@ -220,9 +228,12 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
 ### Free-text extraction (M17)
 - `POST /api/extract?tree= {text}` (editors and owners, up to 2,000 characters) returns a proposal
   and saves nothing: people `{ref, name, match_id, category, context, note}` and connections
-  `{a, b, type}` between refs. `POST /api/extract/apply?tree=` takes the reviewed proposal back
+  `{a, b, type, parent_kind, ended}` between refs (a kind only on PARENT, `ended` only on
+  SPOUSE; anything else is dropped). `POST /api/extract/apply?tree=` takes the reviewed proposal back
   and saves it in one transaction: new people (with category and context), a dated line
-  appended to matched people's notes, connections (existing ones skipped). A match outside the
+  appended to matched people's notes, connections (an existing one is skipped, or updated when
+  the note now calls it step, adoptive or former; the response counts added, updated and
+  skipped). A match outside the
   tree or a dangling ref is a 422 and nothing is written.
 - One non-streamed `CHAT_MODEL` call with Ollama structured output (`EXTRACT_FORMAT`) and
   thinking on. The prompt gets the note, the tree's ids and names (no contact details) and who
@@ -231,7 +242,9 @@ Browser ──► app.example.com (Cloudflare Pages: React build)
   are dropped. Unreadable output is a 502, Ollama down a 503.
 - **Measured** (`tests/eval_extract.py`, 8 people, 10 notes): 10/10 with the final prompt
   (median 13.6 s); thinking off scored 8/10 and invented links from shared surnames. Telling
-  the model that being at the same event isn't a connection fixed made-up friendships.
+  the model that being at the same event isn't a connection fixed made-up friendships. With
+  kinds (2026-10-27, 14 notes: an ex who remarried, a stepdad, an adoption, an ex co-parenting):
+  14/14, median 9.9 s.
 - Frontend: "Add from a note" on the People page (editors and owners). The review lets you
   skip people, edit new people's names and categories, re-match or un-match, edit or untick
   each note line, and untick connections; connections to skipped people drop out.

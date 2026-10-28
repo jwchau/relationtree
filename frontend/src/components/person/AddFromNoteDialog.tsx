@@ -8,6 +8,7 @@ import {
   buildApplyRequest,
   describeConnection,
   initialReview,
+  savedMessage,
   type PersonReview,
   type Review,
 } from '@/lib/extract';
@@ -67,15 +68,9 @@ export function AddFromNoteDialog({ treeId }: { treeId: string }) {
     if (!review) return;
     applyExtract.mutate(buildApplyRequest(review), {
       onSuccess: (applied) => {
-        const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-        const parts = [
-          applied.created.length && `${applied.created.length} added`,
-          applied.updated.length && `${applied.updated.length} updated`,
-          applied.connections_added && plural(applied.connections_added, 'connection'),
-        ].filter(Boolean);
         // The toaster sits outside the router, so its button goes through navigate().
         const [first] = applied.created;
-        toast.success(parts.length ? `Saved: ${parts.join(', ')}` : 'Nothing new to save', {
+        toast.success(savedMessage(applied), {
           duration: first ? 8000 : undefined,
           action: first && {
             label: `Open ${first.name}`,
@@ -191,7 +186,7 @@ export function AddFromNoteDialog({ treeId }: { treeId: string }) {
                           )
                         }
                       />
-                      {describeConnection(names.get(c.a) ?? '?', names.get(c.b) ?? '?', c.type)}
+                      {describeConnection(names.get(c.a) ?? '?', names.get(c.b) ?? '?', c.type, c)}
                     </label>
                   );
                 })}

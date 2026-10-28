@@ -13,6 +13,8 @@ The prompt, the thinking and the answer share num_ctx (8192). Thinking is the bi
 tokens for a one-line note, ~3.5-5k for a full 2000-char one. Each known person costs ~8 tokens
 (it was ~36 with UUIDs), so a full note still read perfectly in a 300-person tree, a short one
 in 600; past that the user gets "too much to read" (413), not a wrong proposal.
+With parent kinds and former partners asked for too (2026-10-27, four more notes: an ex-wife
+who remarried, a stepdad, an adoption, an ex co-parenting a son): 14/14, median 9.9 s.
 Thinking off scored 8/10 (median 2.4 s) with invented links ("Maya and I went to Priya's dinner"
 made Maya a sibling, from the shared surname), so thinking stays on. The usual miss: a college
 roommate proposed as an acquaintance rather than a friend.
@@ -70,6 +72,9 @@ class _RawLink(BaseModel):
     from_: str = Field(alias="from")
     to: str
     type: str
+    # Only meaningful on PARENT and SPOUSE; clean() drops them anywhere else.
+    parent_kind: str | None = None
+    ended: bool | None = None
 
 
 class _RawProposal(BaseModel):
@@ -140,6 +145,17 @@ class _Builder:
         return self.add(match.name, str(match.id)) if match else None
 
 
+def _kind_of(link: _RawLink) -> dict[str, Any]:
+    """A link's parent kind and whether it has ended, kept only where they mean something:
+    a parent with no (or an unknown) kind is biological, as the API defaults it."""
+    is_parent = link.type == Connection.RelationshipType.PARENT
+    kind = link.parent_kind if link.parent_kind in Connection.ParentKind.values else None
+    return {
+        "parent_kind": (kind or Connection.ParentKind.BIOLOGICAL) if is_parent else None,
+        "ended": bool(link.ended) and link.type == Connection.RelationshipType.SPOUSE,
+    }
+
+
 def clean(raw: _RawProposal, tree: Tree) -> dict[str, Any]:
     builder = _Builder(known={str(p.id): p for p in tree.people.all()})
     for person in raw.people:
@@ -161,7 +177,7 @@ def clean(raw: _RawProposal, tree: Tree) -> dict[str, Any]:
         if (pair[0], pair[1], link.type) in seen:
             continue
         seen.add((pair[0], pair[1], link.type))
-        links.append({"a": a.ref, "b": b.ref, "type": link.type})
+        links.append({"a": a.ref, "b": b.ref, "type": link.type, **_kind_of(link)})
 
     return {"people": [e.out() for e in builder.entries.values()], "connections": links}
 
@@ -206,6 +222,7 @@ class Applied:
     created: list[Person]
     updated: list[Person]
     connections_added: int
+    connections_updated: int
     connections_skipped: int
 
 
@@ -245,7 +262,7 @@ def apply(tree: Tree, people: list[dict[str, Any]], links: list[dict[str, Any]])
                     updated.append(person)
             resolved[p["ref"]] = person
 
-        added = skipped = 0
+        added = changed = skipped = 0
         for link in links:
             a, b = resolved.get(link["a"]), resolved.get(link["b"])
             if a is None or b is None:
@@ -254,9 +271,24 @@ def apply(tree: Tree, people: list[dict[str, Any]], links: list[dict[str, Any]])
                 raise ApplyError(f"{a.name} can't be connected to themselves")
             kind = Connection.RelationshipType(link["type"])
             first, second = canonical_pair(kind, a.id, b.id)
-            _, made = Connection.objects.get_or_create(
-                tree=tree, person_a_id=first, person_b_id=second, type=kind
+            # Kinds only where they mean something; the database refuses them elsewhere.
+            fields = {
+                "parent_kind": (link.get("parent_kind") or Connection.ParentKind.BIOLOGICAL)
+                if kind == Connection.RelationshipType.PARENT
+                else None,
+                "ended": bool(link.get("ended")) and kind == Connection.RelationshipType.SPOUSE,
+            }
+            existing_link, made = Connection.objects.get_or_create(
+                tree=tree, person_a_id=first, person_b_id=second, type=kind, defaults=fields
             )
-            added += made
-            skipped += not made
-    return Applied(created, updated, added, skipped)
+            if made:
+                added += 1
+            elif (existing_link.parent_kind, existing_link.ended) != tuple(fields.values()):
+                # The reviewed note says this link is now former, step or adoptive (decision CB).
+                for name, value in fields.items():
+                    setattr(existing_link, name, value)
+                existing_link.save()
+                changed += 1
+            else:
+                skipped += 1
+    return Applied(created, updated, added, changed, skipped)

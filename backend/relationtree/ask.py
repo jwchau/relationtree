@@ -4,6 +4,11 @@ people (graph.py), then writes a short answer.
 Measured on a 15-person tree with 12 graph questions (tests/eval_ask.py, qwen3.8:27b):
 thinking on got 11/12 (median 4.8 s), thinking off 8/12 with confident wrong answers
 ("your kids are Maya and Ava" for a spouse and a child), so thinking stays on.
+With step, adoptive and former links (2026-10-27: an ex-wife, a stepson and an adopted
+daughter added, 18 people, 16 questions): 14, 15 and 14/16 over three runs, median ~4.2 s,
+against 12/16 before the tools named kinds, when "who am I married to?" got the ex too and
+stepchildren and adoptions weren't found. The steady miss is an aunt by marriage ("Ella's aunt
+and uncle" finds only her father's sibling), before and after.
 """
 
 import json
@@ -24,7 +29,10 @@ from relationtree.search import search_people
 MAX_ROUNDS = 6
 GAVE_UP = "Sorry, I couldn't work that out. Try asking more specifically."
 
-ROLES = "Spouse, Child, Parent, Sibling, Report, Manager, Friend, Coworker, Acquaintance"
+ROLES = (
+    "Spouse, Former spouse, Child, Step-child, Adopted child, Parent, Step-parent, "
+    "Adoptive parent, Sibling, Report, Manager, Friend, Coworker, Acquaintance"
+)
 
 
 def _tool(name: str, description: str, /, **params: str) -> dict[str, Any]:
@@ -53,7 +61,8 @@ TOOLS = [
     _tool(
         "people_with_relationship",
         "Everyone who has someone in a given role, e.g. role 'Child' lists parents with their "
-        f"children. Roles: {ROLES}.",
+        "children, step and adopted ones too, named as such. 'Spouse' is a current spouse only. "
+        f"Roles: {ROLES}.",
         role="The role the other person has",
     ),
     _tool(
