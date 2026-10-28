@@ -1,20 +1,22 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, api, resetCsrfToken, unwrap, type User } from '@/api/client';
 
 export const meQueryKey = ['me'] as const;
 
-/** The logged-in user, or null when there is no session. */
+/** The logged-in user, or null when there is no session. Shared with the startup prefetch. */
+export const meQuery = queryOptions({
+  queryKey: meQueryKey,
+  queryFn: async (): Promise<User | null> => {
+    const { data, error, response } = await api.GET('/api/auth/me');
+    if (response.status === 401) return null;
+    if (error !== undefined || !data) throw new ApiError(response.status, 'Failed to load session');
+    return data;
+  },
+  staleTime: Infinity,
+});
+
 export function useMe() {
-  return useQuery({
-    queryKey: meQueryKey,
-    queryFn: async (): Promise<User | null> => {
-      const { data, error, response } = await api.GET('/api/auth/me');
-      if (response.status === 401) return null;
-      if (error !== undefined || !data) throw new ApiError(response.status, 'Failed to load session');
-      return data;
-    },
-    staleTime: Infinity,
-  });
+  return useQuery(meQuery);
 }
 
 export function useLogin() {

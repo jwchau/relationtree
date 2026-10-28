@@ -7,7 +7,8 @@ them on a zoomable family map.
 The backend moved from AWS Amplify to a self-hosted Django + Postgres stack in October
 2026. [docs/backend-migration-plan.md](./docs/backend-migration-plan.md) records its design
 and milestones; [docs/family-graph-design.md](./docs/family-graph-design.md) and
-[its tickets](./docs/family-graph-design-tickets.md) do the same for the map.
+[its tickets](./docs/family-graph-design-tickets.md) do the same for the map, and
+[docs/performance.md](./docs/performance.md) for load times (startup prefetch, code split by page).
 
 ## Status
 
