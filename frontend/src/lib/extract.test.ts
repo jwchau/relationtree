@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Proposal } from '@/api/client';
-import { buildApplyRequest, describeConnection, initialReview } from './extract';
+import { buildApplyRequest, describeConnection, initialReview, savedMessage } from './extract';
 
 const proposal: Proposal = {
   people: [
@@ -76,5 +76,52 @@ describe('describeConnection', () => {
 
   it('has no direction for the others', () => {
     expect(describeConnection('Alex', 'Jordan', 'FRIEND')).toBe('Alex and Jordan: Friend');
+  });
+
+  it('names step, adoptive and former links', () => {
+    expect(describeConnection('Lee', 'Kit', 'PARENT', { parent_kind: 'STEP' })).toBe("Lee is Kit's step-parent");
+    expect(describeConnection('Mae', 'Robin', 'PARENT', { parent_kind: 'ADOPTIVE' })).toBe(
+      "Mae is Robin's adoptive parent",
+    );
+    expect(describeConnection('Nina', 'Lily', 'PARENT', { parent_kind: 'BIOLOGICAL' })).toBe("Nina is Lily's parent");
+    expect(describeConnection('Robin', 'Lee', 'SPOUSE', { ended: true })).toBe('Robin and Lee: Former spouse');
+  });
+});
+
+describe('buildApplyRequest and kinds', () => {
+  it('sends back the kind and whether a partnership has ended', () => {
+    const withKinds: Proposal = {
+      people: [
+        { ref: 'p1', name: 'Robin', match_id: 'robin', category: null, context: null, note: null },
+        { ref: 'p2', name: 'Lee', match_id: null, category: null, context: null, note: null },
+      ],
+      connections: [
+        { a: 'p1', b: 'p2', type: 'SPOUSE', parent_kind: null, ended: true },
+        { a: 'p2', b: 'p1', type: 'PARENT', parent_kind: 'STEP', ended: false },
+      ],
+    };
+    expect(buildApplyRequest(initialReview(withKinds)).connections).toEqual(withKinds.connections);
+  });
+});
+
+describe('savedMessage', () => {
+  const person = { id: 'x', name: 'X' } as never;
+  const applied = (counts: { created?: number; updated?: number; added?: number; changed?: number }) => ({
+    created: Array(counts.created ?? 0).fill(person),
+    updated: Array(counts.updated ?? 0).fill(person),
+    connections_added: counts.added ?? 0,
+    connections_updated: counts.changed ?? 0,
+    connections_skipped: 0,
+  });
+
+  it('counts what was saved, including links the note changed', () => {
+    expect(savedMessage(applied({ created: 1, added: 2, changed: 1 }))).toBe(
+      'Saved: 1 added, 2 connections, 1 connection changed',
+    );
+    expect(savedMessage(applied({ updated: 2, changed: 2 }))).toBe('Saved: 2 updated, 2 connections changed');
+  });
+
+  it('says when there was nothing new', () => {
+    expect(savedMessage(applied({}))).toBe('Nothing new to save');
   });
 });

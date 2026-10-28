@@ -3,8 +3,9 @@ Not part of the test suite (the file name doesn't match test_*.py); run explicit
 
     uv run pytest tests/eval_ask.py -s
 
-Seeds a 15-person tree, marks Jordan as "me", asks each question and prints accuracy and timing.
-An answer passes if it mentions every expected name or word (case-insensitive).
+Seeds an 18-person tree, marks Jordan as "me", asks each question and prints accuracy and timing.
+An answer passes if it mentions every expected name or word and none of the excluded ones
+(case-insensitive).
 """
 
 import asyncio
@@ -38,8 +39,12 @@ PEOPLE = {
     "Raj Shah": "",
     "Nina Park": "Bond trader at a bank in Chicago",
     "Omar Haddad": "Met at the climbing gym",
+    "Hana Cole": "",
+    "Kai Lee": "",
+    "Iris Park": "",
 }
-# (a, type, b): a is b's <type>.
+# (a, type, b): a is b's <type>. A "PARENT:STEP"-style type sets the parent kind, and
+# "SPOUSE:ENDED" a former partner.
 LINKS = [
     ("Jordan Lee", "SPOUSE", "Maya Lee"),
     ("Jordan Lee", "PARENT", "Leo Lee"),
@@ -63,10 +68,15 @@ LINKS = [
     ("Raj Shah", "FRIEND", "Dana Lee"),
     ("Nina Park", "FRIEND", "Maya Lee"),
     ("Omar Haddad", "ACQUAINTANCE", "Sam Ortiz"),
+    # Jordan's ex-wife; Maya's son Kai, Jordan's stepson; Nina's adopted daughter Iris.
+    ("Jordan Lee", "SPOUSE:ENDED", "Hana Cole"),
+    ("Maya Lee", "PARENT", "Kai Lee"),
+    ("Jordan Lee", "PARENT:STEP", "Kai Lee"),
+    ("Nina Park", "PARENT:ADOPTIVE", "Iris Park"),
 ]
 ME = "Jordan Lee"
-# (question, words the answer must all contain)
-QUESTIONS = [
+# (question, words the answer must all contain[, words it must not contain])
+QUESTIONS: list[tuple[str, list[str]] | tuple[str, list[str], list[str]]] = [
     ("Who are my kids?", ["Leo", "Ava"]),
     ("Who has kids?", ["Jordan", "Maya", "Robert", "Linda", "Chris", "Dana"]),
     ("How am I connected to Raj?", ["Priya"]),
@@ -79,6 +89,10 @@ QUESTIONS = [
     ("Who is my manager married to?", ["Raj"]),
     ("How are Leo and Ella related?", ["cousin"]),
     ("Who are Linda's children?", ["Jordan", "Chris"]),
+    ("Who is my ex?", ["Hana"]),
+    ("Who am I married to?", ["Maya"], ["Hana"]),
+    ("Who are my stepchildren?", ["Kai"], ["Leo", "Ava"]),
+    ("Who has an adopted child?", ["Nina"]),
 ]
 
 
@@ -101,12 +115,18 @@ def test_eval() -> None:
         name: Person.objects.create(tree=tree, name=name, context=context)
         for name, context in PEOPLE.items()
     }
-    for a, type_, b in LINKS:
+    for a, typed, b in LINKS:
+        type_, _, extra = typed.partition(":")
         kind = Connection.RelationshipType(type_)
         first, second = canonical_pair(kind, people[a].id, people[b].id)
         by_id = {people[a].id: people[a], people[b].id: people[b]}
         Connection.objects.create(
-            tree=tree, person_a=by_id[first], person_b=by_id[second], type=kind
+            tree=tree,
+            person_a=by_id[first],
+            person_b=by_id[second],
+            type=kind,
+            parent_kind=(extra or "BIOLOGICAL") if kind == "PARENT" else None,
+            ended=extra == "ENDED",
         )
     while embed_pending():
         pass
@@ -119,12 +139,15 @@ def test_eval() -> None:
 
 async def ask_all(user: User, tree: Tree) -> None:
     passed, times = 0, []
-    for question, expected in QUESTIONS:
+    for question, expected, *rest in QUESTIONS:
+        excluded = rest[0] if rest else []
         start = time.monotonic()
         text, tools_used = await ask(user, tree, question)
         elapsed = time.monotonic() - start
         times.append(elapsed)
-        ok = all(word.lower() in text.lower() for word in expected)
+        ok = all(word.lower() in text.lower() for word in expected) and not any(
+            word.lower() in text.lower() for word in excluded
+        )
         passed += ok
         print(f"{'PASS' if ok else 'FAIL'} {elapsed:5.1f}s t{tools_used} {question} -> {text}")
     times.sort()

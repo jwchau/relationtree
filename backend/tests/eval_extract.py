@@ -97,20 +97,59 @@ NOTES: list[tuple[str, set[str], set[str], set[tuple[str, str, str]]]] = [
         {"Omar Haddad"},
         {("Grace Kim", "Omar Haddad", "FRIEND")},
     ),
+    # Step, adoptive and former links: the kind is part of the type here.
+    (
+        "My ex-wife Hana Cole is remarried to Paul Moss.",
+        {"Hana Cole", "Paul Moss"},
+        {"Jordan Lee"},
+        {("Jordan Lee", "Hana Cole", "SPOUSE:ENDED"), ("Hana Cole", "Paul Moss", "SPOUSE")},
+    ),
+    (
+        "Maya's stepdad Victor is visiting from Lisbon.",
+        {"Victor"},
+        {"Maya Lee"},
+        {("Victor", "Maya Lee", "PARENT:STEP")},
+    ),
+    (
+        "Priya adopted a baby girl, Asha.",
+        {"Asha"},
+        {"Priya Shah"},
+        {("Priya Shah", "Asha", "PARENT:ADOPTIVE")},
+    ),
+    (
+        "Alex and his ex, Carla Diaz, still co-parent their son Mateo.",
+        {"Carla Diaz", "Mateo"},
+        {"Alex Rivera"},
+        {
+            ("Alex Rivera", "Carla Diaz", "SPOUSE:ENDED"),
+            ("Alex Rivera", "Mateo", "PARENT"),
+            ("Carla Diaz", "Mateo", "PARENT"),
+        },
+    ),
 ]
 
 SYMMETRIC = {"SPOUSE", "SIBLING", "FRIEND", "COWORKER", "ACQUAINTANCE"}
 
 
 def _normalise(links: set[tuple[str, str, str]]) -> set[tuple[str, str, str]]:
-    return {(*sorted((a, b)), t) if t in SYMMETRIC else (a, b, t) for a, b, t in links}  # type: ignore[misc]
+    return {
+        (*sorted((a, b)), t) if t.split(":")[0] in SYMMETRIC else (a, b, t)  # type: ignore[misc]
+        for a, b, t in links
+    }
+
+
+def _typed(link: dict[str, Any]) -> str:
+    """ "PARENT:STEP", "SPOUSE:ENDED", or the plain type."""
+    if link["type"] == "PARENT" and link["parent_kind"] not in (None, "BIOLOGICAL"):
+        return f"PARENT:{link['parent_kind']}"
+    return "SPOUSE:ENDED" if link["type"] == "SPOUSE" and link["ended"] else link["type"]
 
 
 def _summarise(proposal: dict[str, Any]) -> tuple[set[str], set[str], set[tuple[str, str, str]]]:
     new = {p["name"] for p in proposal["people"] if p["match_id"] is None}
     matched = {p["name"] for p in proposal["people"] if p["match_id"] is not None}
     names = {p["ref"]: p["name"] for p in proposal["people"]}
-    links = {(names[c["a"]], names[c["b"]], c["type"]) for c in proposal["connections"]}
+    links = {(names[c["a"]], names[c["b"]], _typed(c)) for c in proposal["connections"]}
     return new, matched, _normalise(links)
 
 

@@ -187,7 +187,13 @@ async def test_proposal_matches_existing_people_and_cleans_up_the_rest(
     assert people["Sam Lee"]["match_id"] == str(_sam.id)
     assert people["Zed"]["match_id"] is None
     assert body["connections"] == [
-        {"a": people["Jordan Park"]["ref"], "b": people["Alex Rivera"]["ref"], "type": "FRIEND"}
+        {
+            "a": people["Jordan Park"]["ref"],
+            "b": people["Alex Rivera"]["ref"],
+            "type": "FRIEND",
+            "parent_kind": None,
+            "ended": False,
+        }
     ]
 
 
@@ -213,6 +219,73 @@ async def test_direction_and_me_survive_the_round_trip(chat_model: FakeChatModel
     assert {(c["a"], c["b"], c["type"]) for c in body["connections"]} == {
         (refs["Alex Rivera"], refs["Jordan Park"], "MANAGER"),
         (refs["Alice Chen"], refs["Jordan Park"], "COWORKER"),
+    }
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_step_adoptive_and_former_links_survive_the_round_trip(
+    chat_model: FakeChatModel,
+) -> None:
+    alice, tree, [me] = await make_user("alice", "Alice Chen")
+    await sync_to_async(TreeMembership.objects.filter(tree=tree).update)(me=me)
+    people = ["Lee Moss", "Kit Moss", "Mae Chen", "Ben Moss", "Ida Moss"]
+    model_says(
+        chat_model,
+        [{"name": n, "existing_id": None, "category": None, "about": None} for n in people],
+        [
+            {
+                "from": "Alice Chen",
+                "to": "Lee Moss",
+                "type": "SPOUSE",
+                "parent_kind": None,
+                "ended": True,
+            },
+            {
+                "from": "Alice Chen",
+                "to": "Kit Moss",
+                "type": "PARENT",
+                "parent_kind": "STEP",
+                "ended": False,
+            },
+            {
+                "from": "Mae Chen",
+                "to": "Alice Chen",
+                "type": "PARENT",
+                "parent_kind": "ADOPTIVE",
+                "ended": False,
+            },
+            # A kind or "former" on the wrong type is dropped, and a parent with none is biological.
+            {
+                "from": "Lee Moss",
+                "to": "Ben Moss",
+                "type": "FRIEND",
+                "parent_kind": "STEP",
+                "ended": True,
+            },
+            {
+                "from": "Lee Moss",
+                "to": "Ida Moss",
+                "type": "PARENT",
+                "parent_kind": None,
+                "ended": True,
+            },
+        ],
+    )
+
+    body = (
+        await extract(await logged_in(alice), "My ex Lee, her son Kit, my adoptive mum Mae")
+    ).json()
+
+    name = {p["ref"]: p["name"] for p in body["people"]}
+    assert {
+        (name[c["a"]], name[c["b"]], c["type"], c["parent_kind"], c["ended"])
+        for c in body["connections"]
+    } == {
+        ("Alice Chen", "Lee Moss", "SPOUSE", None, True),
+        ("Alice Chen", "Kit Moss", "PARENT", "STEP", False),
+        ("Mae Chen", "Alice Chen", "PARENT", "ADOPTIVE", False),
+        ("Lee Moss", "Ben Moss", "FRIEND", None, False),
+        ("Lee Moss", "Ida Moss", "PARENT", "BIOLOGICAL", False),
     }
 
 
@@ -291,6 +364,78 @@ def test_apply_creates_people_appends_notes_and_links_them(
     manager = Connection.objects.get(type="MANAGER")
     assert (manager.person_a_id, manager.person_b_id) == (alex.id, jordan.id)
     assert Connection.objects.filter(tree=tree).count() == 4
+
+
+def test_apply_saves_kinds_and_updates_a_link_the_note_now_calls_former_or_step(
+    login_as: Callable[[str], Client],
+) -> None:
+    alice = login_as("alice")
+    tree = owner_tree("alice")
+    me, lee, kit = (
+        Person.objects.create(tree=tree, name=n) for n in ["Alice Chen", "Lee Moss", "Kit Moss"]
+    )
+    first, second = canonical_pair(Connection.RelationshipType.SPOUSE, me.id, lee.id)
+    marriage = Connection.objects.create(
+        tree=tree, person_a_id=first, person_b_id=second, type="SPOUSE"
+    )
+    Connection.objects.create(
+        tree=tree, person_a=lee, person_b=kit, type="PARENT", parent_kind="BIOLOGICAL"
+    )
+    people = [
+        {"ref": f"p{i}", "name": p.name, "match_id": str(p.id)}
+        for i, p in enumerate([me, lee, kit], 1)
+    ]
+    mae = {"ref": "p4", "name": "Mae Chen", "match_id": None, "category": "FAMILY"}
+
+    response = apply(
+        alice,
+        {
+            "people": [*people, mae],
+            "connections": [
+                {
+                    "a": "p1",
+                    "b": "p2",
+                    "type": "SPOUSE",
+                    "parent_kind": None,
+                    "ended": True,
+                },  # now an ex
+                {
+                    "a": "p1",
+                    "b": "p3",
+                    "type": "PARENT",
+                    "parent_kind": "STEP",
+                    "ended": False,
+                },  # new
+                {
+                    "a": "p4",
+                    "b": "p1",
+                    "type": "PARENT",
+                    "parent_kind": "ADOPTIVE",
+                    "ended": False,
+                },  # new
+                {
+                    "a": "p2",
+                    "b": "p3",
+                    "type": "PARENT",
+                    "parent_kind": "BIOLOGICAL",
+                    "ended": False,
+                },  # as it was
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert (
+        body["connections_added"],
+        body["connections_updated"],
+        body["connections_skipped"],
+    ) == (2, 1, 1)
+    marriage.refresh_from_db()
+    assert marriage.ended is True
+    step = Connection.objects.get(person_a=me, person_b=kit, type="PARENT")
+    adoptive = Connection.objects.get(person_a__name="Mae Chen", person_b=me, type="PARENT")
+    assert (step.parent_kind, adoptive.parent_kind) == ("STEP", "ADOPTIVE")
 
 
 @pytest.mark.parametrize(

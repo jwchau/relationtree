@@ -2,11 +2,12 @@
 
 A personal relationship tracker: add people (family, friends, coworkers,
 acquaintances), link them to each other with typed relationships, and browse
-the resulting graph.
+them on a zoomable family map.
 
-> **Mid-migration.** The backend is moving from AWS Amplify to a self-hosted
-> Django + Postgres stack. See [docs/backend-migration-plan.md](./docs/backend-migration-plan.md)
-> for the agreed design and milestones.
+The backend moved from AWS Amplify to a self-hosted Django + Postgres stack in October
+2026. [docs/backend-migration-plan.md](./docs/backend-migration-plan.md) records its design
+and milestones; [docs/family-graph-design.md](./docs/family-graph-design.md) and
+[its tickets](./docs/family-graph-design-tickets.md) do the same for the map.
 
 ## Status
 
@@ -20,9 +21,10 @@ the resulting graph.
 | M12 "Ask" semantic search (pgvector + qwen3-embedding, relationship summaries) | ✅ |
 | M13 Production cutover on the Windows home server | ✅ (healthchecks.io ping not set up yet) |
 | M14 Graph Q&A in Ask (tool-calling agent, "This is me") | ✅ |
-| M15 Sharing (tree switcher, members and roles) | ✅ on `dev` |
-| M16 Invite links (one-time, the only way to sign up) | ✅ on `dev` |
-| M17 Free-text extraction ("Add from a note", reviewed before saving) | ✅ on `dev` |
+| M15 Sharing (tree switcher, members and roles) | ✅ |
+| M16 Invite links (one-time, the only way to sign up) | ✅ |
+| M17 Free-text extraction ("Add from a note", reviewed before saving) | ✅ |
+| Family map, FG-1 to FG-13 (nested zoomable frames, social bands, keyboard, 1,000 people) | ✅ (in production 2026-10-27) |
 
 Production runs at https://relationtree.johnchau.org since 2026-10-18. Merging `dev` to
 `main` is what deploys (see [Production](#production)).

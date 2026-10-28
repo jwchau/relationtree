@@ -8,21 +8,21 @@ from typing import Any
 from uuid import UUID
 
 from relationtree.models import Connection, Person, Tree
-from relationtree.relationships import connections_of, label_for
+from relationtree.relationships import connections_of, plain_role, role_of
 
 MAX_PATH_LENGTH = 6
 
 
 def _neighbours(tree: Tree) -> dict[UUID, list[tuple[UUID, str]]]:
-    """Every connection in the tree from both ends: person -> [(other, other's role to them)]."""
-    connections = Connection.objects.filter(tree=tree).values_list(
-        "person_a_id", "person_b_id", "type"
+    """Every connection in the tree from both ends: person -> [(other, other's role to them)],
+    with the role's kind ("Step-child", "Former spouse")."""
+    connections = Connection.objects.filter(tree=tree).only(
+        "person_a_id", "person_b_id", "type", "parent_kind", "ended"
     )
     neighbours: dict[UUID, list[tuple[UUID, str]]] = {}
-    for a, b, type_ in connections:
-        kind = Connection.RelationshipType(type_)
-        neighbours.setdefault(a, []).append((b, label_for(kind, True)))
-        neighbours.setdefault(b, []).append((a, label_for(kind, False)))
+    for c in connections:
+        neighbours.setdefault(c.person_a_id, []).append((c.person_b_id, role_of(c, True)))
+        neighbours.setdefault(c.person_b_id, []).append((c.person_a_id, role_of(c, False)))
     return neighbours
 
 
@@ -58,7 +58,7 @@ def get_person(tree: Tree, person_id: UUID) -> dict[str, Any] | None:
             person.last_contacted_date.isoformat() if person.last_contacted_date else None
         ),
         connections=[
-            {"id": str(view.other.id), "name": view.other.name, "role": view.label}
+            {"id": str(view.other.id), "name": view.other.name, "role": view.role}
             for view in connections_of(person)
         ],
     )
@@ -66,16 +66,28 @@ def get_person(tree: Tree, person_id: UUID) -> dict[str, Any] | None:
 
 
 def people_with_relationship(tree: Tree, label: str) -> list[dict[str, Any]]:
-    """People who have someone in this role, e.g. "Child" -> parents, with those someones."""
+    """People who have someone in this role, e.g. "Child" -> parents, with those someones.
+
+    A plain role takes in its kinds, named: "Child" lists step and adopted children too, as
+    "Kit (step-child)". A kind ("Step-child") lists only that kind. "Spouse" means a current
+    one; exes are "Former spouse"."""
     wanted = label.strip().casefold()
-    related: dict[UUID, list[UUID]] = {}
+    related: dict[UUID, list[tuple[UUID, str]]] = {}
     for person, others in _neighbours(tree).items():
-        matches = [other for other, role in others if role.casefold() == wanted]
+        matches = [
+            (other, role)
+            for other, role in others
+            if wanted in (role.casefold(), plain_role(role).casefold())
+        ]
         if matches:
             related[person] = matches
-    names = _names(tree, {*related, *(o for others in related.values() for o in others)})
+    names = _names(tree, {*related, *(o for others in related.values() for o, _ in others)})
+
+    def named(other: UUID, role: str) -> str:
+        return names[other] if role.casefold() == wanted else f"{names[other]} ({role.lower()})"
+
     return [
-        {"id": str(p), "name": names[p], "related": sorted(names[o] for o in others)}
+        {"id": str(p), "name": names[p], "related": sorted(named(o, r) for o, r in others)}
         for p, others in sorted(related.items(), key=lambda item: names[item[0]])
     ]
 

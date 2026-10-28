@@ -1,5 +1,5 @@
-import type { Proposal, ProposedPerson } from '@/api/client';
-import { relationshipLabel, type RelationshipType } from '@/lib/relationshipTypes';
+import type { Applied, Proposal, ProposedPerson } from '@/api/client';
+import { relationshipLabel, type ParentKind, type RelationshipType } from '@/lib/relationshipTypes';
 
 /** One proposed person as the user reviews them: kept or skipped, new or matched. */
 export interface PersonReview {
@@ -18,6 +18,9 @@ export interface ConnectionReview {
   a: string;
   b: string;
   type: Proposal['connections'][number]['type'];
+  /** Step or adoptive on a parent link, and a partnership that has ended: shown, not edited. */
+  parent_kind?: ParentKind | null;
+  ended?: boolean;
   include: boolean;
 }
 
@@ -60,14 +63,35 @@ export function buildApplyRequest(review: Review): Proposal {
     }),
     connections: review.connections
       .filter((c) => c.include && keptRefs.has(c.a) && keptRefs.has(c.b))
-      .map(({ a, b, type }) => ({ a, b, type })),
+      .map(({ a, b, type, parent_kind, ended }) => ({ a, b, type, parent_kind, ended })),
   };
 }
 
-const DIRECTIONAL: Partial<Record<RelationshipType, string>> = { PARENT: 'parent', MANAGER: 'manager' };
+/** The toast after saving a reviewed note: who was added or updated, and which links were
+ * added or changed (a link the note now calls former, step or adoptive). */
+export function savedMessage(applied: Applied): string {
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const parts = [
+    applied.created.length && `${applied.created.length} added`,
+    applied.updated.length && `${applied.updated.length} updated`,
+    applied.connections_added && plural(applied.connections_added, 'connection'),
+    applied.connections_updated && `${plural(applied.connections_updated, 'connection')} changed`,
+  ].filter(Boolean);
+  return parts.length ? `Saved: ${parts.join(', ')}` : 'Nothing new to save';
+}
 
-/** How a proposed connection reads in the review list, the right way round. */
-export function describeConnection(a: string, b: string, type: RelationshipType) {
-  const role = DIRECTIONAL[type];
-  return role ? `${a} is ${b}'s ${role}` : `${a} and ${b}: ${relationshipLabel(type)}`;
+const DIRECTIONAL: Partial<Record<RelationshipType, string>> = { PARENT: 'parent', MANAGER: 'manager' };
+const PARENT_OF_KIND: Partial<Record<ParentKind, string>> = { STEP: 'step-parent', ADOPTIVE: 'adoptive parent' };
+
+/** How a proposed connection reads in the review list, the right way round, naming a step,
+ * adoptive or former link. */
+export function describeConnection(
+  a: string,
+  b: string,
+  type: RelationshipType,
+  { parent_kind, ended }: Pick<ConnectionReview, 'parent_kind' | 'ended'> = {},
+) {
+  const role = (type === 'PARENT' && parent_kind && PARENT_OF_KIND[parent_kind]) || DIRECTIONAL[type];
+  if (role) return `${a} is ${b}'s ${role}`;
+  return `${a} and ${b}: ${type === 'SPOUSE' && ended ? 'Former spouse' : relationshipLabel(type)}`;
 }

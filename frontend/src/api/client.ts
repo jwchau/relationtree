@@ -16,6 +16,7 @@ export type InviteDetails = components['schemas']['InviteDetailsOut'];
 export type PendingInvite = components['schemas']['PendingInviteOut'];
 export type Proposal = components['schemas']['Proposal'];
 export type ProposedPerson = components['schemas']['ProposedPerson'];
+export type Applied = components['schemas']['AppliedOut'];
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8001';
 
