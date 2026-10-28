@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap, type Person } from '@/api/client';
 import { peopleQueryKey } from './usePersonList';
 import type { ParentKind, RelationshipType } from '@/lib/relationshipTypes';
@@ -16,8 +16,8 @@ export interface ConnectionWithPerson {
 
 export const connectionsQueryKey = ['connections'] as const;
 
-export function useConnections(personId: string | undefined) {
-  const query = useQuery({
+export const connectionsQuery = (personId: string | undefined) =>
+  queryOptions({
     queryKey: [...connectionsQueryKey, personId],
     enabled: Boolean(personId),
     queryFn: async (): Promise<ConnectionWithPerson[]> => {
@@ -36,6 +36,9 @@ export function useConnections(personId: string | undefined) {
       }));
     },
   });
+
+export function useConnections(personId: string | undefined) {
+  const query = useQuery(connectionsQuery(personId));
   return {
     connections: query.data ?? [],
     loading: query.isPending,

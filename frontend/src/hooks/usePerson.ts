@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ApiError,
   api,
@@ -13,8 +13,8 @@ import { removePersonPhoto, uploadPersonPhoto } from '@/lib/photoStorage';
 
 export type { Person };
 
-export function usePerson(personId: string | undefined) {
-  const query = useQuery({
+export const personQuery = (personId: string | undefined) =>
+  queryOptions({
     queryKey: [...peopleQueryKey, personId],
     enabled: Boolean(personId),
     queryFn: async (): Promise<Person | null> => {
@@ -26,6 +26,9 @@ export function usePerson(personId: string | undefined) {
       return data;
     },
   });
+
+export function usePerson(personId: string | undefined) {
+  const query = useQuery(personQuery(personId));
   return { person: query.data ?? null, loading: query.isPending, error: query.error?.message ?? null };
 }
 

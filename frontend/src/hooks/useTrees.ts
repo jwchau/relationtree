@@ -1,15 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap, type TreeRole } from '@/api/client';
 import { peopleQueryKey } from '@/hooks/usePersonList';
 
 export const treesQueryKey = ['trees'] as const;
 
 /** The trees the user belongs to, with their role in each. */
+export const treesQuery = queryOptions({
+  queryKey: treesQueryKey,
+  queryFn: () => unwrap(api.GET('/api/trees')),
+});
+
 export function useTrees() {
-  return useQuery({
-    queryKey: treesQueryKey,
-    queryFn: () => unwrap(api.GET('/api/trees')),
-  });
+  return useQuery(treesQuery);
 }
 
 export function useMembers(treeId: string) {

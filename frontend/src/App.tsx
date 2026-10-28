@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Link, Outlet, useLocation } from 'react-router-dom'
 import { LogOut, Network, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,13 +9,26 @@ import { TreeSwitcher } from '@/components/TreeSwitcher'
 import { ServerStatusBanner } from '@/components/ServerStatusBanner'
 import { useLogout } from '@/hooks/useAuth'
 import { useCurrentTree } from '@/hooks/useCurrentTree'
-import InvitePage from '@/routes/InvitePage'
 import LoginPage from '@/routes/LoginPage'
-import MapPage from '@/routes/MapPage'
 import PersonListPage from '@/routes/PersonListPage'
-import PersonDetailPage from '@/routes/PersonDetailPage'
-import PersonCreatePage from '@/routes/PersonCreatePage'
-import TreeSettingsPage from '@/routes/TreeSettingsPage'
+import {
+  InvitePage,
+  MapPage,
+  PersonCreatePage,
+  PersonDetailPage,
+  TreeSettingsPage,
+} from '@/routes/lazy'
+
+/** What shows while a page's code loads (see routes/lazy.ts): the page's band, empty. */
+function PageFallback() {
+  return (
+    <div
+      className="ink min-h-[104px] min-[1200px]:mx-auto min-[1200px]:max-w-[1200px] min-[1200px]:rounded-b-[16px]"
+      aria-busy="true"
+      aria-label="Loading the page"
+    />
+  )
+}
 
 function AppHeader() {
   const logout = useLogout()
@@ -72,7 +86,9 @@ function AppLayout() {
         <div className="min-h-svh">
           <AppHeader />
           <main>
-            <Outlet />
+            <Suspense fallback={<PageFallback />}>
+              <Outlet />
+            </Suspense>
           </main>
         </div>
       </CurrentTreeProvider>
@@ -86,7 +102,14 @@ function App() {
       <ServerStatusBanner />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/invite/:token" element={<InvitePage />} />
+        <Route
+          path="/invite/:token"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <InvitePage />
+            </Suspense>
+          }
+        />
         <Route element={<AppLayout />}>
           <Route path="/" element={<PersonListPage />} />
           <Route path="/map" element={<MapPage />} />

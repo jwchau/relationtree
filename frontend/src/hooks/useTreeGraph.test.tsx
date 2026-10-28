@@ -30,12 +30,15 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 );
 
 describe('useTreeGraph freshness', () => {
-  it('fetches the graph again on every visit to the map', async () => {
+  it('reuses the graph on another visit to a map, while it is fresh', async () => {
+    // Edits refresh it themselves (below), so a visit needn't fetch the whole tree again.
     const first = renderHook(() => useTreeGraph('ash'), { wrapper });
     await waitFor(() => expect(first.result.current.graph).not.toBeNull());
     first.unmount();
-    renderHook(() => useTreeGraph('ash'), { wrapper });
-    await waitFor(() => expect(graphFetches).toBe(2));
+    const second = renderHook(() => useTreeGraph('ash'), { wrapper });
+    expect(second.result.current.graph).not.toBeNull();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(graphFetches).toBe(1);
   });
 
   it('fetches the graph again after a connection is created', async () => {
