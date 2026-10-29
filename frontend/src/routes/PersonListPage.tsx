@@ -1,17 +1,24 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, UserPlus } from 'lucide-react';
+import { ArrowUpDown, Search, UserPlus } from 'lucide-react';
 import { useCurrentTree } from '@/hooks/useCurrentTree';
 import { usePersonList } from '@/hooks/usePersonList';
 import { AddFromNoteDialog } from '@/components/person/AddFromNoteDialog';
 import { AskPeople } from '@/components/person/AskPeople';
 import { PersonRoster, PersonRosterSkeleton } from '@/components/person/PersonRoster';
 import { Note, PageBand, PageBody } from '@/components/kiln/Page';
-import { filterAndSortPeople, type CategoryFilter } from '@/lib/personListFilters';
+import {
+  PERSON_SORTS,
+  filterAndSortPeople,
+  type CategoryFilter,
+  type PersonSort,
+} from '@/lib/personListFilters';
+import { readRememberedSort, rememberSort } from '@/lib/personSortStorage';
 import { RELATIONSHIP_CATEGORIES, categoryLabel } from '@/lib/relationshipTypes';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function PersonListPage() {
   const { tree, canEdit, loading: treesLoading, error: treesError } = useCurrentTree();
@@ -20,10 +27,16 @@ export default function PersonListPage() {
   const error = treesError ?? peopleError;
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('ALL');
+  const [sort, setSort] = useState<PersonSort>(() => readRememberedSort() ?? 'stalest');
+
+  function changeSort(next: PersonSort) {
+    setSort(next);
+    rememberSort(next);
+  }
 
   const visiblePeople = useMemo(
-    () => filterAndSortPeople(people, { search, category }),
-    [people, search, category],
+    () => filterAndSortPeople(people, { search, category, sort }),
+    [people, search, category, sort],
   );
 
   const counts = useMemo(() => {
@@ -123,6 +136,19 @@ export default function PersonListPage() {
                 );
               })}
             </div>
+            <Select value={sort} onValueChange={(value) => changeSort(value as PersonSort)}>
+              <SelectTrigger aria-label="Sort" className="w-full *:data-[slot=select-value]:flex-1 lg:ml-auto lg:w-fit lg:shrink-0">
+                <ArrowUpDown aria-hidden />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PERSON_SORTS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
@@ -146,8 +172,8 @@ export default function PersonListPage() {
         )}
 
         {!loading && visiblePeople.length > 0 && (
-          // Keyed by the search and filter so changing either starts again at page 1.
-          <PersonRoster key={`${category}|${search}`} people={visiblePeople} label="People" />
+          // Keyed by the search, filter and sort so changing any of them starts again at page 1.
+          <PersonRoster key={`${category}|${sort}|${search}`} people={visiblePeople} label="People" />
         )}
       </PageBody>
     </>
