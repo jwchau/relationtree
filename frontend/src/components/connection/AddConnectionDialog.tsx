@@ -5,10 +5,13 @@ import type { Person } from '@/api/client';
 import { useCreatePerson } from '@/hooks/usePerson';
 import { useCreateConnection } from '@/hooks/useConnections';
 import {
-  RELATIONSHIP_TYPES,
+  CONNECTION_CHOICES,
+  connectionChoiceLabel,
+  connectionChoiceRole,
+  connectionChoiceType,
+  connectionFromChoice,
   connectionLabel,
-  relationshipLabel,
-  type RelationshipType,
+  type ConnectionChoice,
 } from '@/lib/relationshipTypes';
 import {
   RELATIONSHIP_CATEGORIES,
@@ -57,7 +60,7 @@ export function AddConnectionDialog({
   const [otherPerson, setOtherPerson] = useState<Person | null>(null);
   const [newPersonName, setNewPersonName] = useState<string | null>(null);
   const [newPersonCategory, setNewPersonCategory] = useState<RelationshipCategory>('FRIEND');
-  const [relationshipType, setRelationshipType] = useState<RelationshipType>('FRIEND');
+  const [choice, setChoice] = useState<ConnectionChoice>('FRIEND');
   const [kind, setKind] = useState<ConnectionKind>(NO_KIND);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const createPerson = useCreatePerson(treeId);
@@ -67,7 +70,7 @@ export function AddConnectionDialog({
     setOtherPerson(null);
     setNewPersonName(null);
     setNewPersonCategory('FRIEND');
-    setRelationshipType('FRIEND');
+    setChoice('FRIEND');
     setKind(NO_KIND);
   }
 
@@ -92,9 +95,7 @@ export function AddConnectionDialog({
       }
 
       await createConnection.mutateAsync({
-        personAId: personId,
-        personBId: targetPersonId,
-        type: relationshipType,
+        ...connectionFromChoice(choice, personId, targetPersonId),
         parentKind: kind.parentKind,
         ended: kind.ended,
       });
@@ -178,9 +179,9 @@ export function AddConnectionDialog({
           <div className="space-y-2">
             <Label>Relationship</Label>
             <Select
-              value={relationshipType}
+              value={choice}
               onValueChange={(v) => {
-                setRelationshipType(v as RelationshipType);
+                setChoice(v as ConnectionChoice);
                 setKind(NO_KIND);
               }}
             >
@@ -188,9 +189,9 @@ export function AddConnectionDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {RELATIONSHIP_TYPES.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {relationshipLabel(type)}
+                {CONNECTION_CHOICES.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {connectionChoiceLabel(c)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -199,7 +200,7 @@ export function AddConnectionDialog({
               <p className="text-muted-foreground text-[15px] leading-[22px]">
                 {personName} is the{' '}
                 {connectionLabel(
-                  relationshipLabel(relationshipType),
+                  connectionChoiceRole(choice),
                   kind.parentKind,
                   kind.ended,
                 ).toLowerCase()}{' '}
@@ -208,7 +209,7 @@ export function AddConnectionDialog({
             )}
           </div>
 
-          <ConnectionKindFields type={relationshipType} {...kind} onChange={setKind} />
+          <ConnectionKindFields type={connectionChoiceType(choice)} {...kind} onChange={setKind} />
         </div>
 
         <DialogFooter>
