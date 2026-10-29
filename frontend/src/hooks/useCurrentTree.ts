@@ -1,5 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { Tree } from '@/api/client';
+import { hueFor } from '@/lib/categoryHues';
+import type { RelationshipCategory } from '@/lib/relationshipTypes';
 import { permissionsFor } from '@/lib/trees';
 
 export interface CurrentTree {
@@ -24,4 +26,12 @@ export function useCurrentTree() {
 export function useTreePermissions(treeId: string | undefined) {
   const { trees } = useCurrentTree();
   return permissionsFor(trees.find((t) => t.id === treeId)?.role);
+}
+
+/** How a tree (by default the current one) colours each category: a `data-hue` value, or
+ * undefined for plain. */
+export function useCategoryHue(treeId?: string) {
+  const { tree, trees } = useCurrentTree();
+  const hues = (treeId ? trees.find((t) => t.id === treeId) : tree)?.category_hues;
+  return (category: RelationshipCategory | null | undefined) => hueFor(hues, category);
 }

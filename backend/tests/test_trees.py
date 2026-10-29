@@ -49,6 +49,21 @@ def set_role(client: Client, tree_id: str, username: str, role: str) -> Any:
     )
 
 
+DEFAULT_HUES = {
+    "FAMILY": "rose",
+    "FRIEND": "violet",
+    "COWORKER": "blue",
+    "ACQUAINTANCE": "green",
+    "OTHER": "slate",
+}
+
+
+def set_hues(client: Client, tree_id: str, hues: dict[str, str]) -> Any:
+    return client.patch(
+        f"/api/trees/{tree_id}", {"category_hues": hues}, content_type="application/json"
+    )
+
+
 def remove(client: Client, tree_id: str, username: str) -> Any:
     return client.delete(f"/api/trees/{tree_id}/members/{user_id(username)}")
 
@@ -78,7 +93,13 @@ def test_lists_only_my_trees_with_my_role_and_member_count(
     add_member(alice, alices, "bob", "viewer")
 
     assert my_trees(alice) == [
-        {"id": alices, "name": "alice's tree", "role": "owner", "member_count": 2}
+        {
+            "id": alices,
+            "name": "alice's tree",
+            "role": "owner",
+            "member_count": 2,
+            "category_hues": DEFAULT_HUES,
+        }
     ]
     assert sorted((t["name"], t["role"], t["member_count"]) for t in my_trees(bob)) == [
         ("alice's tree", "viewer", 2),
@@ -244,3 +265,62 @@ def test_without_a_tree_of_my_own_the_default_is_one_im_in(
     remove(alice, bobs, "alice")
     assert alice.get("/api/people").status_code == 404
     assert my_trees(alice) == []
+
+
+def test_a_new_tree_has_the_default_category_hues(login_as: Callable[[str], Client]) -> None:
+    alice = login_as("alice")
+
+    created = alice.post("/api/trees", {"name": "Work"}, content_type="application/json")
+
+    assert created.json()["category_hues"] == DEFAULT_HUES
+    assert all(t["category_hues"] == DEFAULT_HUES for t in my_trees(alice))
+
+
+def test_owner_changes_one_category_hue_and_the_rest_stay(
+    login_as: Callable[[str], Client],
+) -> None:
+    alice = login_as("alice")
+    tree = default_tree_id(alice)
+
+    response = set_hues(alice, tree, {"FRIEND": "green"})
+    set_hues(alice, tree, {"OTHER": "none"})
+
+    expected = DEFAULT_HUES | {"FRIEND": "green", "OTHER": "none"}
+    assert response.status_code == 200
+    assert response.json()["category_hues"] == DEFAULT_HUES | {"FRIEND": "green"}
+    assert my_trees(alice)[0]["category_hues"] == expected
+
+
+@pytest.mark.parametrize("hues", [{"FRIEND": "amber"}, {"COUSIN": "rose"}, {"FRIEND": ""}])
+def test_unknown_hues_and_categories_are_rejected(
+    login_as: Callable[[str], Client], hues: dict[str, str]
+) -> None:
+    alice = login_as("alice")
+    tree = default_tree_id(alice)
+
+    assert set_hues(alice, tree, hues).status_code == 422
+    assert my_trees(alice)[0]["category_hues"] == DEFAULT_HUES
+
+
+def test_only_owners_can_change_category_hues(login_as: Callable[[str], Client]) -> None:
+    alice, bob, carol = login_as("alice"), login_as("bob"), login_as("carol")
+    tree = default_tree_id(alice)
+    add_member(alice, tree, "bob", "editor")
+    add_member(alice, tree, "carol", "viewer")
+
+    assert set_hues(bob, tree, {"FAMILY": "blue"}).status_code == 403
+    assert set_hues(carol, tree, {"FAMILY": "blue"}).status_code == 403
+    assert my_trees(alice)[0]["category_hues"] == DEFAULT_HUES
+
+
+def test_renaming_and_changing_hues_are_independent(login_as: Callable[[str], Client]) -> None:
+    alice = login_as("alice")
+    tree = default_tree_id(alice)
+    set_hues(alice, tree, {"FAMILY": "teal"})
+
+    renamed = alice.patch(f"/api/trees/{tree}", {"name": "Family"}, content_type="application/json")
+    recoloured = set_hues(alice, tree, {"COWORKER": "pink"})
+
+    assert renamed.json()["category_hues"]["FAMILY"] == "teal"
+    assert recoloured.json()["name"] == "Family"
+    assert alice.patch(f"/api/trees/{tree}", {}, content_type="application/json").status_code == 200

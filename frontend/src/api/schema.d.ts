@@ -313,8 +313,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Rename Tree */
-        patch: operations["relationtree_trees_api_rename_tree"];
+        /** Update Tree */
+        patch: operations["relationtree_trees_api_update_tree"];
         trace?: never;
     };
     "/api/trees/{tree_id}/graph": {
@@ -769,6 +769,12 @@ export interface components {
             question: string;
         };
         /**
+         * Hue
+         * @description The colours a category can wear. No amber: amber marks "you" and nothing else.
+         * @enum {string}
+         */
+        Hue: "rose" | "violet" | "blue" | "green" | "teal" | "pink" | "slate" | "none";
+        /**
          * Role
          * @enum {string}
          */
@@ -785,11 +791,27 @@ export interface components {
             role: components["schemas"]["Role"];
             /** Member Count */
             member_count: number;
+            /** Category Hues */
+            category_hues: {
+                [key: string]: components["schemas"]["Hue"];
+            };
         };
         /** TreeIn */
         TreeIn: {
             /** Name */
             name: string;
+        };
+        /**
+         * TreeUpdateIn
+         * @description Whatever the owner is changing; categories left out of category_hues keep theirs.
+         */
+        TreeUpdateIn: {
+            /** Name */
+            name?: string | null;
+            /** Category Hues */
+            category_hues?: {
+                [key: string]: components["schemas"]["Hue"];
+            } | null;
         };
         /**
          * GraphPersonOut
@@ -1583,7 +1605,7 @@ export interface operations {
             };
         };
     };
-    relationtree_trees_api_rename_tree: {
+    relationtree_trees_api_update_tree: {
         parameters: {
             query?: never;
             header?: never;
@@ -1594,7 +1616,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TreeIn"];
+                "application/json": components["schemas"]["TreeUpdateIn"];
             };
         };
         responses: {

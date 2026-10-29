@@ -4,7 +4,7 @@ import { Map as MapIcon, Trash2, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDeletePerson, usePerson, useSetMe, useUpdatePerson } from '@/hooks/usePerson';
 import { useConnections } from '@/hooks/useConnections';
-import { useCurrentTree, useTreePermissions } from '@/hooks/useCurrentTree';
+import { useCategoryHue, useCurrentTree, useTreePermissions } from '@/hooks/useCurrentTree';
 import { PersonForm } from '@/components/person/PersonForm';
 import { CatchUpCard } from '@/components/person/CatchUpCard';
 import { PhotoUploader } from '@/components/person/PhotoUploader';
@@ -43,6 +43,7 @@ export default function PersonDetailPage() {
   const setMe = useSetMe(personId);
   const { tree: currentTree, select: selectTree } = useCurrentTree();
   const { canEdit } = useTreePermissions(person?.tree_id);
+  const hueOf = useCategoryHue(person?.tree_id);
   // The map's Link to… arrives with ?connect=1 to open Add connection (FG-11). Read it once,
   // then drop it, so a reload or Back doesn't open the dialog again.
   const [params, setParams] = useSearchParams();
@@ -118,7 +119,9 @@ export default function PersonDetailPage() {
             {/* On ink, amber stays the on-ink amber in both themes. */}
             {person.is_me && <Badge className="bg-[rgba(223,174,78,0.1)] text-amber">You</Badge>}
             {person.relationship_category && (
-              <span>{categoryLabel(person.relationship_category)}</span>
+              <span className="hue-on-ink" data-hue={hueOf(person.relationship_category)}>
+                {categoryLabel(person.relationship_category)}
+              </span>
             )}
             {person.relationship_category && <span aria-hidden>·</span>}
             <span>
