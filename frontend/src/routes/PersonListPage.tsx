@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, UserPlus } from 'lucide-react';
-import { useCurrentTree } from '@/hooks/useCurrentTree';
+import { useCategoryHue, useCurrentTree } from '@/hooks/useCurrentTree';
 import { usePersonList } from '@/hooks/usePersonList';
 import { AddFromNoteDialog } from '@/components/person/AddFromNoteDialog';
 import { AskPeople } from '@/components/person/AskPeople';
@@ -20,6 +20,7 @@ export default function PersonListPage() {
   const error = treesError ?? peopleError;
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('ALL');
+  const hueOf = useCategoryHue();
 
   const visiblePeople = useMemo(
     () => filterAndSortPeople(people, { search, category }),
@@ -51,7 +52,8 @@ export default function PersonListPage() {
     ));
 
   return (
-    <>
+    // .people-page carries this page's warmer, darker look (index.css).
+    <div className="people-page">
       <PageBand
         glow
         title="People"
@@ -108,10 +110,11 @@ export default function PersonListPage() {
                   <button
                     key={cat}
                     type="button"
+                    data-hue={cat === 'ALL' ? undefined : hueOf(cat)}
                     aria-pressed={selected}
                     onClick={() => setCategory(cat)}
                     className={cn(
-                      'focus-ring inline-flex h-12 shrink-0 items-center gap-2 rounded-[12px] px-4 font-nav text-[15px] font-medium transition-colors duration-200',
+                      'category-chip focus-ring inline-flex h-12 shrink-0 items-center gap-2 rounded-[12px] px-4 font-nav text-[15px] font-medium transition-colors duration-200',
                       selected ? 'bg-text text-surface' : 'bg-ghost text-text hover:bg-ghost-hover',
                     )}
                   >
@@ -150,6 +153,6 @@ export default function PersonListPage() {
           <PersonRoster key={`${category}|${search}`} people={visiblePeople} label="People" />
         )}
       </PageBody>
-    </>
+    </div>
   );
 }

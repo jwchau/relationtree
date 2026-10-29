@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { categoryLabel } from '@/lib/relationshipTypes';
 import { lastTalked } from '@/lib/people';
+import { useCategoryHue } from '@/hooks/useCurrentTree';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -89,8 +90,11 @@ export function PersonRoster({
 
 function PersonRow({ person }: { person: PersonSummary }) {
   const talked = lastTalked(person.last_contacted_date);
+  const hue = useCategoryHue()(person.relationship_category);
   return (
-    <li className="before:bg-hairline relative before:absolute before:inset-x-3 before:top-0 before:h-px first:before:hidden">
+    <li
+      data-hue={hue}
+      className="before:bg-hairline relative before:absolute before:inset-x-3 before:top-0 before:h-px first:before:hidden">
       <Link
         to={`/people/${person.id}`}
         className="hover:bg-ghost-hover focus-ring relative flex min-h-14 items-center gap-3 rounded-[12px] px-3 py-1.5 transition-colors duration-200"
