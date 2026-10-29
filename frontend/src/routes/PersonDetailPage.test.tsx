@@ -156,3 +156,12 @@ describe('PersonDetailPage ?connect=1', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
+
+describe('PersonDetailPage details form', () => {
+  it("shows no category when the person doesn't have one", () => {
+    renderPage();
+    const category = screen.getByRole('combobox', { name: 'Category' });
+    expect(category).toHaveTextContent('No category');
+    expect(category).not.toHaveTextContent('Friend');
+  });
+});

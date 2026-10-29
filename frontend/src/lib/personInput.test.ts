@@ -51,4 +51,10 @@ describe('toFormValues', () => {
       last_contacted_date: null,
     });
   });
+
+  it('keeps a missing category missing instead of defaulting it', () => {
+    const person = { name: 'Sam', relationship_category: null } as Person;
+    expect(toFormValues(person).relationshipCategory).toBeNull();
+    expect(toPersonInput(toFormValues(person)).relationship_category).toBeNull();
+  });
 });
