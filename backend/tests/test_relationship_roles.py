@@ -154,7 +154,7 @@ def test_search_summaries_tell_exes_and_step_and_adoptive_relations_apart(
     assert summary["Mae"] == "Has an adopted child."
 
 
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("migrator")
 def test_the_migration_queues_everyone_for_re_embedding_with_the_new_summaries() -> None:
     before = [("relationtree", "0007_connection_kinds")]
     after = [("relationtree", "0008_reembed_with_relationship_kinds")]
@@ -169,7 +169,9 @@ def test_the_migration_queues_everyone_for_re_embedding_with_the_new_summaries()
     executor = MigrationExecutor(db_connection)
     executor.migrate(after)
 
-    refreshed = Person.objects.get(id=ann.id)
+    # Read through the models as of `after`: later migrations add columns it doesn't have yet.
+    new = executor.loader.project_state(after).apps
+    refreshed = new.get_model("relationtree", "Person").objects.get(id=ann.id)
     assert (refreshed.content_version, refreshed.embedded_version) == (4, 3)
 
 

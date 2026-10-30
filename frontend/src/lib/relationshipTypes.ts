@@ -45,6 +45,36 @@ export function relationshipLabel(type: RelationshipType): string {
   return RELATIONSHIP_LABELS[type];
 }
 
+/** What Add connection offers: every type, plus Child, which is a parent link the other way. */
+export type ConnectionChoice = RelationshipType | 'CHILD';
+
+export const CONNECTION_CHOICES: ConnectionChoice[] = RELATIONSHIP_TYPES.flatMap((type) =>
+  type === 'PARENT' ? [type, 'CHILD' as const] : [type],
+);
+
+/** The role this person takes: "Child" for CHILD, otherwise the type's label. */
+export function connectionChoiceRole(choice: ConnectionChoice): string {
+  return choice === 'CHILD' ? 'Child' : relationshipLabel(choice);
+}
+
+/** The dropdown label. Parent and Child say "of…" so it's clear which way the link points. */
+export function connectionChoiceLabel(choice: ConnectionChoice): string {
+  const role = connectionChoiceRole(choice);
+  return choice === 'PARENT' || choice === 'CHILD' ? `${role} of…` : role;
+}
+
+export function connectionChoiceType(choice: ConnectionChoice): RelationshipType {
+  return choice === 'CHILD' ? 'PARENT' : choice;
+}
+
+/** The link to save when `personId` is the chosen role of `otherId`. */
+export function connectionFromChoice(choice: ConnectionChoice, personId: string, otherId: string) {
+  const type = connectionChoiceType(choice);
+  return choice === 'CHILD'
+    ? { personAId: otherId, personBId: personId, type }
+    : { personAId: personId, personBId: otherId, type };
+}
+
 const CATEGORY_LABELS: Record<RelationshipCategory, string> = {
   FAMILY: 'Family',
   FRIEND: 'Friend',

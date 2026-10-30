@@ -32,6 +32,7 @@ describe('toFormValues', () => {
       address: '1 Main St',
       birthday: '1990-04-02',
       photo_url: null,
+      photo_original_url: null,
       is_me: false,
       tree_id: 'tree-1',
       notes: 'Likes climbing',
@@ -50,5 +51,11 @@ describe('toFormValues', () => {
       notes: 'Likes climbing',
       last_contacted_date: null,
     });
+  });
+
+  it('keeps a missing category missing instead of defaulting it', () => {
+    const person = { name: 'Sam', relationship_category: null } as Person;
+    expect(toFormValues(person).relationshipCategory).toBeNull();
+    expect(toPersonInput(toFormValues(person)).relationship_category).toBeNull();
   });
 });

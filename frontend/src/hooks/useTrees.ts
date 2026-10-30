@@ -1,6 +1,7 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap, type TreeRole } from '@/api/client';
 import { peopleQueryKey } from '@/hooks/usePersonList';
+import type { CategoryHues } from '@/lib/categoryHues';
 
 export const treesQueryKey = ['trees'] as const;
 
@@ -39,6 +40,20 @@ export function useRenameTree(treeId: string) {
     mutationFn: (name: string) =>
       unwrap(
         api.PATCH('/api/trees/{tree_id}', { params: { path: { tree_id: treeId } }, body: { name } }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: treesQueryKey }),
+  });
+}
+
+export function useUpdateCategoryHues(treeId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (category_hues: CategoryHues) =>
+      unwrap(
+        api.PATCH('/api/trees/{tree_id}', {
+          params: { path: { tree_id: treeId } },
+          body: { category_hues },
+        }),
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: treesQueryKey }),
   });

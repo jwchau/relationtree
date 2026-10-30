@@ -33,7 +33,10 @@ Production runs at https://relationtree.johnchau.org since 2026-10-18. Merging `
 Photos live in a private Cloudflare R2 bucket. For local photo uploads, fill in the
 `CLOUDFLARE_R2_*` values in `backend/.env` and allow `http://127.0.0.1:5174` in the
 bucket's CORS policy (`PUT`, `GET`, `HEAD`; header `Content-Type`). Everything else works
-without R2, and tests never touch it.
+without R2, and tests never touch it. On upload the browser also makes a 256px WebP thumbnail
+and puts it beside the photo; the API serves it as `photo_url` (the original is
+`photo_original_url`), so avatars and the map never download full-size photos. Photos from
+before thumbnails, or whose thumbnail failed, fall back to the original.
 
 AI features use a local [Ollama](https://ollama.com): `ollama pull qwen3.8:27b` (catch-up
 summaries, `CHAT_MODEL`) and `ollama pull qwen3-embedding:0.6b` (the "Ask" search,

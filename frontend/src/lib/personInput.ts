@@ -19,7 +19,7 @@ export function toPersonInput(values: PersonFormValues): PersonInput {
 export function toFormValues(person: Person): PersonFormValues {
   return {
     name: person.name,
-    relationshipCategory: person.relationship_category ?? 'FRIEND',
+    relationshipCategory: person.relationship_category,
     context: person.context,
     phone: person.phone,
     email: person.email,

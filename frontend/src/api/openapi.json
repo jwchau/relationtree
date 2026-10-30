@@ -1006,8 +1006,8 @@
     },
     "/api/trees/{tree_id}": {
       "patch": {
-        "operationId": "relationtree_trees_api_rename_tree",
-        "summary": "Rename Tree",
+        "operationId": "relationtree_trees_api_update_tree",
+        "summary": "Update Tree",
         "parameters": [
           {
             "in": "path",
@@ -1039,7 +1039,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TreeIn"
+                "$ref": "#/components/schemas/TreeUpdateIn"
               }
             }
           },
@@ -1924,6 +1924,17 @@
             ],
             "title": "Photo Url"
           },
+          "photo_original_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Original Url"
+          },
           "notes": {
             "title": "Notes",
             "type": "string"
@@ -1967,6 +1978,7 @@
           "address",
           "birthday",
           "photo_url",
+          "photo_original_url",
           "notes",
           "last_contacted_date",
           "created_at",
@@ -2217,6 +2229,28 @@
           "key": {
             "title": "Key",
             "type": "string"
+          },
+          "thumb_upload_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb Upload Url"
+          },
+          "thumb_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb Key"
           }
         },
         "required": [
@@ -2224,6 +2258,30 @@
           "key"
         ],
         "title": "UploadUrlOut",
+        "type": "object"
+      },
+      "ThumbIn": {
+        "properties": {
+          "content_type": {
+            "enum": [
+              "image/webp",
+              "image/jpeg"
+            ],
+            "title": "Content Type",
+            "type": "string"
+          },
+          "size": {
+            "exclusiveMinimum": 0,
+            "maximum": 204800,
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "content_type",
+          "size"
+        ],
+        "title": "ThumbIn",
         "type": "object"
       },
       "UploadUrlIn": {
@@ -2243,6 +2301,16 @@
             "maximum": 5242880,
             "title": "Size",
             "type": "integer"
+          },
+          "thumb": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThumbIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -2257,6 +2325,17 @@
           "key": {
             "title": "Key",
             "type": "string"
+          },
+          "thumb_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb Key"
           }
         },
         "required": [
@@ -2459,6 +2538,21 @@
         "title": "AskIn",
         "type": "object"
       },
+      "Hue": {
+        "description": "The colours a category can wear. No amber: amber marks \"you\" and nothing else.",
+        "enum": [
+          "rose",
+          "violet",
+          "blue",
+          "green",
+          "teal",
+          "pink",
+          "slate",
+          "none"
+        ],
+        "title": "Hue",
+        "type": "string"
+      },
       "Role": {
         "enum": [
           "owner",
@@ -2485,13 +2579,24 @@
           "member_count": {
             "title": "Member Count",
             "type": "integer"
+          },
+          "category_hues": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Hue"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/RelationshipCategory"
+            },
+            "title": "Category Hues",
+            "type": "object"
           }
         },
         "required": [
           "id",
           "name",
           "role",
-          "member_count"
+          "member_count",
+          "category_hues"
         ],
         "title": "TreeOut",
         "type": "object"
@@ -2509,6 +2614,43 @@
           "name"
         ],
         "title": "TreeIn",
+        "type": "object"
+      },
+      "TreeUpdateIn": {
+        "description": "Whatever the owner is changing; categories left out of category_hues keep theirs.",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "category_hues": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Hue"
+                },
+                "propertyNames": {
+                  "$ref": "#/components/schemas/RelationshipCategory"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Hues"
+          }
+        },
+        "title": "TreeUpdateIn",
         "type": "object"
       },
       "GraphPersonOut": {

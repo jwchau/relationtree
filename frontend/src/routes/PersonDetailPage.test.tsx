@@ -24,6 +24,7 @@ const robin: Person = {
   address: '',
   birthday: null,
   photo_url: null,
+  photo_original_url: null,
   notes: '',
   last_contacted_date: null,
   created_at: '2026-10-01T00:00:00Z',
@@ -154,5 +155,14 @@ describe('PersonDetailPage ?connect=1', () => {
   it('leaves the dialog closed without it', () => {
     renderPage();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('PersonDetailPage details form', () => {
+  it("shows no category when the person doesn't have one", () => {
+    renderPage();
+    const category = screen.getByRole('combobox', { name: 'Category' });
+    expect(category).toHaveTextContent('No category');
+    expect(category).not.toHaveTextContent('Friend');
   });
 });

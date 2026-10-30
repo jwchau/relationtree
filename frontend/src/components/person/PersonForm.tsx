@@ -21,6 +21,9 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 
+// Radix Select can't use '' as an item value, so "no category" needs a stand-in.
+const NO_CATEGORY = 'NONE';
+
 export interface PersonFormProps {
   defaultValues?: Partial<PersonFormValues>;
   onSubmit: (values: PersonFormValues) => Promise<void> | void;
@@ -79,13 +82,17 @@ export function PersonForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Category</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select
+                  value={field.value ?? NO_CATEGORY}
+                  onValueChange={(value) => field.onChange(value === NO_CATEGORY ? null : value)}
+                >
                   <FormControl>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
+                    <SelectItem value={NO_CATEGORY}>No category</SelectItem>
                     {RELATIONSHIP_CATEGORIES.map((category) => (
                       <SelectItem key={category} value={category}>
                         {categoryLabel(category)}

@@ -39,7 +39,7 @@ def delete_sole_owned_trees(sender: Any, instance: Any, **kwargs: Any) -> None:
 def delete_person_photo(sender: Any, instance: Person, **kwargs: Any) -> None:
     """Covers API deletes, admin deletes, and people removed by a tree cascade."""
     if instance.photo_key:
-        delete_photo_quietly(instance.photo_key)
+        delete_photo_quietly(instance.photo_key, instance.photo_thumb_key)
 
 
 def _mark_for_reembedding(*person_ids: UUID) -> None:

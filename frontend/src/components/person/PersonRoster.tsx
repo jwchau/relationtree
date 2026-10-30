@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { categoryLabel } from '@/lib/relationshipTypes';
-import { lastTalked } from '@/lib/people';
+import { birthdayCell } from '@/lib/people';
+import { useCategoryHue } from '@/hooks/useCurrentTree';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -74,7 +75,7 @@ export function PersonRoster({
         >
           <span>Name</span>
           <span>Category</span>
-          <span className="text-right">Last contacted</span>
+          <span className="text-right">Birthday</span>
         </div>
       )}
       {/* When paged, a short last page keeps a full page's height (rows are min-h-14). */}
@@ -88,9 +89,12 @@ export function PersonRoster({
 }
 
 function PersonRow({ person }: { person: PersonSummary }) {
-  const talked = lastTalked(person.last_contacted_date);
+  const birthday = person.birthday ? birthdayCell(person.birthday) : null;
+  const hue = useCategoryHue()(person.relationship_category);
   return (
-    <li className="before:bg-hairline relative before:absolute before:inset-x-3 before:top-0 before:h-px first:before:hidden">
+    <li
+      data-hue={hue}
+      className="before:bg-hairline relative before:absolute before:inset-x-3 before:top-0 before:h-px first:before:hidden">
       <Link
         to={`/people/${person.id}`}
         className="hover:bg-ghost-hover focus-ring relative flex min-h-14 items-center gap-3 rounded-[12px] px-3 py-1.5 transition-colors duration-200"
@@ -112,13 +116,18 @@ function PersonRow({ person }: { person: PersonSummary }) {
             )}
           </div>
           <p className="text-muted-foreground tabular flex items-center justify-end gap-2 text-[14px] leading-5 font-medium whitespace-nowrap">
-            {talked.stale && (
-              <span aria-hidden className="bg-accent-text size-1.5 shrink-0 rounded-full" />
+            {birthday && (
+              <>
+                {/* Coming up within two weeks. */}
+                {birthday.soon && (
+                  <span aria-hidden className="bg-accent-text size-1.5 shrink-0 rounded-full" />
+                )}
+                <span title={birthday.full}>
+                  <span className="sr-only">Birthday: {birthday.full}</span>
+                  <span aria-hidden>{birthday.label}</span>
+                </span>
+              </>
             )}
-            <span>
-              <span className="sr-only">Last contacted: </span>
-              {talked.label}
-            </span>
           </p>
         </div>
       </Link>

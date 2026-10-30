@@ -106,7 +106,7 @@ def test_the_database_refuses_a_field_on_the_wrong_type(type_: str, fields: dict
         Connection.objects.filter(id=link.id).update(**fields)
 
 
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("migrator")
 def test_the_migration_makes_existing_parent_links_biological() -> None:
     before, after = [("relationtree", "0006_invite")], [("relationtree", "0007_connection_kinds")]
     executor = MigrationExecutor(db_connection)

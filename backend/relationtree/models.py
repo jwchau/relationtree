@@ -7,12 +7,43 @@ from pgvector.django import HnswIndex, VectorField
 
 
 class Tree(models.Model):
+    class Hue(models.TextChoices):
+        """The colours a category can wear. No amber: amber marks "you" and nothing else."""
+
+        ROSE = "rose"
+        VIOLET = "violet"
+        BLUE = "blue"
+        GREEN = "green"
+        TEAL = "teal"
+        PINK = "pink"
+        SLATE = "slate"
+        NONE = "none"
+
+    # By relationship category (Person.RelationshipCategory, defined below).
+    DEFAULT_HUES = {
+        "FAMILY": Hue.ROSE,
+        "FRIEND": Hue.VIOLET,
+        "COWORKER": Hue.BLUE,
+        "ACQUAINTANCE": Hue.GREEN,
+        "OTHER": Hue.SLATE,
+    }
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Only the categories the owner changed; the rest take DEFAULT_HUES. The database default
+    # lets code from before this field (another checkout on the same database) still add trees.
+    category_hues = models.JSONField(default=dict, db_default={}, blank=True)
 
     def __str__(self) -> str:
         return self.name
+
+    def hues(self) -> dict[str, Tree.Hue]:
+        """Every category's hue, with the defaults filled in."""
+        return {
+            category: Tree.Hue(self.category_hues.get(category, default))
+            for category, default in self.DEFAULT_HUES.items()
+        }
 
 
 class TreeMembership(models.Model):
@@ -91,6 +122,9 @@ class Person(models.Model):
     address = models.TextField(blank=True, default="")
     birthday = models.DateField(null=True, blank=True)
     photo_key = models.CharField(max_length=500, blank=True, default="")
+    # A small copy the browser makes on upload; blank for photos uploaded before thumbnails.
+    # db_default so code that predates this column can still insert people.
+    photo_thumb_key = models.CharField(max_length=500, blank=True, db_default="")
     notes = models.TextField(blank=True, default="")
     last_contacted_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

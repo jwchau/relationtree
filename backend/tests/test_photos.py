@@ -7,6 +7,7 @@ from django.test import Client
 
 from relationtree.models import TreeMembership
 from tests.fakes import FakePhotoStorage
+from tests.test_trees import default_tree_id
 
 
 def add_person(client: Client, name: str = "Sam") -> dict[str, Any]:
@@ -60,6 +61,69 @@ def test_upload_url_rejects_non_images_and_oversized_files(
     assert request_upload(alice, sam["id"], content_type, size).status_code == 422
 
 
+def request_upload_with_thumb(
+    client: Client,
+    person_id: str,
+    thumb_type: str = "image/webp",
+    thumb_size: int = 20_000,
+) -> Any:
+    return client.post(
+        f"/api/people/{person_id}/photo/upload-url",
+        {
+            "content_type": "image/jpeg",
+            "size": 200_000,
+            "thumb": {"content_type": thumb_type, "size": thumb_size},
+        },
+        content_type="application/json",
+    )
+
+
+def test_upload_url_with_a_thumbnail_also_targets_a_thumbnail_key_beside_the_photo(
+    login_as: Callable[[str], Client],
+) -> None:
+    alice = login_as("alice")
+    sam = add_person(alice)
+
+    response = request_upload_with_thumb(alice, sam["id"], "image/webp", 18_000)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["thumb_key"] == body["key"].removesuffix(".jpg") + ".thumb.webp"
+    assert body["thumb_upload_url"] == (
+        f"https://r2.test/{body['thumb_key']}?op=put&type=image/webp&size=18000"
+    )
+
+
+@pytest.mark.parametrize(
+    ("thumb_type", "thumb_size"),
+    [
+        ("image/png", 10_000),  # thumbnails are WebP or JPEG only
+        ("image/gif", 10_000),
+        ("image/webp", 200 * 1024 + 1),
+        ("image/webp", 0),
+    ],
+)
+def test_upload_url_rejects_thumbnails_of_the_wrong_type_or_too_big(
+    login_as: Callable[[str], Client], thumb_type: str, thumb_size: int
+) -> None:
+    alice = login_as("alice")
+    sam = add_person(alice)
+
+    assert request_upload_with_thumb(alice, sam["id"], thumb_type, thumb_size).status_code == 422
+
+
+def test_upload_url_without_a_thumbnail_has_no_thumbnail_key(
+    login_as: Callable[[str], Client],
+) -> None:
+    alice = login_as("alice")
+    sam = add_person(alice)
+
+    body = request_upload(alice, sam["id"]).json()
+
+    assert body["thumb_key"] is None
+    assert body["thumb_upload_url"] is None
+
+
 def confirm(client: Client, person_id: str, key: str) -> Any:
     return client.put(
         f"/api/people/{person_id}/photo", {"key": key}, content_type="application/json"
@@ -81,6 +145,60 @@ def test_confirmed_photo_is_served_as_a_download_url(login_as: Callable[[str], C
     assert by_name["Sam"]["photo_url"] == expected_url
     assert by_name["Ann"]["photo_url"] is None
     assert ann["photo_url"] is None
+
+
+def confirm_with_thumb(client: Client, person_id: str, key: str, thumb_key: str) -> Any:
+    return client.put(
+        f"/api/people/{person_id}/photo",
+        {"key": key, "thumb_key": thumb_key},
+        content_type="application/json",
+    )
+
+
+def test_a_confirmed_thumbnail_is_served_as_the_photo_with_the_original_beside_it(
+    login_as: Callable[[str], Client],
+) -> None:
+    alice = login_as("alice")
+    sam = add_person(alice)
+    upload = request_upload_with_thumb(alice, sam["id"]).json()
+
+    confirmed = confirm_with_thumb(alice, sam["id"], upload["key"], upload["thumb_key"])
+
+    assert confirmed.status_code == 200
+    thumb_url = f"https://r2.test/{upload['thumb_key']}?op=get"
+    original_url = f"https://r2.test/{upload['key']}?op=get"
+    for person in [
+        confirmed.json(),
+        alice.get(f"/api/people/{sam['id']}").json(),
+        alice.get("/api/people").json()[0],
+    ]:
+        assert person["photo_url"] == thumb_url
+        assert person["photo_original_url"] == original_url
+
+
+def test_the_tree_graph_serves_the_thumbnail(login_as: Callable[[str], Client]) -> None:
+    alice = login_as("alice")
+    sam = add_person(alice)
+    upload = request_upload_with_thumb(alice, sam["id"]).json()
+    confirm_with_thumb(alice, sam["id"], upload["key"], upload["thumb_key"])
+
+    [person] = alice.get(f"/api/trees/{default_tree_id(alice)}/graph").json()["people"]
+
+    assert person["photo_url"] == f"https://r2.test/{upload['thumb_key']}?op=get"
+
+
+def test_a_photo_without_a_thumbnail_is_served_as_the_original(
+    login_as: Callable[[str], Client],
+) -> None:
+    alice = login_as("alice")
+    sam = add_person(alice)
+    key = request_upload(alice, sam["id"]).json()["key"]
+
+    person = confirm(alice, sam["id"], key).json()
+
+    original_url = f"https://r2.test/{key}?op=get"
+    assert person["photo_url"] == original_url
+    assert person["photo_original_url"] == original_url
 
 
 def test_confirming_a_key_outside_the_persons_folder_is_rejected(
@@ -118,6 +236,70 @@ def test_old_photos_are_deleted_from_storage(
     confirm(alice, sam["id"], third)
     alice.delete(f"/api/people/{sam['id']}")
     assert photo_storage.deleted == [first, second, third]
+
+
+def test_confirming_a_thumbnail_that_isnt_this_photos_is_rejected(
+    login_as: Callable[[str], Client], photo_storage: FakePhotoStorage
+) -> None:
+    alice, bob = login_as("alice"), login_as("bob")
+    sam, ann = add_person(alice, "Sam"), add_person(alice, "Ann")
+    dee = add_person(bob, "Dee")
+    upload = request_upload_with_thumb(alice, sam["id"]).json()
+    other_upload = request_upload_with_thumb(alice, sam["id"]).json()
+    anns_thumb = request_upload_with_thumb(alice, ann["id"]).json()["thumb_key"]
+    bobs_thumb = request_upload_with_thumb(bob, dee["id"]).json()["thumb_key"]
+
+    for thumb_key in [
+        anns_thumb,
+        bobs_thumb,
+        other_upload["thumb_key"],  # Sam's, but for a different photo
+        upload["key"],  # the photo itself
+        upload["thumb_key"].replace(".thumb.webp", ".thumb.png"),
+        f"{upload['thumb_key']}/../../x.webp",
+    ]:
+        response = confirm_with_thumb(alice, sam["id"], upload["key"], thumb_key)
+        assert response.status_code == 422, thumb_key
+
+    assert alice.get(f"/api/people/{sam['id']}").json()["photo_url"] is None
+
+
+def test_old_thumbnails_are_deleted_with_their_photos(
+    login_as: Callable[[str], Client], photo_storage: FakePhotoStorage
+) -> None:
+    alice = login_as("alice")
+    sam = add_person(alice)
+
+    def upload_with_thumb() -> tuple[str, str]:
+        upload = request_upload_with_thumb(alice, sam["id"]).json()
+        confirm_with_thumb(alice, sam["id"], upload["key"], upload["thumb_key"])
+        return upload["key"], upload["thumb_key"]
+
+    first, first_thumb = upload_with_thumb()
+    second, second_thumb = upload_with_thumb()  # replaced
+    assert photo_storage.deleted == [first, first_thumb]
+
+    assert alice.delete(f"/api/people/{sam['id']}/photo").status_code == 204  # removed
+    assert photo_storage.deleted[2:] == [second, second_thumb]
+    assert alice.get(f"/api/people/{sam['id']}").json()["photo_original_url"] is None
+
+    third, third_thumb = upload_with_thumb()
+    alice.delete(f"/api/people/{sam['id']}")  # person deleted
+    assert photo_storage.deleted[4:] == [third, third_thumb]
+
+
+def test_replacing_a_photo_without_a_thumbnail_drops_the_old_thumbnail(
+    login_as: Callable[[str], Client], photo_storage: FakePhotoStorage
+) -> None:
+    alice = login_as("alice")
+    sam = add_person(alice)
+    upload = request_upload_with_thumb(alice, sam["id"]).json()
+    confirm_with_thumb(alice, sam["id"], upload["key"], upload["thumb_key"])
+    key = request_upload(alice, sam["id"]).json()["key"]
+
+    person = confirm(alice, sam["id"], key).json()
+
+    assert person["photo_url"] == f"https://r2.test/{key}?op=get"
+    assert photo_storage.deleted == [upload["key"], upload["thumb_key"]]
 
 
 def test_photo_key_cannot_be_set_through_person_create_or_update(

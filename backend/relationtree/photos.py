@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
 EXTENSIONS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
 
+# The browser makes the thumbnail (256px square); WebP, or JPEG where it can't encode WebP.
+MAX_THUMB_BYTES = 200 * 1024
+THUMB_EXTENSIONS = {"image/webp": "webp", "image/jpeg": "jpg"}
+
 UPLOAD_URL_TTL_SECONDS = 5 * 60
 DOWNLOAD_URL_TTL_SECONDS = 60 * 60
 
@@ -30,6 +34,12 @@ def new_photo_key(person: Person, content_type: str) -> str:
     return f"{_folder(person)}{uuid.uuid4()}.{EXTENSIONS[content_type]}"
 
 
+def thumb_key_for(photo_key: str, content_type: str) -> str:
+    """The thumbnail sits beside its photo: <uuid>.jpg -> <uuid>.thumb.webp."""
+    stem = photo_key.rsplit(".", 1)[0]
+    return f"{stem}.thumb.{THUMB_EXTENSIONS[content_type]}"
+
+
 _GENERATED_NAME = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp|gif)"
 )
@@ -40,6 +50,11 @@ def is_photo_key_for(person: Person, key: str) -> bool:
     another tree's object (which would then be served via a presigned URL) and path tricks."""
     folder = _folder(person)
     return key.startswith(folder) and _GENERATED_NAME.fullmatch(key[len(folder) :]) is not None
+
+
+def is_thumb_key_for(photo_key: str, thumb_key: str) -> bool:
+    """Only the thumbnail key we would have generated beside this (already checked) photo."""
+    return thumb_key in {thumb_key_for(photo_key, t) for t in THUMB_EXTENSIONS}
 
 
 class PhotoStorage(Protocol):
@@ -108,10 +123,12 @@ def set_photo_storage(storage: PhotoStorage | None) -> None:
     _storage = storage
 
 
-def delete_photo_quietly(key: str) -> None:
+def delete_photo_quietly(*keys: str) -> None:
     """Best effort: the database change already happened, so an R2 hiccup must not turn it
-    into an error. A missed delete only leaves an orphaned object in the bucket."""
-    try:
-        get_photo_storage().delete(key)
-    except Exception:
-        logger.warning("Failed to delete photo %s from storage", key, exc_info=True)
+    into an error. A missed delete only leaves an orphaned object in the bucket. Blank keys
+    (no thumbnail) are skipped."""
+    for key in filter(None, keys):
+        try:
+            get_photo_storage().delete(key)
+        except Exception:
+            logger.warning("Failed to delete photo %s from storage", key, exc_info=True)

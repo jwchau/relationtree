@@ -1,17 +1,25 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, UserPlus } from 'lucide-react';
-import { useCurrentTree } from '@/hooks/useCurrentTree';
+import { ArrowUpDown, Search, UserPlus } from 'lucide-react';
+import { useCategoryHue, useCurrentTree } from '@/hooks/useCurrentTree';
 import { usePersonList } from '@/hooks/usePersonList';
 import { AddFromNoteDialog } from '@/components/person/AddFromNoteDialog';
 import { AskPeople } from '@/components/person/AskPeople';
 import { PersonRoster, PersonRosterSkeleton } from '@/components/person/PersonRoster';
 import { Note, PageBand, PageBody } from '@/components/kiln/Page';
-import { filterAndSortPeople, type CategoryFilter } from '@/lib/personListFilters';
+import {
+  DEFAULT_PERSON_SORT,
+  PERSON_SORTS,
+  filterAndSortPeople,
+  type CategoryFilter,
+  type PersonSort,
+} from '@/lib/personListFilters';
+import { readRememberedSort, rememberSort } from '@/lib/personSortStorage';
 import { RELATIONSHIP_CATEGORIES, categoryLabel } from '@/lib/relationshipTypes';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function PersonListPage() {
   const { tree, canEdit, loading: treesLoading, error: treesError } = useCurrentTree();
@@ -20,10 +28,17 @@ export default function PersonListPage() {
   const error = treesError ?? peopleError;
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('ALL');
+  const [sort, setSort] = useState<PersonSort>(() => readRememberedSort() ?? DEFAULT_PERSON_SORT);
+  const hueOf = useCategoryHue();
+
+  function changeSort(next: PersonSort) {
+    setSort(next);
+    rememberSort(next);
+  }
 
   const visiblePeople = useMemo(
-    () => filterAndSortPeople(people, { search, category }),
-    [people, search, category],
+    () => filterAndSortPeople(people, { search, category, sort }),
+    [people, search, category, sort],
   );
 
   const counts = useMemo(() => {
@@ -51,7 +66,8 @@ export default function PersonListPage() {
     ));
 
   return (
-    <>
+    // .people-page carries this page's warmer, darker look (index.css).
+    <div className="people-page">
       <PageBand
         glow
         title="People"
@@ -108,10 +124,11 @@ export default function PersonListPage() {
                   <button
                     key={cat}
                     type="button"
+                    data-hue={cat === 'ALL' ? undefined : hueOf(cat)}
                     aria-pressed={selected}
                     onClick={() => setCategory(cat)}
                     className={cn(
-                      'focus-ring inline-flex h-12 shrink-0 items-center gap-2 rounded-[12px] px-4 font-nav text-[15px] font-medium transition-colors duration-200',
+                      'category-chip focus-ring inline-flex h-12 shrink-0 items-center gap-2 rounded-[12px] px-4 font-nav text-[15px] font-medium transition-colors duration-200',
                       selected ? 'bg-text text-surface' : 'bg-ghost text-text hover:bg-ghost-hover',
                     )}
                   >
@@ -123,6 +140,19 @@ export default function PersonListPage() {
                 );
               })}
             </div>
+            <Select value={sort} onValueChange={(value) => changeSort(value as PersonSort)}>
+              <SelectTrigger aria-label="Sort" className="w-full *:data-[slot=select-value]:flex-1 lg:ml-auto lg:w-fit lg:shrink-0">
+                <ArrowUpDown aria-hidden />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PERSON_SORTS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
@@ -146,10 +176,10 @@ export default function PersonListPage() {
         )}
 
         {!loading && visiblePeople.length > 0 && (
-          // Keyed by the search and filter so changing either starts again at page 1.
-          <PersonRoster key={`${category}|${search}`} people={visiblePeople} label="People" />
+          // Keyed by the search, filter and sort so changing any of them starts again at page 1.
+          <PersonRoster key={`${category}|${sort}|${search}`} people={visiblePeople} label="People" />
         )}
       </PageBody>
-    </>
+    </div>
   );
 }
