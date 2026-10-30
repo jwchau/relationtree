@@ -69,6 +69,9 @@ TEMPLATES = [
 ASGI_APPLICATION = "config.asgi.application"
 
 DATABASES = {"default": env.db("DATABASE_URL")}
+# Two checkouts sharing one Postgres need different test databases, or their test runs collide.
+if test_db_name := env.str("DATABASE_TEST_NAME", default=""):
+    DATABASES["default"]["TEST"] = {"NAME": test_db_name}
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

@@ -1,3 +1,4 @@
+import { daysUntilBirthday } from '@/lib/people';
 import type { RelationshipCategory } from '@/lib/relationshipTypes';
 import type { PersonSummary } from '@/hooks/usePersonList';
 
@@ -5,19 +6,22 @@ export type CategoryFilter = RelationshipCategory | 'ALL';
 
 export type PersonSort = 'stalest' | 'recent' | 'name-asc' | 'name-desc' | 'newest' | 'birthday';
 
+export const DEFAULT_PERSON_SORT: PersonSort = 'name-asc';
+
 /** The sorts the People page offers, in menu order. */
 export const PERSON_SORTS: { value: PersonSort; label: string }[] = [
-  { value: 'stalest', label: 'Longest since contact' },
-  { value: 'recent', label: 'Most recently contacted' },
-  { value: 'birthday', label: 'Upcoming birthday' },
   { value: 'name-asc', label: 'Name A–Z' },
   { value: 'name-desc', label: 'Name Z–A' },
+  { value: 'birthday', label: 'Upcoming birthday' },
+  { value: 'stalest', label: 'Longest since contact' },
+  { value: 'recent', label: 'Most recently contacted' },
   { value: 'newest', label: 'Recently added' },
 ];
 
 export interface PersonListFilters {
   search: string;
   category: CategoryFilter;
+  /** Defaults to DEFAULT_PERSON_SORT. */
   sort?: PersonSort;
   /** The day the birthday sort counts from; defaults to now. */
   today?: Date;
@@ -47,21 +51,6 @@ const byRecent: Compare = (a, b) => {
 
 const byName: Compare = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/**
- * Days from `today` to the next birthday (0 when it's today). `birthday` is an ISO date
- * (YYYY-MM-DD). A Feb 29 birthday falls on Mar 1 in other years, as Date rolls it over.
- */
-function daysUntilBirthday(birthday: string, today: Date): number {
-  const [, month, day] = birthday.split('-').map(Number);
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  let next = new Date(start.getFullYear(), month - 1, day);
-  if (next < start) next = new Date(start.getFullYear() + 1, month - 1, day);
-  // Rounded so a daylight-saving change in between doesn't shift the count.
-  return Math.round((next.getTime() - start.getTime()) / DAY_MS);
-}
-
 /** Soonest next birthday first; no birthday goes last. */
 const byNextBirthday =
   (today: Date): Compare =>
@@ -89,10 +78,10 @@ function compareFor(sort: PersonSort, today: Date): Compare {
   }
 }
 
-/** Filters by name and category, then sorts (stalest first unless `sort` says otherwise). */
+/** Filters by name and category, then sorts (by name unless `sort` says otherwise). */
 export function filterAndSortPeople(
   people: PersonSummary[],
-  { search, category, sort = 'stalest', today = new Date() }: PersonListFilters,
+  { search, category, sort = DEFAULT_PERSON_SORT, today = new Date() }: PersonListFilters,
 ): PersonSummary[] {
   const query = search.trim().toLowerCase();
 

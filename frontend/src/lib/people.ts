@@ -9,6 +9,7 @@ export function initials(name: string): string {
 
 const DAY = 24 * 60 * 60 * 1000;
 const STALE_DAYS = 90;
+const BIRTHDAY_SOON_DAYS = 14;
 
 /** "Last talked" in words, and whether it's been long enough to nudge (three months or never). */
 export function lastTalked(
@@ -30,6 +31,34 @@ function describeDays(days: number): string {
   if (days < 30) return ago(Math.floor(days / 7), 'week');
   if (days < 365) return ago(Math.max(1, Math.floor(days / 30)), 'month');
   return ago(Math.floor(days / 365), 'year');
+}
+
+/** A birthday for the list: "Mar 4", the full date for the tooltip and screen readers, and
+ * whether it's coming up soon. `birthday` is an ISO date (YYYY-MM-DD). */
+export function birthdayCell(
+  birthday: string,
+  today: Date = new Date(),
+): { label: string; full: string; soon: boolean } {
+  const [y, m, d] = birthday.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return {
+    label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    full: date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    soon: daysUntilBirthday(birthday, today) <= BIRTHDAY_SOON_DAYS,
+  };
+}
+
+/**
+ * Days from `today` to the next birthday (0 when it's today). `birthday` is an ISO date
+ * (YYYY-MM-DD). A Feb 29 birthday falls on Mar 1 in other years, as Date rolls it over.
+ */
+export function daysUntilBirthday(birthday: string, today: Date = new Date()): number {
+  const [, month, day] = birthday.split('-').map(Number);
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let next = new Date(start.getFullYear(), month - 1, day);
+  if (next < start) next = new Date(start.getFullYear() + 1, month - 1, day);
+  // Rounded so a daylight-saving change in between doesn't shift the count.
+  return Math.round((next.getTime() - start.getTime()) / DAY);
 }
 
 function ago(n: number, unit: string): string {

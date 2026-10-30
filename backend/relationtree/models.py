@@ -91,6 +91,9 @@ class Person(models.Model):
     address = models.TextField(blank=True, default="")
     birthday = models.DateField(null=True, blank=True)
     photo_key = models.CharField(max_length=500, blank=True, default="")
+    # A small copy the browser makes on upload; blank for photos uploaded before thumbnails.
+    # db_default so code that predates this column can still insert people.
+    photo_thumb_key = models.CharField(max_length=500, blank=True, db_default="")
     notes = models.TextField(blank=True, default="")
     last_contacted_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

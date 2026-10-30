@@ -145,7 +145,12 @@ def tree_graph(request: AuthedRequest, tree_id: UUID) -> TreeGraphOut:
             id=p.id,
             name=p.name,
             # Signing is local, but only touch storage when there's a photo, like PersonOut.
-            photo_url=get_photo_storage().presign_download(p.photo_key) if p.photo_key else None,
+            # The thumbnail when there is one, also like PersonOut.
+            photo_url=(
+                get_photo_storage().presign_download(p.photo_thumb_key or p.photo_key)
+                if p.photo_key
+                else None
+            ),
             birthday=p.birthday,
             relationship_category=(
                 Person.RelationshipCategory(p.relationship_category)

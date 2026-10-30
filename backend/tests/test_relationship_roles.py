@@ -169,8 +169,14 @@ def test_the_migration_queues_everyone_for_re_embedding_with_the_new_summaries()
     executor = MigrationExecutor(db_connection)
     executor.migrate(after)
 
-    refreshed = Person.objects.get(id=ann.id)
+    # Read through the models as of `after`: later migrations add columns it doesn't have yet.
+    new = executor.loader.project_state(after).apps
+    refreshed = new.get_model("relationtree", "Person").objects.get(id=ann.id)
     assert (refreshed.content_version, refreshed.embedded_version) == (4, 3)
+
+    # Leave the database fully migrated for the tests that run after this one.
+    executor = MigrationExecutor(db_connection)
+    executor.migrate(executor.loader.graph.leaf_nodes())
 
 
 def test_a_catch_up_summary_hears_who_is_an_ex_or_a_step_relation(

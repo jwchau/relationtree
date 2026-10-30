@@ -18,6 +18,7 @@ function person(id: string, overrides: Partial<Person> = {}): Person {
     address: '',
     birthday: null,
     photo_url: null,
+    photo_original_url: null,
     notes: '',
     last_contacted_date: null,
     created_at: '2026-10-01T00:00:00Z',
@@ -70,6 +71,21 @@ function chooseSort(label: string) {
 }
 
 describe('PersonListPage sorting', () => {
+  it('sorts by name A–Z when no sort has been picked', () => {
+    listState.people = [
+      person('Carol', { last_contacted_date: '2026-01-01' }),
+      person('Alice', { last_contacted_date: '2026-06-01' }),
+      person('Bob', { last_contacted_date: '2026-03-01' }),
+    ];
+    renderPage();
+    expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Name A–Z');
+    expect(rosterNames()).toEqual([
+      expect.stringContaining('Alice'),
+      expect.stringContaining('Bob'),
+      expect.stringContaining('Carol'),
+    ]);
+  });
+
   it('reorders the roster when you pick another sort', () => {
     listState.people = [
       person('Carol', { last_contacted_date: '2026-01-01' }),
@@ -77,18 +93,13 @@ describe('PersonListPage sorting', () => {
       person('Bob', { last_contacted_date: '2026-03-01' }),
     ];
     renderPage();
+
+    chooseSort('Longest since contact');
+
     expect(rosterNames()).toEqual([
       expect.stringContaining('Carol'),
       expect.stringContaining('Bob'),
       expect.stringContaining('Alice'),
-    ]);
-
-    chooseSort('Name A–Z');
-
-    expect(rosterNames()).toEqual([
-      expect.stringContaining('Alice'),
-      expect.stringContaining('Bob'),
-      expect.stringContaining('Carol'),
     ]);
   });
 
@@ -104,21 +115,21 @@ describe('PersonListPage sorting', () => {
   });
 
   it('remembers the sort you picked the next time the page opens', () => {
-    listState.people = [person('Bob'), person('Alice')];
+    listState.people = [person('Alice'), person('Bob')];
     const { unmount } = renderPage();
-    chooseSort('Name A–Z');
+    chooseSort('Name Z–A');
     unmount();
 
     renderPage();
 
-    expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Name A–Z');
-    expect(rosterNames()).toEqual([expect.stringContaining('Alice'), expect.stringContaining('Bob')]);
+    expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Name Z–A');
+    expect(rosterNames()).toEqual([expect.stringContaining('Bob'), expect.stringContaining('Alice')]);
   });
 
   it('uses the default sort when the remembered one is unknown', () => {
     localStorage.setItem('relationtree.personSort', 'shoe-size');
     listState.people = [person('Bob')];
     renderPage();
-    expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Longest since contact');
+    expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Name A–Z');
   });
 });

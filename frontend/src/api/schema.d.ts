@@ -564,6 +564,8 @@ export interface components {
             birthday: string | null;
             /** Photo Url */
             photo_url: string | null;
+            /** Photo Original Url */
+            photo_original_url: string | null;
             /** Notes */
             notes: string;
             /** Last Contacted Date */
@@ -666,6 +668,20 @@ export interface components {
             upload_url: string;
             /** Key */
             key: string;
+            /** Thumb Upload Url */
+            thumb_upload_url?: string | null;
+            /** Thumb Key */
+            thumb_key?: string | null;
+        };
+        /** ThumbIn */
+        ThumbIn: {
+            /**
+             * Content Type
+             * @enum {string}
+             */
+            content_type: "image/webp" | "image/jpeg";
+            /** Size */
+            size: number;
         };
         /** UploadUrlIn */
         UploadUrlIn: {
@@ -676,11 +692,14 @@ export interface components {
             content_type: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
             /** Size */
             size: number;
+            thumb?: components["schemas"]["ThumbIn"] | null;
         };
         /** ConfirmPhotoIn */
         ConfirmPhotoIn: {
             /** Key */
             key: string;
+            /** Thumb Key */
+            thumb_key?: string | null;
         };
         /** ConnectionOut */
         ConnectionOut: {

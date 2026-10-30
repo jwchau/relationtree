@@ -8,6 +8,7 @@ import { AskPeople } from '@/components/person/AskPeople';
 import { PersonRoster, PersonRosterSkeleton } from '@/components/person/PersonRoster';
 import { Note, PageBand, PageBody } from '@/components/kiln/Page';
 import {
+  DEFAULT_PERSON_SORT,
   PERSON_SORTS,
   filterAndSortPeople,
   type CategoryFilter,
@@ -27,7 +28,7 @@ export default function PersonListPage() {
   const error = treesError ?? peopleError;
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('ALL');
-  const [sort, setSort] = useState<PersonSort>(() => readRememberedSort() ?? 'stalest');
+  const [sort, setSort] = useState<PersonSort>(() => readRememberedSort() ?? DEFAULT_PERSON_SORT);
 
   function changeSort(next: PersonSort) {
     setSort(next);

@@ -24,6 +24,7 @@ const robin: Person = {
   address: '',
   birthday: null,
   photo_url: null,
+  photo_original_url: null,
   notes: '',
   last_contacted_date: null,
   created_at: '2026-10-01T00:00:00Z',

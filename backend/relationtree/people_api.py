@@ -68,6 +68,7 @@ class PersonOut(Schema):
     address: str
     birthday: date | None
     photo_url: str | None
+    photo_original_url: str | None
     notes: str
     last_contacted_date: date | None
     created_at: datetime
@@ -78,6 +79,12 @@ class PersonOut(Schema):
     @staticmethod
     def resolve_photo_url(person: Person) -> str | None:
         # Short-lived presigned GET; signing is local, so this costs no network round trip.
+        # The thumbnail when there is one: the app never shows a photo bigger than 80px.
+        key = person.photo_thumb_key or person.photo_key
+        return get_photo_storage().presign_download(key) if key else None
+
+    @staticmethod
+    def resolve_photo_original_url(person: Person) -> str | None:
         return get_photo_storage().presign_download(person.photo_key) if person.photo_key else None
 
     @staticmethod

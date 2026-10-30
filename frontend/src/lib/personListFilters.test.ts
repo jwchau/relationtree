@@ -13,6 +13,7 @@ function person(overrides: Partial<PersonSummary>): PersonSummary {
     address: '',
     birthday: null,
     photo_url: null,
+    photo_original_url: null,
     is_me: false,
     tree_id: 'tree-1',
     notes: '',
@@ -39,13 +40,19 @@ describe('filterAndSortPeople', () => {
     expect(result.map((p) => p.id)).toEqual(['2']);
   });
 
-  it('sorts never-contacted people first, then by oldest last_contacted_date', () => {
+  it('sorts by name when no sort is given', () => {
+    const people = [person({ id: 'bob', name: 'Bob' }), person({ id: 'alice', name: 'Alice' })];
+    const result = filterAndSortPeople(people, { search: '', category: 'ALL' });
+    expect(result.map((p) => p.id)).toEqual(['alice', 'bob']);
+  });
+
+  it('sorts never-contacted people first, then by oldest last_contacted_date, when sort is stalest', () => {
     const people = [
       person({ id: 'recent', last_contacted_date: '2026-06-01' }),
       person({ id: 'never', last_contacted_date: null }),
       person({ id: 'old', last_contacted_date: '2026-01-01' }),
     ];
-    const result = filterAndSortPeople(people, { search: '', category: 'ALL' });
+    const result = filterAndSortPeople(people, { search: '', category: 'ALL', sort: 'stalest' });
     expect(result.map((p) => p.id)).toEqual(['never', 'old', 'recent']);
   });
 
