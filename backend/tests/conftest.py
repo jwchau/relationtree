@@ -2,10 +2,21 @@ from collections.abc import Callable, Iterator
 
 import pytest
 from django.contrib.auth.models import User
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
 from django.test import Client
 
 from relationtree import ai, photos
 from tests.fakes import FakeChatModel, FakeEmbedder, FakePhotoStorage
+
+
+@pytest.fixture
+def migrator(transactional_db: None) -> Iterator[None]:
+    """For tests that migrate back to check a data migration: puts the database back on the
+    latest migrations afterwards, or every later test would run against the old schema."""
+    yield
+    executor = MigrationExecutor(connection)
+    executor.migrate(executor.loader.graph.leaf_nodes())
 
 
 @pytest.fixture
