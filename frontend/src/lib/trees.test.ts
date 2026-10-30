@@ -3,7 +3,7 @@ import type { Tree } from '@/api/client';
 import { permissionsFor, pickCurrentTree } from './trees';
 
 function tree(id: string, role: Tree['role']): Tree {
-  return { id, name: id, role, member_count: 1 };
+  return { id, name: id, role, member_count: 1, category_hues: {} };
 }
 
 describe('pickCurrentTree', () => {

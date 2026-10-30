@@ -11,7 +11,10 @@ import {
   useMembers,
   useRemoveMember,
   useRenameTree,
+  useUpdateCategoryHues,
 } from '@/hooks/useTrees';
+import { HUES, type CategoryHues, type Hue } from '@/lib/categoryHues';
+import { RELATIONSHIP_CATEGORIES, categoryLabel } from '@/lib/relationshipTypes';
 import { expiresIn, inviteUrl } from '@/lib/invites';
 import { permissionsFor } from '@/lib/trees';
 import { Note, PageBand, PageBody, SectionHead } from '@/components/kiln/Page';
@@ -82,6 +85,7 @@ function TreeSettings({ tree }: { tree: Tree }) {
       />
       <PageBody className="space-y-[var(--section-gap)] *:max-w-[760px]">
         {canManage && <RenameForm tree={tree} />}
+        {canManage && <CategoryColours tree={tree} />}
         <MemberSection tree={tree} canManage={canManage} />
         {canManage && <InviteSection treeId={tree.id} />}
       </PageBody>
@@ -121,6 +125,61 @@ function RenameForm({ tree }: { tree: Tree }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+/** The owner picks the hue each category wears across the tree; each choice saves at once. */
+function CategoryColours({ tree }: { tree: Tree }) {
+  const [hues, setHues] = useState<CategoryHues>(tree.category_hues);
+  const update = useUpdateCategoryHues(tree.id);
+
+  function choose(category: string, hue: Hue) {
+    const before = hues;
+    setHues({ ...hues, [category]: hue });
+    update.mutate(
+      { [category]: hue },
+      {
+        onSuccess: () => toast.success('Saved'),
+        onError: (err) => {
+          setHues(before);
+          showError('Failed to save the colour')(err);
+        },
+      },
+    );
+  }
+
+  return (
+    <section aria-labelledby="colours-head">
+      <SectionHead id="colours-head" title="Category colours" />
+      <div className="panel px-5 py-3">
+        {RELATIONSHIP_CATEGORIES.map((category) => (
+          <fieldset
+            key={category}
+            className="before:bg-hairline relative flex flex-col gap-2 py-3 before:absolute before:inset-x-0 before:top-0 before:h-px first:before:hidden sm:flex-row sm:items-center sm:justify-between"
+          >
+            <legend className="float-left text-[14.7px] leading-[21px] font-semibold sm:w-32">
+              {categoryLabel(category)}
+            </legend>
+            <div className="flex flex-wrap gap-1">
+              {HUES.map((hue) => (
+                <label key={hue.id} title={hue.label} className="hue-swatch" data-hue={hue.id}>
+                  <input
+                    type="radio"
+                    name={`hue-${category}`}
+                    value={hue.id}
+                    checked={hues[category] === hue.id}
+                    onChange={() => choose(category, hue.id)}
+                    aria-label={hue.label}
+                    className="sr-only"
+                  />
+                  <span aria-hidden />
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -106,7 +106,7 @@ def test_the_database_refuses_a_field_on_the_wrong_type(type_: str, fields: dict
         Connection.objects.filter(id=link.id).update(**fields)
 
 
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("migrator")
 def test_the_migration_makes_existing_parent_links_biological() -> None:
     before, after = [("relationtree", "0006_invite")], [("relationtree", "0007_connection_kinds")]
     executor = MigrationExecutor(db_connection)
@@ -125,10 +125,6 @@ def test_the_migration_makes_existing_parent_links_biological() -> None:
     assert Connection.objects.get(id=parent.id).parent_kind == "BIOLOGICAL"
     assert Connection.objects.get(id=spouse.id).parent_kind is None
     assert Connection.objects.get(id=spouse.id).ended is False
-
-    # Leave the database fully migrated for the tests that run after this one.
-    executor = MigrationExecutor(db_connection)
-    executor.migrate(executor.loader.graph.leaf_nodes())
 
 
 def edit(client: Client, connection_id: str, **fields: Any) -> Any:

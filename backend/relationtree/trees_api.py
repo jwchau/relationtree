@@ -28,11 +28,19 @@ class TreeIn(Schema):
     name: Name
 
 
+class TreeUpdateIn(Schema):
+    """Whatever the owner is changing; categories left out of category_hues keep theirs."""
+
+    name: Name | None = None
+    category_hues: dict[Person.RelationshipCategory, Tree.Hue] | None = None
+
+
 class TreeOut(Schema):
     id: UUID
     name: str
     role: TreeMembership.Role
     member_count: int
+    category_hues: dict[Person.RelationshipCategory, Tree.Hue]
 
 
 class MemberIn(Schema):
@@ -78,6 +86,10 @@ def tree_out(membership: TreeMembership, member_count: int | None = None) -> Tre
         name=membership.tree.name,
         role=TreeMembership.Role(membership.role),
         member_count=member_count,
+        category_hues={
+            Person.RelationshipCategory(category): hue
+            for category, hue in membership.tree.hues().items()
+        },
     )
 
 
@@ -123,11 +135,17 @@ def create_tree(request: AuthedRequest, payload: TreeIn) -> Status[TreeOut]:
 
 
 @router.patch("/trees/{tree_id}", response=TreeOut)
-def rename_tree(request: AuthedRequest, tree_id: UUID, payload: TreeIn) -> TreeOut:
+def update_tree(request: AuthedRequest, tree_id: UUID, payload: TreeUpdateIn) -> TreeOut:
     membership = membership_in(request.user, tree_id)
     require_owner(membership)
-    membership.tree.name = payload.name
-    membership.tree.save(update_fields=["name"])
+    tree = membership.tree
+    if payload.name is not None:
+        tree.name = payload.name
+    if payload.category_hues is not None:
+        tree.category_hues = tree.category_hues | {
+            category.value: hue.value for category, hue in payload.category_hues.items()
+        }
+    tree.save(update_fields=["name", "category_hues"])
     return tree_out(membership)
 
 

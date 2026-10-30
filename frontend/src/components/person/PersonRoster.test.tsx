@@ -2,8 +2,17 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Person } from '@/api/client';
+import type { Person, Tree } from '@/api/client';
+import { CurrentTreeContext } from '@/hooks/useCurrentTree';
 import { PersonRoster } from './PersonRoster';
+
+const tree = {
+  id: 'ash',
+  name: 'Ash family',
+  role: 'owner',
+  member_count: 1,
+  category_hues: { FAMILY: 'rose', FRIEND: 'teal', COWORKER: 'blue', ACQUAINTANCE: 'green', OTHER: 'none' },
+} as Tree;
 
 function person(id: string, overrides: Partial<Person> = {}): Person {
   return {
@@ -29,21 +38,37 @@ function person(id: string, overrides: Partial<Person> = {}): Person {
 
 function renderRoster(people: Person[]) {
   render(
-    <MemoryRouter>
-      <PersonRoster people={people} label="People" />
-    </MemoryRouter>,
+    <CurrentTreeContext.Provider value={{ tree, trees: [tree], loading: false, error: null, select: vi.fn() }}>
+      <MemoryRouter>
+        <PersonRoster people={people} label="People" />
+      </MemoryRouter>
+    </CurrentTreeContext.Provider>,
   );
 }
 
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(new Date(2026, 9, 29, 12));
-});
-afterEach(() => {
-  vi.useRealTimers();
+describe('PersonRoster hues', () => {
+  it("colours each row by the tree's hue for its category, and leaves the rest plain", () => {
+    renderRoster([
+      person('Fay', { relationship_category: 'FRIEND' }),
+      person('Ollie', { relationship_category: 'OTHER' }),
+      person('Nia'),
+    ]);
+    const row = (name: string) => screen.getByRole('link', { name: new RegExp(name) }).closest('li');
+    expect(row('Fay')).toHaveAttribute('data-hue', 'teal');
+    expect(row('Ollie')).not.toHaveAttribute('data-hue');
+    expect(row('Nia')).not.toHaveAttribute('data-hue');
+  });
 });
 
-describe('PersonRoster', () => {
+describe('PersonRoster birthdays', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 29, 12));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows each person's birthday as month and day, with the full date", () => {
     renderRoster([person('Robin', { birthday: '1982-03-04' })]);
     const row = screen.getByRole('link', { name: /Robin/ });

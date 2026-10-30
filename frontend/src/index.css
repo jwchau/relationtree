@@ -106,6 +106,21 @@
   --ember-solid: #e68435;
   --ember-glow: radial-gradient(circle at 80% 20%, rgba(230, 132, 53, 0.14) 0%, rgba(230, 132, 53, 0) 60%);
 
+  /* The People page: a fired, near-black copper band over darker panels (dark theme). */
+  --fire-band:
+    radial-gradient(circle at 82% 0%, rgba(230, 132, 53, 0.13) 0%, rgba(230, 132, 53, 0) 58%),
+    linear-gradient(180deg, #1b0d05 0%, #0b0502 100%);
+  --fire-band-muted: #bfa591;
+  --fire-panel: linear-gradient(180deg, #1b1815 0%, #141210 100%);
+  --fire-tint: rgba(230, 132, 53, 0.03);
+  --fire-tint-hover: rgba(230, 132, 53, 0.07);
+  --fire-chip: rgba(230, 132, 53, 0.045);
+  --fire-chip-on: #3a1c0b;
+  --fire-chip-on-text: #f6cba8;
+  --fire-chip-on-ring: rgba(234, 149, 87, 0.35);
+  --fire-tile: #2a1508;
+  --fire-tile-text: #dd9a6b;
+
   /* Depth and feedback */
   --selection: rgba(230, 132, 53, 0.4);
   --focus: 0 0 0 3px rgba(230, 132, 53, 0.4);
@@ -168,6 +183,13 @@
     --ghost-active: rgba(0, 0, 0, 0.15);
     --amber-text: #9e5019;
     --amber-tint: rgba(223, 174, 78, 0.2);
+    --fire-panel: var(--panel);
+    --fire-chip: rgba(230, 132, 53, 0.05);
+    --fire-chip-on: #7e3f14;
+    --fire-chip-on-text: #ffffff;
+    --fire-chip-on-ring: transparent;
+    --fire-tile: #f5e6d9;
+    --fire-tile-text: #7e3f14;
     --elevation-3: 0 0 0 1px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.05);
   }
 }
@@ -219,6 +241,129 @@
 @utility display-face {
   font-family: var(--font-display);
   font-weight: 700;
+}
+
+/*
+ * Category hues. A tree's owner gives each relationship category one of these (tree settings);
+ * anything carrying data-hue picks up --hue-* from it. Equal lightness and chroma, so no
+ * category shouts louder than another; slate is nearly neutral. No amber: amber marks "you".
+ */
+[data-hue] {
+  --hue-c: 0.11;
+}
+[data-hue="rose"] { --hue-h: 18; }
+[data-hue="violet"] { --hue-h: 300; }
+[data-hue="blue"] { --hue-h: 245; }
+[data-hue="green"] { --hue-h: 150; }
+[data-hue="teal"] { --hue-h: 190; }
+[data-hue="pink"] { --hue-h: 345; }
+[data-hue="slate"] { --hue-h: 220; --hue-c: 0.035; }
+[data-hue]:not([data-hue="none"]) {
+  --hue-dot: oklch(0.74 var(--hue-c) var(--hue-h));
+  --hue-text: oklch(0.84 var(--hue-c) var(--hue-h));
+  --hue-tint: oklch(0.6 var(--hue-c) var(--hue-h) / 0.2);
+  --hue-tint-strong: oklch(0.6 var(--hue-c) var(--hue-h) / 0.34);
+  --hue-tile: oklch(0.36 calc(var(--hue-c) * 0.8) var(--hue-h));
+  --hue-tile-text: oklch(0.88 var(--hue-c) var(--hue-h));
+}
+@media (prefers-color-scheme: light) {
+  [data-hue]:not([data-hue="none"]) {
+    --hue-dot: oklch(0.62 var(--hue-c) var(--hue-h));
+    --hue-text: oklch(0.42 var(--hue-c) var(--hue-h));
+    --hue-tint: oklch(0.85 calc(var(--hue-c) * 0.6) var(--hue-h) / 0.55);
+    --hue-tint-strong: oklch(0.82 var(--hue-c) var(--hue-h) / 0.75);
+    --hue-tile: oklch(0.92 calc(var(--hue-c) * 0.5) var(--hue-h));
+    --hue-tile-text: oklch(0.4 var(--hue-c) var(--hue-h));
+  }
+}
+
+/* A person row (roster) in its category's hue: initials tile and category badge. */
+li[data-hue]:not([data-hue="none"]) [data-slot="avatar-fallback"] {
+  background: var(--hue-tile);
+  color: var(--hue-tile-text);
+}
+li[data-hue]:not([data-hue="none"]) [data-slot="badge"][data-variant="secondary"] {
+  background: var(--hue-tint);
+  color: var(--hue-text);
+}
+
+/* A category filter chip: a dot in its hue, and a tint of it when selected. */
+.category-chip[data-hue]:not([data-hue="none"])::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--hue-dot);
+}
+.category-chip[data-hue]:not([data-hue="none"])[aria-pressed="true"] {
+  background: var(--hue-tint-strong);
+  color: var(--hue-text);
+  box-shadow: inset 0 0 0 1px var(--hue-dot);
+}
+
+/* A category named on an ink band: the dark-theme hue text whatever the device theme. */
+.hue-on-ink[data-hue]:not([data-hue="none"]) {
+  color: oklch(0.84 var(--hue-c) var(--hue-h));
+}
+
+/* The swatch picker in tree settings: 48px targets, a 28px disc, a ring on the chosen one. */
+.hue-swatch {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 200ms;
+}
+.hue-swatch:hover {
+  background: var(--ghost-hover);
+}
+.hue-swatch > span {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--hue-dot);
+}
+.hue-swatch[data-hue="none"] > span {
+  background: linear-gradient(135deg, transparent 46%, var(--muted) 46% 54%, transparent 54%);
+  box-shadow: inset 0 0 0 1.5px var(--muted);
+}
+.hue-swatch:has(input:checked) > span {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text);
+}
+.hue-swatch[data-hue="none"]:has(input:checked) > span {
+  box-shadow: inset 0 0 0 1.5px var(--muted), 0 0 0 2px var(--surface), 0 0 0 4px var(--text);
+}
+.hue-swatch:has(input:focus-visible) {
+  box-shadow: var(--focus);
+}
+
+/*
+ * The People page. Its band is fired copper (PageBand glow) and its panels sit darker, with
+ * category hues on top; people without a category take a quiet copper tile.
+ */
+.people-page .panel {
+  background-image: linear-gradient(180deg, var(--fire-tint), transparent 40%), var(--fire-panel);
+}
+.people-page ul li > a:hover {
+  background-color: var(--fire-tint-hover);
+}
+.people-page [data-slot="avatar-fallback"] {
+  background: var(--fire-tile);
+  color: var(--fire-tile-text);
+}
+.people-page .category-chip[aria-pressed="false"] {
+  background-color: var(--fire-chip);
+}
+.people-page .category-chip[aria-pressed="false"]:hover {
+  background-color: var(--fire-tint-hover);
+}
+.people-page .category-chip[aria-pressed="true"] {
+  background-color: var(--fire-chip-on);
+  color: var(--fire-chip-on-text);
+  box-shadow: inset 0 0 0 1px var(--fire-chip-on-ring);
 }
 
 @layer base {

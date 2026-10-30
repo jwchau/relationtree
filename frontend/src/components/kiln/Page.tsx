@@ -29,7 +29,7 @@ export interface PageBandProps {
   /** Something before the title, such as the person's photo. */
   leading?: ReactNode;
   back?: { to: string; label: string };
-  /** The ember glow is for the People page's band only. */
+  /** The fired copper band is for the People page only. */
   glow?: boolean;
 }
 
@@ -38,7 +38,7 @@ export function PageBand({ title, meta, actions, leading, back, glow }: PageBand
   return (
     <section
       className="ink min-[1200px]:mx-auto min-[1200px]:max-w-[1200px] min-[1200px]:rounded-b-[16px]"
-      style={glow ? { backgroundImage: 'var(--ember-glow), var(--ink)' } : undefined}
+      style={glow ? { backgroundImage: 'var(--fire-band)' } : undefined}
     >
       <div className="mx-auto max-w-[1200px] px-[var(--gutter)] pt-4 pb-6">
         {back && (
@@ -58,7 +58,12 @@ export function PageBand({ title, meta, actions, leading, back, glow }: PageBand
                 {title}
               </h1>
               {meta && (
-                <div className="text-band-muted flex flex-wrap items-center gap-x-2 gap-y-1 text-[14.7px] leading-[21px] font-medium">
+                <div
+                  className={cn(
+                    glow ? 'text-[var(--fire-band-muted)]' : 'text-band-muted',
+                    'flex flex-wrap items-center gap-x-2 gap-y-1 text-[14.7px] leading-[21px] font-medium',
+                  )}
+                >
                   {meta}
                 </div>
               )}

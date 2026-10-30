@@ -154,7 +154,7 @@ def test_search_summaries_tell_exes_and_step_and_adoptive_relations_apart(
     assert summary["Mae"] == "Has an adopted child."
 
 
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("migrator")
 def test_the_migration_queues_everyone_for_re_embedding_with_the_new_summaries() -> None:
     before = [("relationtree", "0007_connection_kinds")]
     after = [("relationtree", "0008_reembed_with_relationship_kinds")]
@@ -173,10 +173,6 @@ def test_the_migration_queues_everyone_for_re_embedding_with_the_new_summaries()
     new = executor.loader.project_state(after).apps
     refreshed = new.get_model("relationtree", "Person").objects.get(id=ann.id)
     assert (refreshed.content_version, refreshed.embedded_version) == (4, 3)
-
-    # Leave the database fully migrated for the tests that run after this one.
-    executor = MigrationExecutor(db_connection)
-    executor.migrate(executor.loader.graph.leaf_nodes())
 
 
 def test_a_catch_up_summary_hears_who_is_an_ex_or_a_step_relation(
